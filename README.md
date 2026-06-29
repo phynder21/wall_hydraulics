@@ -1,9 +1,10 @@
 # Container Wall Actuator Sizing
 
 Interactive tool for sizing the hydraulic cylinder that raises and lowers
-a hinged sidewall on a shipping container. Move the sliders, see the
-geometry update in real time, read off the required piston force and the
-cylinder length range.
+a hinged sidewall on a shipping container. Drag or type the mounting
+dimensions, watch the geometry update in real time, and read off the
+required piston force and cylinder length range — or let the built-in
+optimizer find the force-minimizing geometry for you.
 
 ---
 
@@ -14,8 +15,11 @@ cylinder length range.
 Open the link in any browser — phone, tablet, or computer. Nothing to
 install.
 
-Your slider positions are saved into the page URL as you change them.
-That means:
+Every numeric input is both a **slider** (drag) and a **number box** (type
+an exact value) — use whichever you prefer.
+
+Your input values are saved into the page URL as you change them. That
+means:
 
 - Reloading the page restores your last setup.
 - Copy the address bar and send it to a colleague to drop them into the
@@ -41,14 +45,17 @@ The tool answers two design questions:
    (Drives bore and operating pressure.)
 2. **What cylinder length range** is swept out from open to closed?
    (Drives stroke. Off-the-shelf hydraulic cylinders typically extend to
-   at most ~2× their retracted length.)
+   at most ~1.8–2× their retracted length; the tool uses 1.8 by default
+   and lets you change it.)
 
 ---
 
 ## 3. Parameters
 
 All distances are in meters. The hinge is the origin; the floor extends
-left into the container; the wall opens to the right.
+left into the container; the wall opens to the right. Every numeric
+parameter below can be **dragged on its slider or typed into its number
+box** — whichever is handier.
 
 ### Container
 
@@ -81,6 +88,22 @@ cylinder force.
 | Parameter   | Meaning                              |
 | ----------- | ------------------------------------ |
 | `theta_deg` | Current angle for the side-view diagram. Slide it to scrub through the motion; both plots mark the current angle in red. |
+
+### Constraints
+
+These bound what counts as a valid design and feed the optimizer (below).
+
+| Parameter          | Meaning                                                                    |
+| ------------------ | -------------------------------------------------------------------------- |
+| Max stroke ratio   | Largest allowed `L_max / L_min` over the swing. Draws the red limit line on the length plot. Default `1.8`. |
+| Roof clearance (m) | How far below the ceiling the linkage endpoint must stay. When > 0, a dashed red **effective ceiling** line appears on the diagram. Default `0`. |
+
+### Optimize
+
+| Control | Meaning |
+| ------- | ------- |
+| **Optimize geometry** button | Searches for the `a, b, d, f` that minimize the worst-case piston force for the current container, cg, and constraints, then fills them in. See [section 6](#6-optimizing-the-geometry-optimizepy). |
+| 🔒 lock (beside `a`, `b`, `d`, `f`) | Hold that dimension at its current value so the optimizer searches only the unlocked ones. Lock all four to just evaluate that exact geometry. |
 
 ---
 
@@ -128,6 +151,9 @@ peak **magnitude**, not the sign.
 - **A spike or asymptote** in the force curve means the geometry passes
   through the `sin(beta - phi) = 0` singularity. Change `a`, `b`, `d`,
   or `f` until the curve is smooth and finite everywhere.
+- **Side-view diagram** shows the container outline and the linkage. With
+  *Roof clearance* > 0, a dashed red line marks the effective ceiling the
+  linkage must stay below.
 
 ### Before sizing real hardware
 
@@ -316,16 +342,21 @@ The split is intentional: `wall.py` knows nothing about Streamlit and
 can be imported into a Jupyter notebook, a test, or a CSV-generating
 script without dragging in the UI.
 
-**Hot reload.** Streamlit watches both files. Save a change and a
-"Rerun" banner appears in the top-right of the browser; click "Always
-rerun" once to make it automatic. You only need to restart Streamlit
-when you edit `requirements.txt` or `.streamlit/config.toml`.
+**Hot reload.** Streamlit watches `app.py` and the modules it imports at
+the top (`wall.py`, `optimize.py`) and re-runs on save. If a change ever
+doesn't seem to take effect — Streamlit's watcher can miss edits to
+imported modules in some cases — stop the server (`Ctrl+C`) and run
+`streamlit run app.py` again; a full restart always reloads everything.
+You also need a restart when you edit `requirements.txt` or
+`.streamlit/config.toml`.
 
 **To add a new parameter:**
 
 1. Add it as a keyword argument to the relevant function(s) in
    `wall.py`.
-2. Add a `st.sidebar.slider(..., key="my_param")` in `app.py`.
+2. Add an input in `app.py` — use the `linked_input(...)` helper for a
+   drag-and-type geometry value, or `st.sidebar.number_input(..., key=...)`
+   for a plain one.
 3. Add an entry to the `DEFAULTS` dict in `app.py` so the URL
    persistence picks it up.
 4. Pass it through to the `compute_*` calls in `app.py`.

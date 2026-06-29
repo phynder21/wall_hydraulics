@@ -8,6 +8,9 @@ from wall import (
     compute_geometry,
     compute_cylinder_length,
 )
+# Imported at top level (not lazily inside the button) so Streamlit's file
+# watcher tracks optimize.py and reloads it on edit, like wall.py.
+from optimize import optimize_actuator
 
 st.set_page_config(page_title="Container Wall Actuator", layout="wide")
 st.title("Shipping container hinged-wall actuator")
@@ -123,7 +126,6 @@ roof_clearance = st.sidebar.number_input(
 st.sidebar.header("Optimize")
 if st.sidebar.button("Optimize geometry for current settings"):
     try:
-        from optimize import optimize_actuator
         # Locked variables are held at their current value; the rest are searched.
         locked = {k: round(st.session_state[k], 2)
                   for k in ("a", "b", "d", "f")
