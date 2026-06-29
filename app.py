@@ -60,15 +60,23 @@ st.sidebar.header("Container")
 size_key = st.sidebar.selectbox("Container size", list(CONTAINER_SIZES.keys()), key="size_key")
 container_width, container_height = CONTAINER_SIZES[size_key]
 
+# Bounds for the four geometry variables — single source of truth shared by the
+# slider widgets, the clamp-on-resize logic, and the optimize button's clamp, so
+# they can never drift apart and let an optimized value fall outside a slider.
+GEOM_BOUNDS = {
+    "a": (0.05, container_width / 2),
+    "b": (0.05, container_height),
+    "d": (0.00, 1.00),
+    "f": (0.00, container_height),
+}
+
 # Clamp persisted values into the bounds the current container allows, so
 # changing container size doesn't trip a "value out of range" error on widgets.
 def _clamp(key, lo, hi):
     st.session_state[key] = float(min(max(st.session_state[key], lo), hi))
 
-_clamp("a", 0.05, container_width / 2)
-_clamp("b", 0.05, container_height)
-_clamp("d", 0.00, 1.00)
-_clamp("f", 0.00, container_height)
+for _k, (_lo, _hi) in GEOM_BOUNDS.items():
+    _clamp(_k, _lo, _hi)
 _clamp("x_cg", 0.00, container_height)
 _clamp("z_cg", 0.00, 1.50)
 _clamp("theta_deg", 0.0, 90.0)
@@ -139,32 +147,38 @@ if st.sidebar.button("Optimize geometry for current settings"):
                 roof_clearance=st.session_state["roof_clearance"],
                 locked=locked,
             )
+        # Snap to slider precision AND clamp into the widget bounds, so a value
+        # the optimizer lands at the very top of a range (e.g. b ≈ container
+        # height on High-Cube, which rounds just above the max) can't exceed the
+        # slider and error out. GEOM_BOUNDS is the same source the sliders use.
         for k in ("a", "b", "d", "f"):
-            st.session_state[k] = round(res[k], 2)  # snap to slider precision
+            lo, hi = GEOM_BOUNDS[k]
+            st.session_state[k] = float(min(max(round(res[k], 2), lo), hi))
         verdict = "feasible" if res["feasible"] else "INFEASIBLE"
         held = f" (held: {', '.join(sorted(locked))})" if locked else ""
         action = "Evaluated" if len(locked) == 4 else "Optimized"
-        st.session_state["_opt_msg"] = (
+        # No st.rerun(): the geometry widgets below re-seed from these canonical
+        # values in this same run, so they update immediately. Skipping the
+        # rerun also keeps the lock checkboxes (rendered later) from being reset,
+        # since an aborted run would drop their not-yet-rendered widget state.
+        st.sidebar.success(
             f"{action}{held} ({verdict}): peak {res['peak_force']:.2f} N/kg, "
             f"stroke {res['stroke_ratio']:.2f}, "
             f"roof breach {res['ceiling_violation'] * 1000:.0f} mm.")
-        st.rerun()
     except Exception as exc:  # surface any optimizer error in the UI
         st.sidebar.error(f"Optimizer failed: {exc}")
-if "_opt_msg" in st.session_state:
-    st.sidebar.success(st.session_state.pop("_opt_msg"))
 
 st.sidebar.header("Geometry (meters)")
 st.sidebar.caption("🔒 a value to hold it fixed while the others are optimized.")
 a = linked_input("a — hinge to cylinder base (along floor)", "a",
-                 0.05, container_width / 2, lockable=True,
+                 *GEOM_BOUNDS["a"], lockable=True,
                  help=f"Limited to half the floor width ({container_width/2:.2f} m).")
 b = linked_input("b — hinge to piston attachment (along wall)", "b",
-                 0.05, container_height, lockable=True)
+                 *GEOM_BOUNDS["b"], lockable=True)
 d = linked_input("d — wall to piston attachment (perpendicular)", "d",
-                 0.00, 1.00, lockable=True)
+                 *GEOM_BOUNDS["d"], lockable=True)
 f = linked_input("f — cylinder base height above floor", "f",
-                 0.00, container_height, lockable=True)
+                 *GEOM_BOUNDS["f"], lockable=True)
 
 st.sidebar.header("Wall angle")
 theta_deg = linked_input("theta (degrees)", "theta_deg", 0.0, 90.0,
