@@ -41,6 +41,11 @@ for key, default in DEFAULTS.items():
         except (ValueError, TypeError):
             st.session_state[key] = default
 
+# size_key is the one field with no numeric clamp to fall back on, so a bad
+# value from the URL would crash the selectbox below. Validate membership.
+if st.session_state["size_key"] not in CONTAINER_SIZES:
+    st.session_state["size_key"] = DEFAULTS["size_key"]
+
 st.sidebar.header("Container")
 size_key = st.sidebar.selectbox("Container size", list(CONTAINER_SIZES.keys()), key="size_key")
 container_width, container_height = CONTAINER_SIZES[size_key]
@@ -61,20 +66,20 @@ _clamp("theta_deg", 0.0, 90.0)
 st.sidebar.header("Geometry (meters)")
 a = st.sidebar.slider(
     "a — hinge to cylinder base (along floor)",
-    0.05, container_width / 2, step=0.05, key="a",
+    0.05, container_width / 2, step=0.01, key="a",
     help=f"Limited to half the floor width ({container_width/2:.2f} m).",
 )
 b = st.sidebar.slider(
     "b — hinge to piston attachment (along wall)",
-    0.05, container_height, step=0.05, key="b",
+    0.05, container_height, step=0.01, key="b",
 )
 d = st.sidebar.slider(
     "d — wall to piston attachment (perpendicular)",
-    0.00, 1.00, step=0.05, key="d",
+    0.00, 1.00, step=0.01, key="d",
 )
 f = st.sidebar.slider(
     "f — cylinder base height above floor",
-    0.00, container_height, step=0.05, key="f",
+    0.00, container_height, step=0.01, key="f",
 )
 
 st.sidebar.header("Wall angle")
@@ -83,9 +88,9 @@ theta = np.radians(theta_deg)
 
 st.sidebar.header("Center of gravity (meters)")
 x_cg = st.sidebar.slider("x_cg — along wall from hinge",
-                          0.0, container_height, step=0.05, key="x_cg")
+                          0.0, container_height, step=0.01, key="x_cg")
 z_cg = st.sidebar.slider("z_cg — perpendicular off wall",
-                          0.0, 1.5, step=0.05, key="z_cg")
+                          0.0, 1.5, step=0.01, key="z_cg")
 
 # Push current values back into the URL so reloads / shared links restore them.
 st.query_params.update({k: str(st.session_state[k]) for k in DEFAULTS})
@@ -100,10 +105,17 @@ L_here = float(compute_cylinder_length(theta, a=a, b=b, d=d, f=f))
 L_min, L_max = float(L_curve.min()), float(L_curve.max())
 L_ratio = L_max / L_min if L_min > 0 else float("inf")
 
-# Ignore infinities/NaNs from singularities when finding F extremes
-F_finite = F_curve[np.isfinite(F_curve)]
-F_min = float(F_finite.min()) if F_finite.size else float("nan")
-F_max = float(F_finite.max()) if F_finite.size else float("nan")
+# Near a singularity the required force blows up toward +/-inf (and flips sign).
+# Forces beyond this magnitude mean the geometry is effectively unusable there,
+# so we treat them as "off the chart": exclude them from the reported extremes
+# AND break the plotted line, so the numbers and the curve always agree.
+F_CAP = 50.0  # N/kg
+usable = np.isfinite(F_curve) & (np.abs(F_curve) <= F_CAP)
+F_plot = np.where(usable, F_curve, np.nan)  # NaN breaks the line across poles
+F_valid = F_curve[usable]
+F_min = float(F_valid.min()) if F_valid.size else float("nan")
+F_max = float(F_valid.max()) if F_valid.size else float("nan")
+has_singularity = not bool(np.all(usable))
 
 geom = compute_geometry(theta, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
 x_att, z_att = (float(v) for v in geom["attachment"])
@@ -192,7 +204,7 @@ with col_diag:
 with col_force:
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=np.degrees(theta_curve), y=F_curve, mode="lines", name="F(theta)"))
+        x=np.degrees(theta_curve), y=F_plot, mode="lines", name="F(theta)"))
     fig.add_trace(go.Scatter(
         x=[theta_deg], y=[F_here], mode="markers",
         marker=dict(size=14, color="red"), name="current"))
@@ -202,17 +214,28 @@ with col_force:
     fig.add_hline(y=F_max, line=dict(color="red", dash="dot"),
                    annotation_text=f"F_max = {F_max:.2f} N/kg",
                    annotation_position="top right")
+    if F_valid.size:
+        span = F_max - F_min if F_max > F_min else 1.0
+        y_range = [F_min - 0.1 * span, F_max + 0.1 * span]
+    else:
+        y_range = [-F_CAP, F_CAP]
     fig.update_layout(
         title="Piston force vs. wall angle",
         xaxis_title="theta (degrees)",
         yaxis_title="Piston force (N per kg of wall + equipment mass)",
         xaxis=dict(range=[0, 90]),
-        yaxis=dict(range=[-50, 50]),
+        yaxis=dict(range=y_range),
         height=500,
         showlegend=False,
         margin=dict(l=10, r=10, t=40, b=10),
     )
     st.plotly_chart(fig, width="stretch")
+    if has_singularity:
+        st.caption(
+            f"⚠️ Part of the swing needs more than {F_CAP:.0f} N/kg "
+            "(near-singular geometry) and is hidden — extremes shown are over "
+            "the usable range only."
+        )
 
 # --- Bottom row: cylinder length plot (full width) ---
 fig_len = go.Figure()
