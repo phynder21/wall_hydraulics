@@ -17,6 +17,11 @@ import numpy as np
 
 g = 9.81  # m/s^2
 
+# Max allowed ratio of extended to retracted cylinder length over the swing.
+# Single source of truth shared by the app and the optimizer. Unsure whether
+# the right value is 1.8, 1.9, or 2.0 — change it here and it updates everywhere.
+STROKE_RATIO_MAX = 1.8
+
 
 def compute_geometry(theta, a=0.5, b=1.0, d=0.1, f=0.5, x_cg=1.2, z_cg=0.55):
     """World-frame positions of the key points at angle theta."""

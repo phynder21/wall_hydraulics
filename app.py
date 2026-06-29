@@ -2,7 +2,12 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-from wall import compute_F_piston, compute_geometry, compute_cylinder_length
+from wall import (
+    STROKE_RATIO_MAX,
+    compute_F_piston,
+    compute_geometry,
+    compute_cylinder_length,
+)
 
 st.set_page_config(page_title="Container Wall Actuator", layout="wide")
 st.title("Shipping container hinged-wall actuator")
@@ -96,11 +101,15 @@ z_cg = st.sidebar.slider("z_cg — perpendicular off wall",
 st.query_params.update({k: str(st.session_state[k]) for k in DEFAULTS})
 
 # --- Computations ---
+# Near-singular geometries make compute_F_piston divide by ~0; we mask those
+# samples below, so silence the expected warning rather than spam the console.
 theta_curve = np.linspace(0.0, np.pi / 2, 400)
-F_curve = compute_F_piston(theta_curve, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
+with np.errstate(divide="ignore", invalid="ignore"):
+    F_curve = compute_F_piston(theta_curve, a=a, b=b, d=d, f=f,
+                               x_cg=x_cg, z_cg=z_cg)
+    F_here = float(compute_F_piston(theta, a=a, b=b, d=d, f=f,
+                                    x_cg=x_cg, z_cg=z_cg))
 L_curve = compute_cylinder_length(theta_curve, a=a, b=b, d=d, f=f)
-
-F_here = float(compute_F_piston(theta, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg))
 L_here = float(compute_cylinder_length(theta, a=a, b=b, d=d, f=f))
 L_min, L_max = float(L_curve.min()), float(L_curve.max())
 L_ratio = L_max / L_min if L_min > 0 else float("inf")
@@ -208,13 +217,13 @@ with col_force:
     fig.add_trace(go.Scatter(
         x=[theta_deg], y=[F_here], mode="markers",
         marker=dict(size=14, color="red"), name="current"))
-    fig.add_hline(y=F_min, line=dict(color="green", dash="dot"),
-                   annotation_text=f"F_min = {F_min:.2f} N/kg",
-                   annotation_position="bottom right")
-    fig.add_hline(y=F_max, line=dict(color="red", dash="dot"),
-                   annotation_text=f"F_max = {F_max:.2f} N/kg",
-                   annotation_position="top right")
     if F_valid.size:
+        fig.add_hline(y=F_min, line=dict(color="green", dash="dot"),
+                       annotation_text=f"F_min = {F_min:.2f} N/kg",
+                       annotation_position="bottom right")
+        fig.add_hline(y=F_max, line=dict(color="red", dash="dot"),
+                       annotation_text=f"F_max = {F_max:.2f} N/kg",
+                       annotation_position="top right")
         span = F_max - F_min if F_max > F_min else 1.0
         y_range = [F_min - 0.1 * span, F_max + 0.1 * span]
     else:
@@ -247,8 +256,9 @@ fig_len.add_trace(go.Scatter(
 fig_len.add_hline(y=L_min, line=dict(color="green", dash="dot"),
                    annotation_text=f"L_min = {L_min:.2f} m",
                    annotation_position="bottom right")
-fig_len.add_hline(y=2 * L_min, line=dict(color="red", dash="dot"),
-                   annotation_text=f"2 x L_min = {2 * L_min:.2f} m (max stroke limit)",
+fig_len.add_hline(y=STROKE_RATIO_MAX * L_min, line=dict(color="red", dash="dot"),
+                   annotation_text=f"{STROKE_RATIO_MAX:g} x L_min = "
+                                   f"{STROKE_RATIO_MAX * L_min:.2f} m (max stroke limit)",
                    annotation_position="top right")
 fig_len.update_layout(
     title="Cylinder length vs. wall angle",
@@ -261,8 +271,9 @@ fig_len.update_layout(
 )
 st.plotly_chart(fig_len, width="stretch")
 
-stroke_ok = L_ratio <= 2.0
-stroke_status = "within 2x limit" if stroke_ok else "EXCEEDS 2x stroke limit"
+stroke_ok = L_ratio <= STROKE_RATIO_MAX
+stroke_status = (f"within {STROKE_RATIO_MAX:g}x limit" if stroke_ok
+                 else f"EXCEEDS {STROKE_RATIO_MAX:g}x stroke limit")
 st.caption(
     f"At theta = {theta_deg:.0f} deg: piston force = **{F_here:.2f} N/kg**, "
     f"cylinder length = **{L_here:.2f} m**.  "
