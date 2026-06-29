@@ -9,8 +9,7 @@ cylinder length range.
 
 ## 1. Use the tool
 
-> **Live app:** *(to be filled in once deployed)*  
-> e.g. `https://wall-hydraulics.streamlit.app`
+> **Live app:** https://wall-hydraulics.streamlit.app
 
 Open the link in any browser — phone, tablet, or computer. Nothing to
 install.
