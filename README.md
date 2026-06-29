@@ -159,11 +159,20 @@ Run it (standard container is the default):
 python3 optimize.py                                   # standard container
 python3 optimize.py --container highcube --x-cg 1.4   # high-cube, custom cg
 python3 optimize.py --stroke-ratio 2.0                # override the limit
+python3 optimize.py --lock f=0.5                      # hold f, optimize a, b, d
 python3 optimize.py --help                            # all options
 ```
 
 It prints the optimal `a, b, d, f`, the resulting peak force, the stroke
 ratio, the roof clearance, and a paste-ready line for the app's sliders.
+
+**Locking variables.** Real installs often fix some dimensions (a bracket
+height, an existing floor mount). Pass `--lock VAR=VALUE` (repeatable) to
+hold those fixed and search only the rest — e.g. `--lock f=0.5 --lock a=0.6`.
+In the app, tick the 🔒 box next to `a`, `b`, `d`, or `f` to do the same.
+Locking removes design freedom, so the best achievable peak force can only
+stay equal or rise, and tight locks may make the constraints infeasible
+(reported as such). Locking all four just evaluates that fixed geometry.
 
 ### How it works
 

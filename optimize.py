@@ -34,6 +34,9 @@ CONTAINER_PRESETS = {
     "highcube": (2.438, 2.896),   # High-Cube 9'6"
 }
 
+# The four design variables, in the order _metrics expects them.
+VAR_NAMES = ("a", "b", "d", "f")
+
 # Large multipliers turning the inequality constraints into costs the optimizer
 # feels. Big enough that the optimum sits essentially on the limit, not over it.
 STROKE_PENALTY = 1.0e6
@@ -84,26 +87,39 @@ def _metrics(p, theta, x_cg, z_cg, m_cg, container_width, container_height,
 
 def optimize_actuator(container_width, container_height, x_cg, z_cg,
                       stroke_ratio_max=STROKE_RATIO_MAX,
-                      roof_clearance=ROOF_CLEARANCE, n_theta=200, m_cg=1.0,
-                      seed=0, maxiter=300):
+                      roof_clearance=ROOF_CLEARANCE, locked=None,
+                      n_theta=200, m_cg=1.0, seed=0, maxiter=300):
     """Search for the (a, b, d, f) minimizing peak piston force over 0-90 deg.
 
-    Returns a dict with the optimal geometry and the resulting metrics.
+    `locked` is an optional {name: value} dict (names in VAR_NAMES) holding those
+    variables fixed; only the remaining variables are optimized. If all four are
+    locked, the fixed geometry is simply evaluated. Returns a dict with the
+    geometry and resulting metrics.
     """
+    locked = dict(locked or {})
     theta = np.linspace(0.0, np.pi / 2, n_theta)
 
-    # Box bounds mirror the slider ranges in app.py.
-    bounds = [
-        (0.05, container_width / 2),   # a — hinge to cylinder base, along floor
-        (0.05, container_height),      # b — hinge to attachment, along wall
-        (0.00, 1.00),                  # d — wall to attachment, perpendicular
-        (0.00, container_height),      # f — cylinder base height above floor
-    ]
+    # Full box bounds (mirror the slider ranges in app.py); we keep only the
+    # unlocked variables for the actual search.
+    full_bounds = {
+        "a": (0.05, container_width / 2),   # hinge to cylinder base, along floor
+        "b": (0.05, container_height),      # hinge to attachment, along wall
+        "d": (0.00, 1.00),                  # wall to attachment, perpendicular
+        "f": (0.00, container_height),      # cylinder base height above floor
+    }
+    free = [v for v in VAR_NAMES if v not in locked]
+    bounds = [full_bounds[v] for v in free]
 
-    def objective(p):
+    def assemble(free_vals):
+        """Combine searched (free) values with the locked ones into (a,b,d,f)."""
+        vals = dict(zip(free, free_vals))
+        vals.update(locked)
+        return tuple(float(vals[v]) for v in VAR_NAMES)
+
+    def objective(free_vals):
         peak, ratio, _, _, ceiling = _metrics(
-            p, theta, x_cg, z_cg, m_cg, container_width, container_height,
-            roof_clearance)
+            assemble(free_vals), theta, x_cg, z_cg, m_cg, container_width,
+            container_height, roof_clearance)
         penalty = 0.0
         if ratio > stroke_ratio_max:
             penalty += STROKE_PENALTY * (ratio - stroke_ratio_max) ** 2
@@ -111,17 +127,25 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
             penalty += CEILING_PENALTY * ceiling ** 2
         return peak + penalty
 
-    result = differential_evolution(
-        objective, bounds, seed=seed, maxiter=maxiter,
-        tol=1e-8, polish=True,
-    )
+    if free:
+        result = differential_evolution(
+            objective, bounds, seed=seed, maxiter=maxiter,
+            tol=1e-8, polish=True,
+        )
+        best = assemble(result.x)
+        success = bool(result.success)
+    else:
+        # Everything locked: nothing to search, just evaluate the fixed geometry.
+        best = assemble([])
+        success = True
 
-    a, b, d, f = (float(v) for v in result.x)
+    a, b, d, f = best
     peak, ratio, L_min, L_max, ceiling = _metrics(
-        result.x, theta, x_cg, z_cg, m_cg, container_width, container_height,
+        best, theta, x_cg, z_cg, m_cg, container_width, container_height,
         roof_clearance)
     return {
         "a": a, "b": b, "d": d, "f": f,
+        "locked": locked,
         "peak_force": peak,        # N per kg of wall+equipment mass
         "stroke_ratio": ratio,     # L_max / L_min over the swing
         "L_min": L_min, "L_max": L_max,
@@ -133,7 +157,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
         "x_cg": x_cg, "z_cg": z_cg,
         "container_width": container_width,
         "container_height": container_height,
-        "success": bool(result.success),
+        "success": success,
     }
 
 
@@ -159,6 +183,9 @@ def _build_parser():
     p.add_argument("--clearance", type=float, default=ROOF_CLEARANCE,
                    help="Mechanical gap (m) the endpoint must keep below the "
                         "ceiling; effective ceiling = height - clearance.")
+    p.add_argument("--lock", action="append", default=[], metavar="VAR=VALUE",
+                   help="Hold a variable fixed during optimization, e.g. "
+                        "--lock f=0.5 (repeatable). VAR is one of a, b, d, f.")
     p.add_argument("--grid", type=int, default=200,
                    help="Number of theta samples across the swing.")
     p.add_argument("--mass", type=float, default=1.0,
@@ -177,11 +204,24 @@ def main(argv=None):
     if args.height is not None:
         height = args.height
 
+    locked = {}
+    for item in args.lock:
+        name, sep, value = item.partition("=")
+        name = name.strip()
+        if name not in VAR_NAMES or not sep or not value.strip():
+            raise SystemExit(
+                f"--lock expects VAR=VALUE with VAR in {', '.join(VAR_NAMES)}; "
+                f"got '{item}'")
+        try:
+            locked[name] = float(value)
+        except ValueError:
+            raise SystemExit(f"--lock VALUE must be a number; got '{item}'")
+
     res = optimize_actuator(
         container_width=width, container_height=height,
         x_cg=args.x_cg, z_cg=args.z_cg,
         stroke_ratio_max=args.stroke_ratio, roof_clearance=args.clearance,
-        n_theta=args.grid, m_cg=args.mass, seed=args.seed,
+        locked=locked, n_theta=args.grid, m_cg=args.mass, seed=args.seed,
     )
 
     print("\n=== Optimized actuator geometry ===")
@@ -190,6 +230,9 @@ def main(argv=None):
     print(f"  stroke cap: extended <= {res['stroke_ratio_max']:.2f} x retracted")
     print(f"  roof gap  : keep >= {res['roof_clearance']:.3f} m below ceiling "
           f"(effective ceiling {height - res['roof_clearance']:.3f} m)")
+    if res["locked"]:
+        locks = ", ".join(f"{k}={v:.3f}" for k, v in sorted(res["locked"].items()))
+        print(f"  locked    : {locks} (held fixed; remaining vars optimized)")
     print("  ---------------------------------")
     print(f"  a = {res['a']:.4f} m   (hinge to cylinder base, along floor)")
     print(f"  b = {res['b']:.4f} m   (hinge to attachment, along wall)")

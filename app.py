@@ -73,13 +73,17 @@ _clamp("stroke_ratio", 1.0, 3.0)
 _clamp("roof_clearance", 0.0, 0.5)
 
 
-def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None):
+def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
+                 lockable=False):
     """A draggable slider AND a typeable number box bound to one value.
 
     `st.session_state[key]` is the single source of truth (URL-persisted). The
     two widgets get their own keys and are re-seeded from the canonical value
     each run, so they stay in sync and respect the current clamps. Either one
     edited writes back to the canonical value via its on_change callback.
+
+    When `lockable`, a 🔒 checkbox (transient state under `lock_<key>`) lets the
+    user pin this value so the optimizer holds it fixed.
     """
     skey, nkey = f"{key}__sld", f"{key}__num"
     st.session_state[skey] = st.session_state[key]
@@ -91,10 +95,17 @@ def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None):
     def _from_num():
         st.session_state[key] = float(min(max(st.session_state[nkey], lo), hi))
 
-    c1, c2 = st.sidebar.columns([2, 1])
+    if lockable:
+        st.session_state.setdefault(f"lock_{key}", False)
+        c1, c2, c3 = st.sidebar.columns([2, 1, 0.7])
+    else:
+        c1, c2 = st.sidebar.columns([2, 1])
     c1.slider(label, lo, hi, step=step, key=skey, on_change=_from_sld, help=help)
     c2.number_input(label, min_value=lo, max_value=hi, step=step, key=nkey,
                     on_change=_from_num, format=fmt, label_visibility="collapsed")
+    if lockable:
+        c3.checkbox("🔒", key=f"lock_{key}",
+                    help="Hold this value fixed when you press Optimize.")
     return st.session_state[key]
 
 # --- Constraints (shared with the optimizer) ---
@@ -113,6 +124,10 @@ st.sidebar.header("Optimize")
 if st.sidebar.button("Optimize geometry for current settings"):
     try:
         from optimize import optimize_actuator
+        # Locked variables are held at their current value; the rest are searched.
+        locked = {k: round(st.session_state[k], 2)
+                  for k in ("a", "b", "d", "f")
+                  if st.session_state.get(f"lock_{k}", False)}
         with st.spinner("Searching for the force-minimizing geometry…"):
             res = optimize_actuator(
                 container_width=container_width,
@@ -120,12 +135,15 @@ if st.sidebar.button("Optimize geometry for current settings"):
                 x_cg=st.session_state["x_cg"], z_cg=st.session_state["z_cg"],
                 stroke_ratio_max=st.session_state["stroke_ratio"],
                 roof_clearance=st.session_state["roof_clearance"],
+                locked=locked,
             )
         for k in ("a", "b", "d", "f"):
             st.session_state[k] = round(res[k], 2)  # snap to slider precision
         verdict = "feasible" if res["feasible"] else "INFEASIBLE"
+        held = f" (held: {', '.join(sorted(locked))})" if locked else ""
+        action = "Evaluated" if len(locked) == 4 else "Optimized"
         st.session_state["_opt_msg"] = (
-            f"Optimized ({verdict}): peak {res['peak_force']:.2f} N/kg, "
+            f"{action}{held} ({verdict}): peak {res['peak_force']:.2f} N/kg, "
             f"stroke {res['stroke_ratio']:.2f}, "
             f"roof breach {res['ceiling_violation'] * 1000:.0f} mm.")
         st.rerun()
@@ -135,15 +153,16 @@ if "_opt_msg" in st.session_state:
     st.sidebar.success(st.session_state.pop("_opt_msg"))
 
 st.sidebar.header("Geometry (meters)")
+st.sidebar.caption("🔒 a value to hold it fixed while the others are optimized.")
 a = linked_input("a — hinge to cylinder base (along floor)", "a",
-                 0.05, container_width / 2,
+                 0.05, container_width / 2, lockable=True,
                  help=f"Limited to half the floor width ({container_width/2:.2f} m).")
 b = linked_input("b — hinge to piston attachment (along wall)", "b",
-                 0.05, container_height)
+                 0.05, container_height, lockable=True)
 d = linked_input("d — wall to piston attachment (perpendicular)", "d",
-                 0.00, 1.00)
+                 0.00, 1.00, lockable=True)
 f = linked_input("f — cylinder base height above floor", "f",
-                 0.00, container_height)
+                 0.00, container_height, lockable=True)
 
 st.sidebar.header("Wall angle")
 theta_deg = linked_input("theta (degrees)", "theta_deg", 0.0, 90.0,
