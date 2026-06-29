@@ -9,9 +9,14 @@ Method (see README / the project notes): this is a constrained min-max problem.
 For one candidate geometry we sweep theta across the whole swing and reduce the
 force curve to a single number — its peak magnitude. A global, gradient-free
 optimizer (scipy's differential_evolution) then searches the geometry space for
-the candidate with the smallest peak. The stroke limit (extended length must not
-exceed `stroke_ratio_max` times the retracted length) is folded in as a penalty:
-violating it adds a steep cost, so the optimizer steers away from it.
+the candidate with the smallest peak. Two constraints are folded in as penalties
+that add a steep cost when violated, so the optimizer steers away from them:
+
+  * stroke limit  — extended length must not exceed `stroke_ratio_max` times
+                    the retracted length, over the swing.
+  * roof clearance — the attachment endpoint, while horizontally inside the
+                    container footprint, must stay `roof_clearance` meters below
+                    the ceiling (i.e. z <= container_height - roof_clearance).
 
 Run `python3 optimize.py --help` for the command-line options.
 """
@@ -29,17 +34,27 @@ CONTAINER_PRESETS = {
     "highcube": (2.438, 2.896),   # High-Cube 9'6"
 }
 
-# Large multiplier turning the stroke inequality into a cost the optimizer feels.
-# Big enough that the optimum sits essentially on the limit, not measurably over.
+# Large multipliers turning the inequality constraints into costs the optimizer
+# feels. Big enough that the optimum sits essentially on the limit, not over it.
 STROKE_PENALTY = 1.0e6
+CEILING_PENALTY = 1.0e6
 
-# Engineering tolerance for declaring the stroke limit "met" (penalty methods
-# leave a tiny residual violation at the optimum).
-FEASIBLE_TOL = 1.0e-3
+# Mechanical design margin: how far BELOW the ceiling the attachment endpoint
+# must stay (meters). The effective ceiling becomes (container_height - this).
+# 0.0 lets the endpoint just touch the roof; raise it for real clearance (e.g.
+# 0.025 for 25 mm). Override per run with --clearance.
+ROOF_CLEARANCE = 0.0
+
+# Numerical tolerances for declaring a constraint "met" — penalty methods leave
+# a tiny residual violation at the optimum. These are SOLVER slack, not design
+# margins (for a ceiling design margin, use ROOF_CLEARANCE above).
+STROKE_TOL = 1.0e-3          # stroke ratio (dimensionless)
+CEILING_TOL = 1.0e-3         # meters
 
 
-def _metrics(p, theta, x_cg, z_cg, m_cg):
-    """Peak |force| and stroke ratio for one geometry p=(a,b,d,f)."""
+def _metrics(p, theta, x_cg, z_cg, m_cg, container_width, container_height,
+             roof_clearance):
+    """Peak |force|, stroke ratio, and ceiling overshoot for geometry p=(a,b,d,f)."""
     a, b, d, f = p
     # Candidates near a singularity divide by ~0; we discard those samples
     # below, so silence the expected warning rather than spam the console.
@@ -52,11 +67,24 @@ def _metrics(p, theta, x_cg, z_cg, m_cg):
     L = compute_cylinder_length(theta, a=a, b=b, d=d, f=f)
     L_min, L_max = float(L.min()), float(L.max())
     ratio = L_max / L_min if L_min > 0 else float("inf")
-    return peak, ratio, L_min, L_max
+
+    # Ceiling clearance: the attachment endpoint sweeps an arc about the hinge.
+    # Wherever it is horizontally inside the container footprint (-W <= x <= 0),
+    # it must stay below the effective ceiling (z <= H - roof_clearance), i.e.
+    # leave roof_clearance meters of air under the roof. Measure worst overshoot.
+    effective_ceiling = container_height - roof_clearance
+    x_att = b * np.cos(theta) - d * np.sin(theta)
+    z_att = b * np.sin(theta) + d * np.cos(theta)
+    inside = (x_att >= -container_width) & (x_att <= 0.0)
+    overshoot = np.where(inside, z_att - effective_ceiling, 0.0)
+    ceiling_violation = float(np.maximum(overshoot, 0.0).max())
+
+    return peak, ratio, L_min, L_max, ceiling_violation
 
 
 def optimize_actuator(container_width, container_height, x_cg, z_cg,
-                      stroke_ratio_max=STROKE_RATIO_MAX, n_theta=200, m_cg=1.0,
+                      stroke_ratio_max=STROKE_RATIO_MAX,
+                      roof_clearance=ROOF_CLEARANCE, n_theta=200, m_cg=1.0,
                       seed=0, maxiter=300):
     """Search for the (a, b, d, f) minimizing peak piston force over 0-90 deg.
 
@@ -73,10 +101,14 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     ]
 
     def objective(p):
-        peak, ratio, _, _ = _metrics(p, theta, x_cg, z_cg, m_cg)
+        peak, ratio, _, _, ceiling = _metrics(
+            p, theta, x_cg, z_cg, m_cg, container_width, container_height,
+            roof_clearance)
         penalty = 0.0
         if ratio > stroke_ratio_max:
-            penalty = STROKE_PENALTY * (ratio - stroke_ratio_max) ** 2
+            penalty += STROKE_PENALTY * (ratio - stroke_ratio_max) ** 2
+        if ceiling > 0.0:
+            penalty += CEILING_PENALTY * ceiling ** 2
         return peak + penalty
 
     result = differential_evolution(
@@ -85,13 +117,18 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     )
 
     a, b, d, f = (float(v) for v in result.x)
-    peak, ratio, L_min, L_max = _metrics(result.x, theta, x_cg, z_cg, m_cg)
+    peak, ratio, L_min, L_max, ceiling = _metrics(
+        result.x, theta, x_cg, z_cg, m_cg, container_width, container_height,
+        roof_clearance)
     return {
         "a": a, "b": b, "d": d, "f": f,
         "peak_force": peak,        # N per kg of wall+equipment mass
         "stroke_ratio": ratio,     # L_max / L_min over the swing
         "L_min": L_min, "L_max": L_max,
-        "feasible": ratio <= stroke_ratio_max + FEASIBLE_TOL,
+        "ceiling_violation": ceiling,   # meters the endpoint breaches the roof
+        "roof_clearance": roof_clearance,
+        "feasible": (ratio <= stroke_ratio_max + STROKE_TOL
+                     and ceiling <= CEILING_TOL),
         "stroke_ratio_max": stroke_ratio_max,
         "x_cg": x_cg, "z_cg": z_cg,
         "container_width": container_width,
@@ -119,6 +156,9 @@ def _build_parser():
                    help="Cg distance perpendicular off the wall (m).")
     p.add_argument("--stroke-ratio", type=float, default=STROKE_RATIO_MAX,
                    help="Max allowed extended/retracted cylinder length ratio.")
+    p.add_argument("--clearance", type=float, default=ROOF_CLEARANCE,
+                   help="Mechanical gap (m) the endpoint must keep below the "
+                        "ceiling; effective ceiling = height - clearance.")
     p.add_argument("--grid", type=int, default=200,
                    help="Number of theta samples across the swing.")
     p.add_argument("--mass", type=float, default=1.0,
@@ -140,7 +180,7 @@ def main(argv=None):
     res = optimize_actuator(
         container_width=width, container_height=height,
         x_cg=args.x_cg, z_cg=args.z_cg,
-        stroke_ratio_max=args.stroke_ratio,
+        stroke_ratio_max=args.stroke_ratio, roof_clearance=args.clearance,
         n_theta=args.grid, m_cg=args.mass, seed=args.seed,
     )
 
@@ -148,6 +188,8 @@ def main(argv=None):
     print(f"  container : {width:.3f} m wide x {height:.3f} m tall")
     print(f"  cg        : x_cg={res['x_cg']:.3f} m, z_cg={res['z_cg']:.3f} m")
     print(f"  stroke cap: extended <= {res['stroke_ratio_max']:.2f} x retracted")
+    print(f"  roof gap  : keep >= {res['roof_clearance']:.3f} m below ceiling "
+          f"(effective ceiling {height - res['roof_clearance']:.3f} m)")
     print("  ---------------------------------")
     print(f"  a = {res['a']:.4f} m   (hinge to cylinder base, along floor)")
     print(f"  b = {res['b']:.4f} m   (hinge to attachment, along wall)")
@@ -158,8 +200,10 @@ def main(argv=None):
     print(f"  peak piston force : {res['peak_force']:.3f} {force_unit}")
     print(f"  stroke ratio      : {res['stroke_ratio']:.3f} "
           f"(L_min={res['L_min']:.3f} m, L_max={res['L_max']:.3f} m)")
-    feas = "OK — within stroke limit" if res["feasible"] else \
-        "WARNING — stroke limit NOT met"
+    print(f"  ceiling clearance : endpoint breaches roof by "
+          f"{res['ceiling_violation']:.4f} m (0 = clears)")
+    feas = "OK — all constraints met" if res["feasible"] else \
+        "WARNING — a constraint is NOT met (see stroke/ceiling above)"
     print(f"  feasibility       : {feas}")
     if not res["success"]:
         print("  note              : optimizer did not fully converge; "

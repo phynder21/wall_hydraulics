@@ -30,6 +30,8 @@ DEFAULTS = {
     "x_cg": 1.20,
     "z_cg": 0.55,
     "theta_deg": 45.0,
+    "stroke_ratio": STROKE_RATIO_MAX,   # max L_max/L_min (also drives optimizer)
+    "roof_clearance": 0.0,              # m the endpoint must stay below the roof
 }
 
 # Hydrate session state from URL query params (so reloads preserve values).
@@ -67,35 +69,90 @@ _clamp("f", 0.00, container_height)
 _clamp("x_cg", 0.00, container_height)
 _clamp("z_cg", 0.00, 1.50)
 _clamp("theta_deg", 0.0, 90.0)
+_clamp("stroke_ratio", 1.0, 3.0)
+_clamp("roof_clearance", 0.0, 0.5)
+
+
+def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None):
+    """A draggable slider AND a typeable number box bound to one value.
+
+    `st.session_state[key]` is the single source of truth (URL-persisted). The
+    two widgets get their own keys and are re-seeded from the canonical value
+    each run, so they stay in sync and respect the current clamps. Either one
+    edited writes back to the canonical value via its on_change callback.
+    """
+    skey, nkey = f"{key}__sld", f"{key}__num"
+    st.session_state[skey] = st.session_state[key]
+    st.session_state[nkey] = st.session_state[key]
+
+    def _from_sld():
+        st.session_state[key] = st.session_state[skey]
+
+    def _from_num():
+        st.session_state[key] = float(min(max(st.session_state[nkey], lo), hi))
+
+    c1, c2 = st.sidebar.columns([2, 1])
+    c1.slider(label, lo, hi, step=step, key=skey, on_change=_from_sld, help=help)
+    c2.number_input(label, min_value=lo, max_value=hi, step=step, key=nkey,
+                    on_change=_from_num, format=fmt, label_visibility="collapsed")
+    return st.session_state[key]
+
+# --- Constraints (shared with the optimizer) ---
+st.sidebar.header("Constraints")
+stroke_ratio = st.sidebar.number_input(
+    "Max stroke ratio (L_max / L_min)", min_value=1.0, max_value=3.0,
+    step=0.05, key="stroke_ratio",
+    help="Hydraulic cylinders extend at most ~1.8–2× their retracted length.")
+roof_clearance = st.sidebar.number_input(
+    "Roof clearance (m)", min_value=0.0, max_value=0.5, step=0.01,
+    key="roof_clearance",
+    help="Gap the actuator endpoint must keep below the ceiling.")
+
+# --- Optimize: fill the geometry with the force-minimizing design ---
+st.sidebar.header("Optimize")
+if st.sidebar.button("Optimize geometry for current settings"):
+    try:
+        from optimize import optimize_actuator
+        with st.spinner("Searching for the force-minimizing geometry…"):
+            res = optimize_actuator(
+                container_width=container_width,
+                container_height=container_height,
+                x_cg=st.session_state["x_cg"], z_cg=st.session_state["z_cg"],
+                stroke_ratio_max=st.session_state["stroke_ratio"],
+                roof_clearance=st.session_state["roof_clearance"],
+            )
+        for k in ("a", "b", "d", "f"):
+            st.session_state[k] = round(res[k], 2)  # snap to slider precision
+        verdict = "feasible" if res["feasible"] else "INFEASIBLE"
+        st.session_state["_opt_msg"] = (
+            f"Optimized ({verdict}): peak {res['peak_force']:.2f} N/kg, "
+            f"stroke {res['stroke_ratio']:.2f}, "
+            f"roof breach {res['ceiling_violation'] * 1000:.0f} mm.")
+        st.rerun()
+    except Exception as exc:  # surface any optimizer error in the UI
+        st.sidebar.error(f"Optimizer failed: {exc}")
+if "_opt_msg" in st.session_state:
+    st.sidebar.success(st.session_state.pop("_opt_msg"))
 
 st.sidebar.header("Geometry (meters)")
-a = st.sidebar.slider(
-    "a — hinge to cylinder base (along floor)",
-    0.05, container_width / 2, step=0.01, key="a",
-    help=f"Limited to half the floor width ({container_width/2:.2f} m).",
-)
-b = st.sidebar.slider(
-    "b — hinge to piston attachment (along wall)",
-    0.05, container_height, step=0.01, key="b",
-)
-d = st.sidebar.slider(
-    "d — wall to piston attachment (perpendicular)",
-    0.00, 1.00, step=0.01, key="d",
-)
-f = st.sidebar.slider(
-    "f — cylinder base height above floor",
-    0.00, container_height, step=0.01, key="f",
-)
+a = linked_input("a — hinge to cylinder base (along floor)", "a",
+                 0.05, container_width / 2,
+                 help=f"Limited to half the floor width ({container_width/2:.2f} m).")
+b = linked_input("b — hinge to piston attachment (along wall)", "b",
+                 0.05, container_height)
+d = linked_input("d — wall to piston attachment (perpendicular)", "d",
+                 0.00, 1.00)
+f = linked_input("f — cylinder base height above floor", "f",
+                 0.00, container_height)
 
 st.sidebar.header("Wall angle")
-theta_deg = st.sidebar.slider("theta (degrees)", 0.0, 90.0, step=1.0, key="theta_deg")
+theta_deg = linked_input("theta (degrees)", "theta_deg", 0.0, 90.0,
+                         step=1.0, fmt="%.0f")
 theta = np.radians(theta_deg)
 
 st.sidebar.header("Center of gravity (meters)")
-x_cg = st.sidebar.slider("x_cg — along wall from hinge",
-                          0.0, container_height, step=0.01, key="x_cg")
-z_cg = st.sidebar.slider("z_cg — perpendicular off wall",
-                          0.0, 1.5, step=0.01, key="z_cg")
+x_cg = linked_input("x_cg — along wall from hinge", "x_cg", 0.0, container_height)
+z_cg = linked_input("z_cg — perpendicular off wall", "z_cg", 0.0, 1.5)
 
 # Push current values back into the URL so reloads / shared links restore them.
 st.query_params.update({k: str(st.session_state[k]) for k in DEFAULTS})
@@ -152,6 +209,14 @@ with col_diag:
         y=[0, 0, container_height, container_height],
         mode="lines", line=dict(color="darkgray", width=3),
         hoverinfo="skip", name="container"))
+
+    # Effective ceiling the optimizer respects (roof minus clearance margin)
+    if roof_clearance > 0:
+        z_eff = container_height - roof_clearance
+        fig_geom.add_trace(go.Scatter(
+            x=[-container_width, 0], y=[z_eff, z_eff], mode="lines",
+            line=dict(color="firebrick", width=1, dash="dash"),
+            hoverinfo="skip", name="effective ceiling"))
 
     # Hinged wall (door) — full length to container_height
     fig_geom.add_trace(go.Scatter(
@@ -256,9 +321,9 @@ fig_len.add_trace(go.Scatter(
 fig_len.add_hline(y=L_min, line=dict(color="green", dash="dot"),
                    annotation_text=f"L_min = {L_min:.2f} m",
                    annotation_position="bottom right")
-fig_len.add_hline(y=STROKE_RATIO_MAX * L_min, line=dict(color="red", dash="dot"),
-                   annotation_text=f"{STROKE_RATIO_MAX:g} x L_min = "
-                                   f"{STROKE_RATIO_MAX * L_min:.2f} m (max stroke limit)",
+fig_len.add_hline(y=stroke_ratio * L_min, line=dict(color="red", dash="dot"),
+                   annotation_text=f"{stroke_ratio:g} x L_min = "
+                                   f"{stroke_ratio * L_min:.2f} m (max stroke limit)",
                    annotation_position="top right")
 fig_len.update_layout(
     title="Cylinder length vs. wall angle",
@@ -271,9 +336,9 @@ fig_len.update_layout(
 )
 st.plotly_chart(fig_len, width="stretch")
 
-stroke_ok = L_ratio <= STROKE_RATIO_MAX
-stroke_status = (f"within {STROKE_RATIO_MAX:g}x limit" if stroke_ok
-                 else f"EXCEEDS {STROKE_RATIO_MAX:g}x stroke limit")
+stroke_ok = L_ratio <= stroke_ratio
+stroke_status = (f"within {stroke_ratio:g}x limit" if stroke_ok
+                 else f"EXCEEDS {stroke_ratio:g}x stroke limit")
 st.caption(
     f"At theta = {theta_deg:.0f} deg: piston force = **{F_here:.2f} N/kg**, "
     f"cylinder length = **{L_here:.2f} m**.  "

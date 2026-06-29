@@ -121,9 +121,10 @@ peak **magnitude**, not the sign.
 - **Force plot** marks `F_min` (most negative) and `F_max` (most
   positive). The worst-case magnitude is whichever has the larger
   absolute value.
-- **Length plot** marks `L_min` (green) and `2 × L_min` (red, the
-  practical stroke ceiling). If the curve crosses the red line you
-  can't buy a standard cylinder for this geometry.
+- **Length plot** marks `L_min` (green) and `STROKE_RATIO_MAX × L_min`
+  (red, the practical stroke ceiling — `1.8 ×` by default). If the curve
+  crosses the red line you can't buy a standard cylinder for this
+  geometry.
 - **A spike or asymptote** in the force curve means the geometry passes
   through the `sin(beta - phi) = 0` singularity. Change `a`, `b`, `d`,
   or `f` until the curve is smooth and finite everywhere.
@@ -143,7 +144,89 @@ peak **magnitude**, not the sign.
 
 ---
 
-## 6. Run it locally (for developers)
+## 6. Optimizing the geometry (`optimize.py`)
+
+The app is a *viewer* — you move the sliders and read off the force.
+`optimize.py` is the inverse: it *searches* for the four mounting
+dimensions (`a`, `b`, `d`, `f`) that **minimize the worst-case piston
+force** over the full 0–90° swing, subject to physical constraints. The
+center of gravity and container size are fixed inputs (the door you are
+lifting), not design variables.
+
+Run it (standard container is the default):
+
+```bash
+python3 optimize.py                                   # standard container
+python3 optimize.py --container highcube --x-cg 1.4   # high-cube, custom cg
+python3 optimize.py --stroke-ratio 2.0                # override the limit
+python3 optimize.py --help                            # all options
+```
+
+It prints the optimal `a, b, d, f`, the resulting peak force, the stroke
+ratio, the roof clearance, and a paste-ready line for the app's sliders.
+
+### How it works
+
+This is a constrained **min–max** problem. For one candidate geometry we
+sweep `theta` across the whole swing and reduce the force curve to a
+single number — its peak magnitude. A global, gradient-free optimizer
+(SciPy's `differential_evolution`) then searches the geometry space for
+the candidate with the smallest peak.
+
+### How the constraints are added (penalty method)
+
+Rather than derive Lagrange/KKT multipliers by hand, each inequality
+constraint is folded into the objective as a **penalty** — a cost that is
+zero when the constraint holds and grows quadratically as it is violated.
+The optimizer then minimizes a single unconstrained sum and is naturally
+pushed to the feasible boundary:
+
+```
+objective(a,b,d,f) = peak_force
+                   + STROKE_PENALTY  * max(0, stroke_ratio - STROKE_RATIO_MAX)^2
+                   + CEILING_PENALTY * roof_overshoot^2
+```
+
+Two constraints are enforced this way:
+
+1. **Stroke limit.** A hydraulic cylinder can only extend so far, so we
+   require `L_max / L_min ≤ STROKE_RATIO_MAX` across the swing.
+
+2. **Roof clearance.** The attachment endpoint sweeps an arc of radius
+   `r_att = √(b² + d²)` about the hinge. Wherever that endpoint is
+   horizontally inside the container footprint (`−W ≤ x ≤ 0`), it must
+   stay below the **effective ceiling** `H − ROOF_CLEARANCE`; otherwise
+   the bracket would pass through the roof. `ROOF_CLEARANCE` is a
+   mechanical safety margin (meters) — `0` lets the endpoint just touch
+   the roof, larger values keep more air underneath. `roof_overshoot` is
+   the worst `max(0, z − (H − ROOF_CLEARANCE))` over the swing.
+   Geometrically this caps the swing radius at `r_att ≤ H − ROOF_CLEARANCE`,
+   and the optimum sits right on that cap.
+
+A result is reported **feasible** only when *both* constraints hold
+within tolerance.
+
+### The global constants
+
+| Constant | Where | Default | Meaning |
+|---|---|---|---|
+| `STROKE_RATIO_MAX` | `wall.py` | `1.8` | Max extended/retracted cylinder length ratio. **Shared** by the app's length plot and the optimizer so the two never disagree — change it in one place. |
+| `ROOF_CLEARANCE` | `optimize.py` | `0.0` m | Mechanical margin: how far below the ceiling the endpoint must stay. Effective ceiling = `height − ROOF_CLEARANCE`. |
+| `STROKE_PENALTY` | `optimize.py` | `1e6` | Weight on the stroke-limit penalty. |
+| `CEILING_PENALTY` | `optimize.py` | `1e6` | Weight on the roof-clearance penalty. |
+| `STROKE_TOL` | `optimize.py` | `1e-3` | Solver slack for declaring the stroke limit "met" (not a design margin). |
+| `CEILING_TOL` | `optimize.py` | `1e-3` m | Solver slack for declaring roof clearance "met" (not a design margin). |
+
+Two values can also be overridden per run without touching the
+constants: `--stroke-ratio` and `--clearance`. The penalty weights are
+deliberately large so the optimum sits essentially *on* each limit rather
+than past it; the `*_TOL` values are pure numerical slack that absorb the
+tiny residual violation penalty methods leave behind. `optimize.py`
+requires SciPy (already in `requirements.txt`).
+
+---
+
+## 7. Run it locally (for developers)
 
 End users don't need this section — they just open the live app URL
 above. This is only for someone who wants to modify the code.
@@ -209,13 +292,14 @@ A browser tab opens at `http://localhost:8501`. Stop with `Ctrl+C`.
 
 ---
 
-## 7. Modify the code
+## 8. Modify the code
 
 ```
 .
-├── wall.py            # Physics. Pure functions, no UI.
+├── wall.py            # Physics + shared constants (e.g. STROKE_RATIO_MAX). No UI.
 ├── app.py             # Streamlit UI. Sliders, plots, layout.
-├── requirements.txt   # Dependencies (streamlit, numpy, plotly).
+├── optimize.py        # Geometry optimizer (CLI + importable function). Needs SciPy.
+├── requirements.txt   # Dependencies (streamlit, numpy, plotly, scipy).
 └── README.md
 ```
 
@@ -239,7 +323,7 @@ when you edit `requirements.txt` or `.streamlit/config.toml`.
 
 ---
 
-## 8. Deploy your own copy
+## 9. Deploy your own copy
 
 Free public hosting via [Streamlit Community
 Cloud](https://share.streamlit.io):
