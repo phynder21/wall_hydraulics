@@ -46,6 +46,11 @@ VAR_NAMES = ("a", "b", "d", "f")
 STROKE_PENALTY = 1.0e6
 CEILING_PENALTY = 1.0e6
 OVERCENTER_PENALTY = 1.0e6
+# A crossing (moment arm goes negative) is physically impossible, not merely
+# costly. This hard floor makes ANY non-crossing geometry beat ANY crossing one,
+# so the optimizer always returns the best *buildable* design -- giving up the
+# stroke/roof limits before it ever hands back an impossible (over-center) one.
+OVERCENTER_HARD = 1.0e12
 
 # Minimum moment-arm clearance the cylinder must keep about the hinge over the
 # whole swing: |sin(beta - phi)| >= this. When sin(beta - phi) reaches zero the
@@ -154,6 +159,8 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
             penalty += STROKE_PENALTY * (ratio - stroke_ratio_max) ** 2
         if ceiling > 0.0:
             penalty += CEILING_PENALTY * ceiling ** 2
+        if moment_arm < 0.0:
+            penalty += OVERCENTER_HARD   # crossing the hinge: impossible, reject hard
         if moment_arm < MIN_MOMENT_ARM:
             penalty += OVERCENTER_PENALTY * (MIN_MOMENT_ARM - moment_arm) ** 2
         return peak + penalty

@@ -196,18 +196,30 @@ if st.sidebar.button("Optimize geometry for current settings"):
         for k in ("a", "b", "d", "f"):
             lo, hi = GEOM_BOUNDS[k]
             st.session_state[k] = float(min(max(round(res[k], 2), lo), hi))
-        verdict = "feasible" if res["feasible"] else "INFEASIBLE"
         held = f" (held: {', '.join(sorted(locked))})" if locked else ""
         action = "Evaluated" if len(locked) == 4 else "Optimized"
-        oc = " — OVER-CENTERS (no buildable geometry here)" if res["over_center"] else ""
+        detail = (f"peak {res['peak_force']:.2f} N/kg, "
+                  f"stroke {res['stroke_ratio']:.2f}, "
+                  f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}")
         # No st.rerun(): the geometry widgets below re-seed from these canonical
         # values in this same run, so they update immediately. Skipping the
         # rerun also keeps the lock checkboxes (rendered later) from being reset,
         # since an aborted run would drop their not-yet-rendered widget state.
-        msg = (f"{action}{held} ({verdict}{oc}): peak {res['peak_force']:.2f} "
-               f"N/kg, stroke {res['stroke_ratio']:.2f}, "
-               f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}.")
-        (st.sidebar.success if res["feasible"] else st.sidebar.warning)(msg)
+        # .get() guards against a stale optimize.py that predates these keys.
+        if res.get("over_center", False):
+            # Reached only when the geometry is forced to over-center — in
+            # practice the all-four-locked "evaluate" case (pinned to an
+            # impossible geometry), since the search hard-rejects crossings.
+            st.sidebar.error(
+                f"{action}{held}: this geometry OVER-CENTERS — the cylinder line "
+                "crosses the hinge so the force diverges, and it can't be built. "
+                "Unlock a variable (or change the pinned values) and re-optimize.")
+        elif res["feasible"]:
+            st.sidebar.success(f"{action}{held} — buildable, all limits met: {detail}.")
+        else:
+            st.sidebar.warning(
+                f"{action}{held} — best buildable design, but not all limits are met "
+                f"(usable; may need different hardware or looser settings): {detail}.")
     except Exception as exc:  # surface any optimizer error in the UI
         st.sidebar.error(f"Optimizer failed: {exc}")
 

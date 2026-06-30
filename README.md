@@ -224,6 +224,7 @@ objective(a,b,d,f) = peak_force
                    + STROKE_PENALTY     * max(0, stroke_ratio - STROKE_RATIO_MAX)^2
                    + CEILING_PENALTY    * roof_overshoot^2
                    + OVERCENTER_PENALTY * max(0, MIN_MOMENT_ARM - moment_arm)^2
+                   + OVERCENTER_HARD    if moment_arm < 0   (crossing: impossible)
 ```
 
 Three constraints are enforced this way:
@@ -256,8 +257,14 @@ Three constraints are enforced this way:
    the force magnitude: near the crossing the force spike can be so narrow
    it slips between samples and reads as deceptively low.)
 
-A result is reported **feasible** only when *all three* constraints hold
-within tolerance.
+The over-center penalty is **hard** (`OVERCENTER_HARD`, far larger than the
+others): a crossing is physically impossible, not merely costly, so the
+optimizer always returns the best **buildable** (non-over-center) geometry —
+it will give up the stroke and roof limits before it ever hands back an
+impossible design. A result is reported **feasible** only when *all three*
+constraints hold within tolerance; when they can't all be met, you still get
+the best buildable geometry, flagged as not-all-limits-met rather than a
+failure.
 
 ### The global constants
 
@@ -268,7 +275,8 @@ within tolerance.
 | `MIN_MOMENT_ARM` | `optimize.py` | `0.05` | Smallest allowed `|sin(β − φ)|` over the swing — the over-center floor. Larger = more clearance from the singularity (and a lower force ceiling), at the cost of a smaller feasible set. |
 | `STROKE_PENALTY` | `optimize.py` | `1e6` | Weight on the stroke-limit penalty. |
 | `CEILING_PENALTY` | `optimize.py` | `1e6` | Weight on the roof-clearance penalty. |
-| `OVERCENTER_PENALTY` | `optimize.py` | `1e6` | Weight on the over-center penalty. |
+| `OVERCENTER_PENALTY` | `optimize.py` | `1e6` | Weight on the (soft) over-center margin penalty. |
+| `OVERCENTER_HARD` | `optimize.py` | `1e12` | Hard floor added when the moment arm actually crosses zero, so a buildable geometry always beats an impossible one. |
 | `STROKE_TOL` | `optimize.py` | `1e-3` | Solver slack for declaring the stroke limit "met" (not a design margin). |
 | `CEILING_TOL` | `optimize.py` | `1e-3` m | Solver slack for declaring roof clearance "met" (not a design margin). |
 | `MOMENT_ARM_TOL` | `optimize.py` | `1e-3` | Solver slack for declaring the over-center constraint "met". |
