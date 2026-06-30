@@ -83,9 +83,23 @@ _clamp("theta_deg", 0.0, 90.0)
 _clamp("stroke_ratio", 1.0, 3.0)
 _clamp("roof_clearance", 0.0, 0.5)
 
+# --- Display units -----------------------------------------------------------
+# All values are stored and computed in METERS internally (so the physics, the
+# optimizer, and shared URLs stay consistent). This toggle only changes how
+# lengths are *displayed*: widgets, plots, and captions multiply by `U`. Angles
+# (degrees) and force (N/kg) are not lengths and are unaffected.
+st.sidebar.header("Display units")
+units = st.sidebar.radio("Length units", ["meters", "inches"], key="units",
+                         horizontal=True, label_visibility="collapsed")
+inches = units == "inches"
+U = 39.3700787 if inches else 1.0    # meters -> display-unit factor
+ULABEL = "in" if inches else "m"      # short unit label
+UWORD = "inches" if inches else "meters"
+LEN_STEP = 0.1 if inches else 0.01    # slider/number step in display units
+
 
 def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
-                 lockable=False):
+                 lockable=False, disp_factor=1.0, disp_step=None):
     """A draggable slider AND a typeable number box bound to one value.
 
     `st.session_state[key]` is the single source of truth (URL-persisted). The
@@ -95,25 +109,33 @@ def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
 
     When `lockable`, a 🔒 checkbox (transient state under `lock_<key>`) lets the
     user pin this value so the optimizer holds it fixed.
+
+    `disp_factor` scales the canonical (stored) value for display: the widgets
+    show `value * disp_factor` and `lo`/`hi * disp_factor`, and convert edits
+    back by dividing. `lo`/`hi` and the returned value stay in canonical units.
     """
     skey, nkey = f"{key}__sld", f"{key}__num"
-    st.session_state[skey] = st.session_state[key]
-    st.session_state[nkey] = st.session_state[key]
+    U = disp_factor
+    dstep = disp_step if disp_step is not None else step
+    st.session_state[skey] = st.session_state[key] * U
+    st.session_state[nkey] = st.session_state[key] * U
 
     def _from_sld():
-        st.session_state[key] = st.session_state[skey]
+        st.session_state[key] = st.session_state[skey] / U
 
     def _from_num():
-        st.session_state[key] = float(min(max(st.session_state[nkey], lo), hi))
+        st.session_state[key] = float(min(max(st.session_state[nkey] / U, lo), hi))
 
     if lockable:
         st.session_state.setdefault(f"lock_{key}", False)
         c1, c2, c3 = st.sidebar.columns([2, 1, 0.7])
     else:
         c1, c2 = st.sidebar.columns([2, 1])
-    c1.slider(label, lo, hi, step=step, key=skey, on_change=_from_sld, help=help)
-    c2.number_input(label, min_value=lo, max_value=hi, step=step, key=nkey,
-                    on_change=_from_num, format=fmt, label_visibility="collapsed")
+    c1.slider(label, lo * U, hi * U, step=dstep, key=skey,
+              on_change=_from_sld, help=help)
+    c2.number_input(label, min_value=lo * U, max_value=hi * U, step=dstep,
+                    key=nkey, on_change=_from_num, format=fmt,
+                    label_visibility="collapsed")
     if lockable:
         c3.checkbox("🔒", key=f"lock_{key}",
                     help="Hold this value fixed when you press Optimize.")
@@ -125,9 +147,9 @@ stroke_ratio = st.sidebar.number_input(
     "Max stroke ratio (L_max / L_min)", min_value=1.0, max_value=3.0,
     step=0.05, key="stroke_ratio",
     help="Hydraulic cylinders extend at most ~1.8–2× their retracted length.")
-roof_clearance = st.sidebar.number_input(
-    "Roof clearance (m)", min_value=0.0, max_value=0.5, step=0.01,
-    key="roof_clearance",
+roof_clearance = linked_input(
+    f"Roof clearance [{ULABEL}]", "roof_clearance", 0.0, 0.5,
+    disp_factor=U, disp_step=LEN_STEP,
     help="Gap the actuator endpoint must keep below the ceiling.")
 
 # --- Optimize: fill the geometry with the force-minimizing design ---
@@ -164,30 +186,34 @@ if st.sidebar.button("Optimize geometry for current settings"):
         st.sidebar.success(
             f"{action}{held} ({verdict}): peak {res['peak_force']:.2f} N/kg, "
             f"stroke {res['stroke_ratio']:.2f}, "
-            f"roof breach {res['ceiling_violation'] * 1000:.0f} mm.")
+            f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}.")
     except Exception as exc:  # surface any optimizer error in the UI
         st.sidebar.error(f"Optimizer failed: {exc}")
 
-st.sidebar.header("Geometry (meters)")
+st.sidebar.header(f"Geometry ({UWORD})")
 st.sidebar.caption("🔒 a value to hold it fixed while the others are optimized.")
-a = linked_input("a — hinge to cylinder base (along floor)", "a",
-                 *GEOM_BOUNDS["a"], lockable=True,
-                 help=f"Limited to half the floor width ({container_width/2:.2f} m).")
-b = linked_input("b — hinge to piston attachment (along wall)", "b",
-                 *GEOM_BOUNDS["b"], lockable=True)
-d = linked_input("d — wall to piston attachment (perpendicular)", "d",
-                 *GEOM_BOUNDS["d"], lockable=True)
-f = linked_input("f — cylinder base height above floor", "f",
-                 *GEOM_BOUNDS["f"], lockable=True)
+_geom = dict(disp_factor=U, disp_step=LEN_STEP, lockable=True)
+a = linked_input(f"a — hinge to cylinder base (along floor) [{ULABEL}]", "a",
+                 *GEOM_BOUNDS["a"], **_geom,
+                 help=f"Limited to half the floor width "
+                      f"({container_width / 2 * U:.2f} {ULABEL}).")
+b = linked_input(f"b — hinge to piston attachment (along wall) [{ULABEL}]", "b",
+                 *GEOM_BOUNDS["b"], **_geom)
+d = linked_input(f"d — wall to piston attachment (perpendicular) [{ULABEL}]", "d",
+                 *GEOM_BOUNDS["d"], **_geom)
+f = linked_input(f"f — cylinder base height above floor [{ULABEL}]", "f",
+                 *GEOM_BOUNDS["f"], **_geom)
 
 st.sidebar.header("Wall angle")
 theta_deg = linked_input("theta (degrees)", "theta_deg", 0.0, 90.0,
                          step=1.0, fmt="%.0f")
 theta = np.radians(theta_deg)
 
-st.sidebar.header("Center of gravity (meters)")
-x_cg = linked_input("x_cg — along wall from hinge", "x_cg", 0.0, container_height)
-z_cg = linked_input("z_cg — perpendicular off wall", "z_cg", 0.0, 1.5)
+st.sidebar.header(f"Center of gravity ({UWORD})")
+x_cg = linked_input(f"x_cg — along wall from hinge [{ULABEL}]", "x_cg",
+                    0.0, container_height, disp_factor=U, disp_step=LEN_STEP)
+z_cg = linked_input(f"z_cg — perpendicular off wall [{ULABEL}]", "z_cg",
+                    0.0, 1.5, disp_factor=U, disp_step=LEN_STEP)
 
 # Push current values back into the URL so reloads / shared links restore them.
 st.query_params.update({k: str(st.session_state[k]) for k in DEFAULTS})
@@ -218,14 +244,18 @@ F_min = float(F_valid.min()) if F_valid.size else float("nan")
 F_max = float(F_valid.max()) if F_valid.size else float("nan")
 has_singularity = not bool(np.all(usable))
 
+# Diagram coordinates — all scaled by U into the chosen display unit. (These are
+# display-only; the physics above uses the canonical metre values directly.)
 geom = compute_geometry(theta, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
-x_att, z_att = (float(v) for v in geom["attachment"])
-x_cgw, z_cgw = (float(v) for v in geom["cg"])
-xb, zb = geom["cylinder_base"]
-x_tip_b, z_tip_b = (float(v) for v in geom["wall_axis_at_b"])
-x_cgf, z_cgf = (float(v) for v in geom["wall_axis_at_xcg"])
-x_door_tip = container_height * np.cos(theta)
-z_door_tip = container_height * np.sin(theta)
+x_att, z_att = (float(v) * U for v in geom["attachment"])
+x_cgw, z_cgw = (float(v) * U for v in geom["cg"])
+xb, zb = (float(v) * U for v in geom["cylinder_base"])
+x_tip_b, z_tip_b = (float(v) * U for v in geom["wall_axis_at_b"])
+x_cgf, z_cgf = (float(v) * U for v in geom["wall_axis_at_xcg"])
+x_door_tip = container_height * np.cos(theta) * U
+z_door_tip = container_height * np.sin(theta) * U
+cw, ch = container_width * U, container_height * U   # display-unit container dims
+pad = 0.5 * U                                        # display-unit plot margin
 
 # --- Top row: diagram + force ---
 col_diag, col_force = st.columns(2)
@@ -235,21 +265,21 @@ with col_diag:
 
     # Ground (the door lies on it when open)
     fig_geom.add_trace(go.Scatter(
-        x=[-container_width - 0.3, container_height + 0.3], y=[0, 0], mode="lines",
+        x=[-cw - pad, ch + pad], y=[0, 0], mode="lines",
         line=dict(color="lightgray", dash="dash"), hoverinfo="skip", showlegend=False))
 
     # Container outline: floor + back wall + ceiling
     fig_geom.add_trace(go.Scatter(
-        x=[0, -container_width, -container_width, 0],
-        y=[0, 0, container_height, container_height],
+        x=[0, -cw, -cw, 0],
+        y=[0, 0, ch, ch],
         mode="lines", line=dict(color="darkgray", width=3),
         hoverinfo="skip", name="container"))
 
     # Effective ceiling the optimizer respects (roof minus clearance margin)
     if roof_clearance > 0:
-        z_eff = container_height - roof_clearance
+        z_eff = (container_height - roof_clearance) * U
         fig_geom.add_trace(go.Scatter(
-            x=[-container_width, 0], y=[z_eff, z_eff], mode="lines",
+            x=[-cw, 0], y=[z_eff, z_eff], mode="lines",
             line=dict(color="firebrick", width=1, dash="dash"),
             hoverinfo="skip", name="effective ceiling"))
 
@@ -293,17 +323,16 @@ with col_diag:
 
     # Gravity arrow at cg
     fig_geom.add_annotation(
-        x=x_cgw, y=z_cgw - 0.35, ax=x_cgw, ay=z_cgw,
+        x=x_cgw, y=z_cgw - 0.35 * U, ax=x_cgw, ay=z_cgw,
         xref="x", yref="y", axref="x", ayref="y",
         showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2, arrowcolor="blue")
 
-    pad = 0.5
     fig_geom.update_layout(
         title=f"Side view (theta = {theta_deg:.0f} deg)",
-        xaxis=dict(range=[-container_width - pad, container_height + pad],
-                    title="x (m)", zeroline=False),
-        yaxis=dict(range=[-pad, container_height + pad],
-                    title="z (m)", scaleanchor="x", scaleratio=1, zeroline=False),
+        xaxis=dict(range=[-cw - pad, ch + pad],
+                    title=f"x ({ULABEL})", zeroline=False),
+        yaxis=dict(range=[-pad, ch + pad],
+                    title=f"z ({ULABEL})", scaleanchor="x", scaleratio=1, zeroline=False),
         height=500,
         legend=dict(orientation="h", y=-0.15),
         margin=dict(l=10, r=10, t=40, b=10),
@@ -349,21 +378,21 @@ with col_force:
 # --- Bottom row: cylinder length plot (full width) ---
 fig_len = go.Figure()
 fig_len.add_trace(go.Scatter(
-    x=np.degrees(theta_curve), y=L_curve, mode="lines", name="L(theta)"))
+    x=np.degrees(theta_curve), y=L_curve * U, mode="lines", name="L(theta)"))
 fig_len.add_trace(go.Scatter(
-    x=[theta_deg], y=[L_here], mode="markers",
+    x=[theta_deg], y=[L_here * U], mode="markers",
     marker=dict(size=14, color="red"), name="current"))
-fig_len.add_hline(y=L_min, line=dict(color="green", dash="dot"),
-                   annotation_text=f"L_min = {L_min:.2f} m",
+fig_len.add_hline(y=L_min * U, line=dict(color="green", dash="dot"),
+                   annotation_text=f"L_min = {L_min * U:.2f} {ULABEL}",
                    annotation_position="bottom right")
-fig_len.add_hline(y=stroke_ratio * L_min, line=dict(color="red", dash="dot"),
+fig_len.add_hline(y=stroke_ratio * L_min * U, line=dict(color="red", dash="dot"),
                    annotation_text=f"{stroke_ratio:g} x L_min = "
-                                   f"{stroke_ratio * L_min:.2f} m (max stroke limit)",
+                                   f"{stroke_ratio * L_min * U:.2f} {ULABEL} (max stroke limit)",
                    annotation_position="top right")
 fig_len.update_layout(
     title="Cylinder length vs. wall angle",
     xaxis_title="theta (degrees)",
-    yaxis_title="Cylinder length (m)",
+    yaxis_title=f"Cylinder length ({ULABEL})",
     xaxis=dict(range=[0, 90]),
     height=350,
     showlegend=False,
@@ -376,7 +405,8 @@ stroke_status = (f"within {stroke_ratio:g}x limit" if stroke_ok
                  else f"EXCEEDS {stroke_ratio:g}x stroke limit")
 st.caption(
     f"At theta = {theta_deg:.0f} deg: piston force = **{F_here:.2f} N/kg**, "
-    f"cylinder length = **{L_here:.2f} m**.  "
-    f"Across 0-90 deg: L_min = {L_min:.2f} m, L_max = {L_max:.2f} m "
+    f"cylinder length = **{L_here * U:.2f} {ULABEL}**.  "
+    f"Across 0-90 deg: L_min = {L_min * U:.2f} {ULABEL}, "
+    f"L_max = {L_max * U:.2f} {ULABEL} "
     f"(ratio = **{L_ratio:.2f}**, {stroke_status})."
 )
