@@ -282,8 +282,10 @@ def main(argv=None):
     print("  ---------------------------------")
     force_unit = "N" if args.mass != 1.0 else "N/kg"
     print(f"  peak piston force : {res['peak_force']:.3f} {force_unit}")
-    print(f"  stroke ratio      : {res['stroke_ratio']:.3f} "
+    print(f"  cylinder stroke   : {res['L_max'] - res['L_min']:.3f} m "
           f"(L_min={res['L_min']:.3f} m, L_max={res['L_max']:.3f} m)")
+    print(f"  stroke ratio      : {res['stroke_ratio']:.3f} "
+          f"(L_max / L_min; limit {res['stroke_ratio_max']:.2f})")
     print(f"  ceiling clearance : endpoint breaches roof by "
           f"{res['ceiling_violation']:.4f} m (0 = clears)")
     oc = ("OVER-CENTERS (cylinder line crosses the hinge — impossible)"

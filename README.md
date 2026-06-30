@@ -151,6 +151,9 @@ peak **magnitude**, not the sign.
   (red, the practical stroke ceiling — `1.8 ×` by default). If the curve
   crosses the red line you can't buy a standard cylinder for this
   geometry.
+- **Caption under the length plot** reports `L_min`, `L_max`, and the
+  **stroke** (`L_max − L_min`) — the rod travel you actually order a
+  cylinder by — plus the `L_max / L_min` ratio. All follow the units toggle.
 - **A spike or asymptote** in the force curve means the geometry passes
   through the `sin(beta - phi) = 0` singularity. Change `a`, `b`, `d`,
   or `f` until the curve is smooth and finite everywhere.

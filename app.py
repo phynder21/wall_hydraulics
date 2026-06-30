@@ -199,7 +199,8 @@ if st.sidebar.button("Optimize geometry for current settings"):
         held = f" (held: {', '.join(sorted(locked))})" if locked else ""
         action = "Evaluated" if len(locked) == 4 else "Optimized"
         detail = (f"peak {res['peak_force']:.2f} N/kg, "
-                  f"stroke {res['stroke_ratio']:.2f}, "
+                  f"stroke {(res['L_max'] - res['L_min']) * U:.2f} {ULABEL} "
+                  f"(ratio {res['stroke_ratio']:.2f}), "
                   f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}")
         # No st.rerun(): the geometry widgets below re-seed from these canonical
         # values in this same run, so they update immediately. Skipping the
@@ -455,7 +456,8 @@ st.caption(
     f"At theta = {theta_deg:.0f} deg: piston force = **{F_here:.2f} N/kg**, "
     f"cylinder length = **{L_here * U:.2f} {ULABEL}**.  "
     f"Across 0-90 deg: L_min = {L_min * U:.2f} {ULABEL}, "
-    f"L_max = {L_max * U:.2f} {ULABEL} "
+    f"L_max = {L_max * U:.2f} {ULABEL}, "
+    f"**stroke = {(L_max - L_min) * U:.2f} {ULABEL}** "
     f"(ratio = **{L_ratio:.2f}**, {stroke_status})."
 )
 
