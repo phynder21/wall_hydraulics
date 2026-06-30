@@ -17,6 +17,10 @@ that add a steep cost when violated, so the optimizer steers away from them:
   * roof clearance — the attachment endpoint, while horizontally inside the
                     container footprint, must stay `roof_clearance` meters below
                     the ceiling (i.e. z <= container_height - roof_clearance).
+  * no over-center — the cylinder's moment arm about the hinge, sin(beta - phi),
+                    must keep one sign over the swing and stay >= MIN_MOMENT_ARM.
+                    A sign change means the line of action crosses the hinge and
+                    the force diverges -- a physically impossible geometry.
 
 Run `python3 optimize.py --help` for the command-line options.
 """
@@ -41,6 +45,15 @@ VAR_NAMES = ("a", "b", "d", "f")
 # feels. Big enough that the optimum sits essentially on the limit, not over it.
 STROKE_PENALTY = 1.0e6
 CEILING_PENALTY = 1.0e6
+OVERCENTER_PENALTY = 1.0e6
+
+# Minimum moment-arm clearance the cylinder must keep about the hinge over the
+# whole swing: |sin(beta - phi)| >= this. When sin(beta - phi) reaches zero the
+# cylinder's line of action passes through the hinge (base, hinge, and
+# attachment go collinear), the lever arm vanishes, and the required force
+# diverges -- a physically impossible "over-center". A small positive floor both
+# forbids that crossing and keeps a real, build-tolerant margin away from it.
+MIN_MOMENT_ARM = 0.05
 
 # Mechanical design margin: how far BELOW the ceiling the attachment endpoint
 # must stay (meters). The effective ceiling becomes (container_height - this).
@@ -53,11 +66,13 @@ ROOF_CLEARANCE = 0.0
 # margins (for a ceiling design margin, use ROOF_CLEARANCE above).
 STROKE_TOL = 1.0e-3          # stroke ratio (dimensionless)
 CEILING_TOL = 1.0e-3         # meters
+MOMENT_ARM_TOL = 1.0e-3      # moment-arm clearance (dimensionless)
 
 
 def _metrics(p, theta, x_cg, z_cg, m_cg, container_width, container_height,
              roof_clearance):
-    """Peak |force|, stroke ratio, and ceiling overshoot for geometry p=(a,b,d,f)."""
+    """Peak |force|, stroke ratio, ceiling overshoot, and moment-arm clearance
+    for geometry p=(a,b,d,f) over the swept theta."""
     a, b, d, f = p
     # Candidates near a singularity divide by ~0; we discard those samples
     # below, so silence the expected warning rather than spam the console.
@@ -82,7 +97,21 @@ def _metrics(p, theta, x_cg, z_cg, m_cg, container_width, container_height,
     overshoot = np.where(inside, z_att - effective_ceiling, 0.0)
     ceiling_violation = float(np.maximum(overshoot, 0.0).max())
 
-    return peak, ratio, L_min, L_max, ceiling_violation
+    # Over-center guard: the cylinder's moment arm about the hinge is
+    # r_att * sin(beta - phi), where beta points hinge->attachment and phi points
+    # base->attachment. It vanishes when base, hinge, and attachment go collinear
+    # (line of action through the hinge) and the required force diverges. Track
+    # sin(beta - phi): if it takes both signs over the swing the geometry
+    # over-centers. `moment_arm` is the signed worst-case clearance from zero --
+    # the closest approach, made NEGATIVE when the sign flips (crosses the pole).
+    beta = np.arctan2(z_att, x_att)
+    phi = np.arctan2(z_att - f, x_att + a)
+    m_arm = np.sin(beta - phi)
+    crosses = bool(m_arm.min() < 0.0 and m_arm.max() > 0.0)
+    closest = float(np.abs(m_arm).min())
+    moment_arm = -closest if crosses else closest
+
+    return peak, ratio, L_min, L_max, ceiling_violation, moment_arm
 
 
 def optimize_actuator(container_width, container_height, x_cg, z_cg,
@@ -117,7 +146,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
         return tuple(float(vals[v]) for v in VAR_NAMES)
 
     def objective(free_vals):
-        peak, ratio, _, _, ceiling = _metrics(
+        peak, ratio, _, _, ceiling, moment_arm = _metrics(
             assemble(free_vals), theta, x_cg, z_cg, m_cg, container_width,
             container_height, roof_clearance)
         penalty = 0.0
@@ -125,6 +154,8 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
             penalty += STROKE_PENALTY * (ratio - stroke_ratio_max) ** 2
         if ceiling > 0.0:
             penalty += CEILING_PENALTY * ceiling ** 2
+        if moment_arm < MIN_MOMENT_ARM:
+            penalty += OVERCENTER_PENALTY * (MIN_MOMENT_ARM - moment_arm) ** 2
         return peak + penalty
 
     if free:
@@ -140,7 +171,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
         success = True
 
     a, b, d, f = best
-    peak, ratio, L_min, L_max, ceiling = _metrics(
+    peak, ratio, L_min, L_max, ceiling, moment_arm = _metrics(
         best, theta, x_cg, z_cg, m_cg, container_width, container_height,
         roof_clearance)
     return {
@@ -151,8 +182,11 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
         "L_min": L_min, "L_max": L_max,
         "ceiling_violation": ceiling,   # meters the endpoint breaches the roof
         "roof_clearance": roof_clearance,
+        "moment_arm": moment_arm,  # signed worst |sin(beta-phi)|; < 0 over-centers
+        "over_center": moment_arm < 0.0,
         "feasible": (ratio <= stroke_ratio_max + STROKE_TOL
-                     and ceiling <= CEILING_TOL),
+                     and ceiling <= CEILING_TOL
+                     and moment_arm >= MIN_MOMENT_ARM - MOMENT_ARM_TOL),
         "stroke_ratio_max": stroke_ratio_max,
         "x_cg": x_cg, "z_cg": z_cg,
         "container_width": container_width,
@@ -245,8 +279,11 @@ def main(argv=None):
           f"(L_min={res['L_min']:.3f} m, L_max={res['L_max']:.3f} m)")
     print(f"  ceiling clearance : endpoint breaches roof by "
           f"{res['ceiling_violation']:.4f} m (0 = clears)")
+    oc = ("OVER-CENTERS (cylinder line crosses the hinge — impossible)"
+          if res["over_center"] else f"clear (min |sin(beta-phi)| = {res['moment_arm']:.3f})")
+    print(f"  over-center       : {oc}")
     feas = "OK — all constraints met" if res["feasible"] else \
-        "WARNING — a constraint is NOT met (see stroke/ceiling above)"
+        "WARNING — a constraint is NOT met (see above)"
     print(f"  feasibility       : {feas}")
     if not res["success"]:
         print("  note              : optimizer did not fully converge; "

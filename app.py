@@ -199,14 +199,15 @@ if st.sidebar.button("Optimize geometry for current settings"):
         verdict = "feasible" if res["feasible"] else "INFEASIBLE"
         held = f" (held: {', '.join(sorted(locked))})" if locked else ""
         action = "Evaluated" if len(locked) == 4 else "Optimized"
+        oc = " — OVER-CENTERS (no buildable geometry here)" if res["over_center"] else ""
         # No st.rerun(): the geometry widgets below re-seed from these canonical
         # values in this same run, so they update immediately. Skipping the
         # rerun also keeps the lock checkboxes (rendered later) from being reset,
         # since an aborted run would drop their not-yet-rendered widget state.
-        st.sidebar.success(
-            f"{action}{held} ({verdict}): peak {res['peak_force']:.2f} N/kg, "
-            f"stroke {res['stroke_ratio']:.2f}, "
-            f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}.")
+        msg = (f"{action}{held} ({verdict}{oc}): peak {res['peak_force']:.2f} "
+               f"N/kg, stroke {res['stroke_ratio']:.2f}, "
+               f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}.")
+        (st.sidebar.success if res["feasible"] else st.sidebar.warning)(msg)
     except Exception as exc:  # surface any optimizer error in the UI
         st.sidebar.error(f"Optimizer failed: {exc}")
 

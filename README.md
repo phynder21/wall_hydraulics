@@ -221,11 +221,12 @@ pushed to the feasible boundary:
 
 ```
 objective(a,b,d,f) = peak_force
-                   + STROKE_PENALTY  * max(0, stroke_ratio - STROKE_RATIO_MAX)^2
-                   + CEILING_PENALTY * roof_overshoot^2
+                   + STROKE_PENALTY     * max(0, stroke_ratio - STROKE_RATIO_MAX)^2
+                   + CEILING_PENALTY    * roof_overshoot^2
+                   + OVERCENTER_PENALTY * max(0, MIN_MOMENT_ARM - moment_arm)^2
 ```
 
-Two constraints are enforced this way:
+Three constraints are enforced this way:
 
 1. **Stroke limit.** A hydraulic cylinder can only extend so far, so we
    require `L_max / L_min ≤ STROKE_RATIO_MAX` across the swing.
@@ -241,7 +242,21 @@ Two constraints are enforced this way:
    Geometrically this caps the swing radius at `r_att ≤ H − ROOF_CLEARANCE`,
    and the optimum sits right on that cap.
 
-A result is reported **feasible** only when *both* constraints hold
+3. **No over-center.** The cylinder's moment arm about the hinge is
+   `r_att · sin(β − φ)`, where `β` points hinge→attachment and `φ` points
+   base→attachment. It vanishes when the base, hinge, and attachment go
+   **collinear** — the line of action passes through the hinge, the lever
+   arm is zero, and the required force **diverges to infinity**. We track
+   `sin(β − φ)` over the swing; if it changes sign the geometry
+   *over-centers* (physically impossible to build). `moment_arm` is the
+   signed worst-case clearance — the closest approach of `|sin(β − φ)|` to
+   zero, made negative if it crosses — and we require it to stay
+   `≥ MIN_MOMENT_ARM`. This both forbids the crossing and keeps a real,
+   build-tolerant margin away from it. (Catching this needs the *sign*, not
+   the force magnitude: near the crossing the force spike can be so narrow
+   it slips between samples and reads as deceptively low.)
+
+A result is reported **feasible** only when *all three* constraints hold
 within tolerance.
 
 ### The global constants
@@ -250,10 +265,13 @@ within tolerance.
 |---|---|---|---|
 | `STROKE_RATIO_MAX` | `wall.py` | `1.8` | Max extended/retracted cylinder length ratio. **Shared** by the app's length plot and the optimizer so the two never disagree — change it in one place. |
 | `ROOF_CLEARANCE` | `optimize.py` | `0.0` m | Mechanical margin: how far below the ceiling the endpoint must stay. Effective ceiling = `height − ROOF_CLEARANCE`. |
+| `MIN_MOMENT_ARM` | `optimize.py` | `0.05` | Smallest allowed `|sin(β − φ)|` over the swing — the over-center floor. Larger = more clearance from the singularity (and a lower force ceiling), at the cost of a smaller feasible set. |
 | `STROKE_PENALTY` | `optimize.py` | `1e6` | Weight on the stroke-limit penalty. |
 | `CEILING_PENALTY` | `optimize.py` | `1e6` | Weight on the roof-clearance penalty. |
+| `OVERCENTER_PENALTY` | `optimize.py` | `1e6` | Weight on the over-center penalty. |
 | `STROKE_TOL` | `optimize.py` | `1e-3` | Solver slack for declaring the stroke limit "met" (not a design margin). |
 | `CEILING_TOL` | `optimize.py` | `1e-3` m | Solver slack for declaring roof clearance "met" (not a design margin). |
+| `MOMENT_ARM_TOL` | `optimize.py` | `1e-3` | Solver slack for declaring the over-center constraint "met". |
 
 Two values can also be overridden per run without touching the
 constants: `--stroke-ratio` and `--clearance`. The penalty weights are
