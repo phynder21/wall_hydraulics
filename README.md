@@ -99,7 +99,7 @@ These bound what counts as a valid design and feed the optimizer (below).
 | Parameter          | Meaning                                                                    |
 | ------------------ | -------------------------------------------------------------------------- |
 | Max stroke ratio   | Largest allowed `L_max / L_min` over the swing. Draws the red limit line on the length plot. Default `1.8`. |
-| Roof clearance (m) | How far below the ceiling the linkage endpoint must stay. When > 0, a dashed red **effective ceiling** line appears on the diagram. Default `0`. |
+| Roof clearance     | How far below the ceiling the linkage endpoint must stay (in the active length unit). When > 0, a dashed red **effective ceiling** line appears on the diagram. Default `0`. |
 
 ### Optimize
 
@@ -107,6 +107,7 @@ These bound what counts as a valid design and feed the optimizer (below).
 | ------- | ------- |
 | **Optimize geometry** button | Searches for the `a, b, d, f` that minimize the worst-case piston force for the current container, cg, and constraints, then fills them in. See [section 6](#6-optimizing-the-geometry-optimizepy). |
 | 🔒 lock (beside `a`, `b`, `d`, `f`) | Hold that dimension at its current value so the optimizer searches only the unlocked ones. Lock all four to just evaluate that exact geometry. |
+| Result banner | The optimizer **never returns an impossible (over-center) geometry**. After it runs, a banner reports the design: **green** = buildable and all limits met; **yellow** = best buildable design, but a stroke/roof limit can't be met (still usable — you'd just need different hardware); **red** = the (locked) geometry over-centers and can't be built, so unlock something. |
 
 ---
 
@@ -126,8 +127,10 @@ F_piston(theta) = - m_cg * g * r_cg * cos(alpha)
 - `phi` — angle of the cylinder line (base to attachment).
 - `sin(beta - phi)` is the **mechanical advantage** of the cylinder
   about the hinge. When it crosses zero, the cylinder pulls straight
-  through the hinge and the required force diverges. A good design
-  keeps this term well away from zero across the full 0–π/2 sweep.
+  through the hinge and the required force diverges (an *over-center*).
+  A good design keeps this term well away from zero across the full
+  0–π/2 sweep — the optimizer enforces exactly this (constraint 3 in
+  [section 6](#6-optimizing-the-geometry-optimizepy)).
 
 Cylinder length is just the distance from base `(-a, f)` to the
 attachment point:
@@ -195,8 +198,9 @@ python3 optimize.py --lock f=0.5                      # hold f, optimize a, b, d
 python3 optimize.py --help                            # all options
 ```
 
-It prints the optimal `a, b, d, f`, the resulting peak force, the stroke
-ratio, the roof clearance, and a paste-ready line for the app's sliders.
+It prints the optimal `a, b, d, f`, the resulting peak force, the cylinder
+stroke and stroke ratio, the roof and over-center clearances, whether the
+design is feasible, and a paste-ready line for the app's sliders.
 
 **Locking variables.** Real installs often fix some dimensions (a bracket
 height, an existing floor mount). Pass `--lock VAR=VALUE` (repeatable) to
