@@ -52,10 +52,12 @@ The tool answers two design questions:
 
 ## 3. Parameters
 
-All distances are in meters. The hinge is the origin; the floor extends
-left into the container; the wall opens to the right. Every numeric
-parameter below can be **dragged on its slider or typed into its number
-box** — whichever is handier.
+The hinge is the origin; the floor extends left into the container; the
+wall opens to the right. Every numeric parameter below can be **dragged on
+its slider or typed into its number box** — whichever is handier. A
+**Display units** toggle in the sidebar switches every length between
+**meters and inches** (angles and force are unaffected); values are stored
+in meters internally, so shared links are identical regardless of unit.
 
 ### Container
 
@@ -88,6 +90,7 @@ cylinder force.
 | Parameter   | Meaning                              |
 | ----------- | ------------------------------------ |
 | `theta_deg` | Current angle for the side-view diagram. Slide it to scrub through the motion; both plots mark the current angle in red. |
+| ▶ Sweep θ   | Toggle to **continuously animate** the wall opening and closing (0 → 90 → 0°). The angle slider sweeps along; toggle off to freeze and scrub manually. |
 
 ### Constraints
 

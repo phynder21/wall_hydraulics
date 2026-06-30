@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
@@ -141,6 +143,24 @@ def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
                     help="Hold this value fixed when you press Optimize.")
     return st.session_state[key]
 
+# --- Animation -----------------------------------------------------------
+ANIM_STEP_DEG = 3.0     # degrees advanced per frame
+FRAME_DELAY_S = 0.05    # pause between frames (~ steady frame rate)
+
+
+def _advance_angle(angle, direction, step=ANIM_STEP_DEG):
+    """Next sweep angle, bouncing back at the 0 and 90 degree limits.
+
+    Returns (new_angle, new_direction) with direction in {+1, -1}.
+    """
+    nxt = angle + direction * step
+    if nxt >= 90.0:
+        return 90.0, -1
+    if nxt <= 0.0:
+        return 0.0, 1
+    return nxt, direction
+
+
 # --- Constraints (shared with the optimizer) ---
 st.sidebar.header("Constraints")
 stroke_ratio = st.sidebar.number_input(
@@ -205,6 +225,18 @@ f = linked_input(f"f — cylinder base height above floor [{ULABEL}]", "f",
                  *GEOM_BOUNDS["f"], **_geom)
 
 st.sidebar.header("Wall angle")
+animating = st.sidebar.toggle(
+    "▶ Sweep θ (0 → 90 → 0)", key="animating",
+    help="Continuously animate the wall opening and closing. "
+         "Toggle off to scrub the angle manually.")
+st.session_state.setdefault("anim_theta", float(st.session_state["theta_deg"]))
+st.session_state.setdefault("anim_dir", 1)
+if animating:
+    # Drive the angle from the sweep state; the slider below follows along.
+    st.session_state["theta_deg"] = st.session_state["anim_theta"]
+else:
+    # Idle: keep the sweep ready to resume from the current manual angle.
+    st.session_state["anim_theta"] = float(st.session_state["theta_deg"])
 theta_deg = linked_input("theta (degrees)", "theta_deg", 0.0, 90.0,
                          step=1.0, fmt="%.0f")
 theta = np.radians(theta_deg)
@@ -216,7 +248,10 @@ z_cg = linked_input(f"z_cg — perpendicular off wall [{ULABEL}]", "z_cg",
                     0.0, 1.5, disp_factor=U, disp_step=LEN_STEP)
 
 # Push current values back into the URL so reloads / shared links restore them.
-st.query_params.update({k: str(st.session_state[k]) for k in DEFAULTS})
+# Skip while animating: it reruns ~20x/sec, and browsers throttle history updates
+# (Safari errors past ~100/30s). The frozen value is written once on stop.
+if not animating:
+    st.query_params.update({k: str(st.session_state[k]) for k in DEFAULTS})
 
 # --- Computations ---
 # Near-singular geometries make compute_F_piston divide by ~0; we mask those
@@ -410,3 +445,14 @@ st.caption(
     f"L_max = {L_max * U:.2f} {ULABEL} "
     f"(ratio = **{L_ratio:.2f}**, {stroke_status})."
 )
+
+# --- Animation driver -------------------------------------------------------
+# Streamlit has no background loop, so we animate by advancing the sweep angle
+# and re-running. This sits at the very end so every widget has already rendered
+# this frame — an aborted (early) rerun would drop not-yet-rendered widget state
+# (e.g. the lock checkboxes). Toggle the animation off to stop the loop.
+if animating:
+    st.session_state["anim_theta"], st.session_state["anim_dir"] = _advance_angle(
+        st.session_state["anim_theta"], st.session_state["anim_dir"])
+    time.sleep(FRAME_DELAY_S)
+    st.rerun()
