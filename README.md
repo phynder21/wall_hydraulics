@@ -400,6 +400,35 @@ streamlit run app.py
 
 A browser tab opens at `http://localhost:8501`. Stop with `Ctrl+C`.
 
+**Run the tests:**
+
+The repo ships a [`pytest`](https://docs.pytest.org/) suite under `tests/`
+that guards the three layers — the physics (`wall.py`), the optimizer
+(`optimize.py`), and the Streamlit UI (`app.py`). Run it after any change:
+
+```bash
+pytest                 # fast suite (~1 min) — run this routinely
+pytest -m slow         # exhaustive sweeps too (several minutes; before a release)
+pytest tests/test_physics.py -v   # one file, verbose
+```
+
+(If `pytest` isn't found, use `python3 -m pytest`.) What it covers:
+
+- **`test_physics.py`** — cross-checks `compute_F_piston` against an
+  independent torque-balance derivation over thousands of random geometries,
+  plus array/scalar consistency, swing endpoints, and degenerate inputs.
+- **`test_optimize.py`** — result-shape and constraint *invariants* across
+  varied cg, stroke ratios, clearances, locks, and mounting limits;
+  determinism; and that multi-start still reaches the known global optimum.
+- **`test_app.py`** — renders the app headlessly (Streamlit's `AppTest`) in
+  both unit systems and the fine-precision mode, with extreme geometries, cg,
+  constraints, container switches, malformed URL params, and the
+  clickable-alternatives flow. The animation bounce logic is unit-tested
+  directly (it can't be driven through `AppTest`'s rerun loop).
+
+The heavier sweeps are marked `slow` and skipped by default, so the routine
+`pytest` run stays fast.
+
 ### Troubleshooting
 
 | Symptom                                          | Fix                                                                          |
@@ -419,7 +448,9 @@ A browser tab opens at `http://localhost:8501`. Stop with `Ctrl+C`.
 ├── wall.py            # Physics + shared constants (e.g. STROKE_RATIO_MAX). No UI.
 ├── app.py             # Streamlit UI. Sliders, plots, layout.
 ├── optimize.py        # Geometry optimizer (CLI + importable function). Needs SciPy.
-├── requirements.txt   # Dependencies (streamlit, numpy, plotly, scipy).
+├── tests/             # pytest suite (physics, optimizer, UI). See section 7.
+├── pytest.ini         # Test config (adds repo root to the import path; markers).
+├── requirements.txt   # Dependencies (streamlit, numpy, plotly, scipy, pytest).
 └── README.md
 ```
 
