@@ -452,6 +452,11 @@ pytest tests/test_physics.py -v   # one file, verbose
 The heavier sweeps are marked `slow` and skipped by default, so the routine
 `pytest` run stays fast.
 
+For a **human-readable, reproducible test plan** — physics cases checkable by
+hand from the equations, plus optimizer and UI cases with expected values and
+tolerances — see [`docs/experiment_plan.md`](docs/experiment_plan.md) and the
+paste-into-a-spreadsheet [`docs/test_cases.csv`](docs/test_cases.csv).
+
 ### Troubleshooting
 
 | Symptom                                          | Fix                                                                          |
@@ -472,6 +477,7 @@ The heavier sweeps are marked `slow` and skipped by default, so the routine
 ├── app.py             # Streamlit UI. Sliders, plots, layout.
 ├── optimize.py        # Geometry optimizer (CLI + importable function). Needs SciPy.
 ├── tests/             # pytest suite (physics, optimizer, UI). See section 7.
+├── docs/              # Reproducible test plan (experiment_plan.md + test_cases.csv).
 ├── pytest.ini         # Test config (adds repo root to the import path; markers).
 ├── requirements.txt   # Dependencies (streamlit, numpy, plotly, scipy, pytest).
 └── README.md
