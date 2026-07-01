@@ -18,7 +18,7 @@ from optimize import optimize_actuator
 # glance whether a running/deployed page has the latest code (a stale process
 # shows the OLD marker). If the app errors right after a push, check this — an
 # old marker means the deploy hasn't reloaded yet (reboot it).
-BUILD = "mounting-limits + typeable ranges · 2026-07-01"
+BUILD = "clickable alternatives + reordered sidebar · 2026-07-01"
 
 st.set_page_config(page_title="Container Wall Actuator", layout="wide")
 st.title("Shipping container hinged-wall actuator")
@@ -229,6 +229,14 @@ def _advance_angle(angle, direction, step=ANIM_STEP_DEG):
     return nxt, direction
 
 
+# --- Center of gravity: the load the actuator must hold, part of the problem
+# statement — placed before the constraints/optimizer that consume it. ---
+st.sidebar.header(f"Center of gravity ({UWORD})")
+x_cg = linked_input(f"x_cg — along wall from hinge [{ULABEL}]", "x_cg",
+                    0.0, container_height, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
+z_cg = linked_input(f"z_cg — perpendicular off wall [{ULABEL}]", "z_cg",
+                    0.0, 1.5, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
+
 # --- Constraints (shared with the optimizer) ---
 st.sidebar.header("Constraints")
 stroke_ratio = st.sidebar.number_input(
@@ -308,19 +316,10 @@ if st.sidebar.button("Optimize geometry for current settings"):
                 f"{action}{held} — best buildable design, but not all limits are met "
                 f"(usable; may need different hardware or looser settings): {detail}.")
 
-        # If several distinct geometries tie for the best force (a flat optimum),
-        # list them so you can pick on other grounds. The sliders hold the first.
-        alts = res.get("alternatives", [])
-        if len(alts) > 1:
-            with st.sidebar.expander(
-                    f"{len(alts)} equally-good geometries (same peak force)"):
-                st.caption("Same force — pick by build convenience. The sliders "
-                           "show the first.")
-                for x in alts:
-                    st.write(
-                        f"a={x['a'] * U:.2f}  b={x['b'] * U:.2f}  "
-                        f"d={x['d'] * U:.2f}  f={x['f'] * U:.2f} {ULABEL}  "
-                        f"— {x['peak_force']:.2f} N/kg")
+        # Persist the distinct equally-good geometries (a flat optimum) so they
+        # render as clickable buttons below — outside this click block, so they
+        # survive later reruns and let you load any one into the sliders.
+        st.session_state["_alts"] = res.get("alternatives", [])
     except TypeError as exc:  # e.g. new app.py calling an old optimize.py
         if "unexpected keyword argument" in str(exc):
             st.sidebar.error(
@@ -331,6 +330,25 @@ if st.sidebar.button("Optimize geometry for current settings"):
             st.sidebar.error(f"Optimizer failed: {exc}")
     except Exception as exc:  # surface any other optimizer error in the UI
         st.sidebar.error(f"Optimizer failed: {exc}")
+
+# Clickable list of the last optimize's equally-good geometries. Rendered here —
+# above the Geometry sliders and outside the Optimize click block — so a click
+# loads the chosen geometry into a/b/d/f and the sliders + diagrams below re-seed
+# from it in the same run (no st.rerun needed, same reason as the Optimize path).
+_alts = st.session_state.get("_alts", [])
+if len(_alts) > 1:
+    with st.sidebar.expander(
+            f"{len(_alts)} equally-good geometries (same peak force)"):
+        st.caption("Same force — click one to load it into the diagrams.")
+        for _i, _x in enumerate(_alts):
+            _lbl = (f"a={_x['a'] * U:.2f}  b={_x['b'] * U:.2f}  "
+                    f"d={_x['d'] * U:.2f}  f={_x['f'] * U:.2f} {ULABEL}  "
+                    f"— {_x['peak_force']:.2f} N/kg")
+            if st.button(_lbl, key=f"alt_{_i}", use_container_width=True):
+                for _k in ("a", "b", "d", "f"):
+                    _lo, _hi = USER_BOUNDS[_k]
+                    st.session_state[_k] = float(
+                        min(max(round(_x[_k], ROUND_DP), _lo), _hi))
 
 st.sidebar.header(f"Geometry ({UWORD})")
 st.sidebar.caption("🔒 a value to hold it fixed while the others are optimized.")
@@ -362,12 +380,6 @@ else:
 theta_deg = linked_input("theta (degrees)", "theta_deg", 0.0, 90.0,
                          step=1.0, fmt="%.0f")
 theta = np.radians(theta_deg)
-
-st.sidebar.header(f"Center of gravity ({UWORD})")
-x_cg = linked_input(f"x_cg — along wall from hinge [{ULABEL}]", "x_cg",
-                    0.0, container_height, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
-z_cg = linked_input(f"z_cg — perpendicular off wall [{ULABEL}]", "z_cg",
-                    0.0, 1.5, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
 
 # Push current values back into the URL so reloads / shared links restore them.
 # Skip while animating: it reruns ~20x/sec, and browsers throttle history updates

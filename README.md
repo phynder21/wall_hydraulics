@@ -65,14 +65,10 @@ in meters internally, so shared links are identical regardless of unit.
 | ------------------ | -------------------------------------------------------------------------- |
 | Container size     | Dropdown: Standard (2.44 m × 2.59 m) or High-Cube (2.44 m × 2.90 m). Sets `container_width` and `container_height`, which bound the other sliders. |
 
-### Geometry
-
-| Parameter | Meaning                                                                                                |
-| --------- | ------------------------------------------------------------------------------------------------------ |
-| `a`       | Distance along the floor from the hinge to the cylinder mounting base. Capped at half the floor width. |
-| `b`       | Distance along the wall from the hinge to the piston attachment point. Stays fixed on the wall as it rotates. |
-| `d`       | Perpendicular stand-off from the wall surface to the piston attachment (the length of the bracket).    |
-| `f`       | Height of the cylinder mounting base above the floor.                                                  |
+The sidebar reads top-to-bottom as the workflow: describe the **load**
+(Center of gravity), set the **rules** (Constraints, Mounting limits),
+**Optimize**, then read/tweak the resulting **Geometry** and scrub the
+**Wall angle**.
 
 ### Center of gravity
 
@@ -85,13 +81,6 @@ The wall mass is fixed at 1 kg, so the force readout is **newtons per kg
 of wall + equipment mass**. Multiply by your actual mass for the real
 cylinder force.
 
-### Wall angle
-
-| Parameter   | Meaning                              |
-| ----------- | ------------------------------------ |
-| `theta_deg` | Current angle for the side-view diagram. Slide it to scrub through the motion; both plots mark the current angle in red. |
-| ▶ Sweep θ   | Toggle to **continuously animate** the wall opening and closing (0 → 90 → 0°). The angle slider sweeps along; toggle off to freeze and scrub manually. |
-
 ### Constraints
 
 These bound what counts as a valid design and feed the optimizer (below).
@@ -100,14 +89,6 @@ These bound what counts as a valid design and feed the optimizer (below).
 | ------------------ | -------------------------------------------------------------------------- |
 | Max stroke ratio   | Largest allowed `L_max / L_min` over the swing. Draws the red limit line on the length plot. Default `1.8`. |
 | Roof clearance     | How far below the ceiling the linkage endpoint must stay (in the active length unit). When > 0, a dashed red **effective ceiling** line appears on the diagram. Default `0`. |
-
-### Optimize
-
-| Control | Meaning |
-| ------- | ------- |
-| **Optimize geometry** button | Searches for the `a, b, d, f` that minimize the worst-case piston force for the current container, cg, and constraints, then fills them in. See [section 6](#6-optimizing-the-geometry-optimizepy). |
-| 🔒 lock (beside `a`, `b`, `d`, `f`) | Hold that dimension at its current value so the optimizer searches only the unlocked ones. Lock all four to just evaluate that exact geometry. |
-| Result banner | The optimizer **never returns an impossible (over-center) geometry**. After it runs, a banner reports the design: **green** = buildable and all limits met; **yellow** = best buildable design, but a stroke/roof limit can't be met (still usable — you'd just need different hardware); **red** = the (locked) geometry over-centers and can't be built, so unlock something. |
 
 ### Mounting limits
 
@@ -121,6 +102,33 @@ actually build*, not an optimal-but-unmountable one (e.g. the base pinned at
 the ceiling). Leave a range at full for no restriction; to pin an exact value
 use the 🔒 lock instead. Tighter ranges = less freedom, so the best
 achievable force can only rise.
+
+### Optimize
+
+| Control | Meaning |
+| ------- | ------- |
+| **Optimize geometry** button | Searches for the `a, b, d, f` that minimize the worst-case piston force for the current container, cg, and constraints, then fills them in. See [section 6](#6-optimizing-the-geometry-optimizepy). |
+| 🔒 lock (beside `a`, `b`, `d`, `f`) | Hold that dimension at its current value so the optimizer searches only the unlocked ones. Lock all four to just evaluate that exact geometry. |
+| Result banner | The optimizer **never returns an impossible (over-center) geometry**. After it runs, a banner reports the design: **green** = buildable and all limits met; **yellow** = best buildable design, but a stroke/roof limit can't be met (still usable — you'd just need different hardware); **red** = the (locked) geometry over-centers and can't be built, so unlock something. |
+| Equally-good geometries | When several distinct designs tie for the best peak force (a flat optimum), they appear in an expander below the button. **Click any one to load it into the geometry and diagrams** — pick by build convenience without re-running the search. |
+
+### Geometry
+
+The optimizer writes its result here; you can also edit any value by hand.
+
+| Parameter | Meaning                                                                                                |
+| --------- | ------------------------------------------------------------------------------------------------------ |
+| `a`       | Distance along the floor from the hinge to the cylinder mounting base. Capped at half the floor width. |
+| `b`       | Distance along the wall from the hinge to the piston attachment point. Stays fixed on the wall as it rotates. |
+| `d`       | Perpendicular stand-off from the wall surface to the piston attachment (the length of the bracket).    |
+| `f`       | Height of the cylinder mounting base above the floor.                                                  |
+
+### Wall angle
+
+| Parameter   | Meaning                              |
+| ----------- | ------------------------------------ |
+| `theta_deg` | Current angle for the side-view diagram. Slide it to scrub through the motion; both plots mark the current angle in red. |
+| ▶ Sweep θ   | Toggle to **continuously animate** the wall opening and closing (0 → 90 → 0°). The angle slider sweeps along; toggle off to freeze and scrub manually. |
 
 ---
 
@@ -252,9 +260,10 @@ aren't used. The trade-off: the Optimize button takes ~20 s; `n_starts` is
 tunable (`--starts` on the CLI).
 
 If several **distinct** feasible geometries tie for the best force (a *flat*
-optimum), they're returned as `alternatives` and listed in the CLI and the
-app, so you can choose on other grounds (mounting, packaging, cost). A unique
-optimum — like the standard case — lists just one.
+optimum), they're returned as `alternatives` — listed by the CLI and shown in
+the app as **clickable buttons** (click one to load it into the geometry and
+diagrams) — so you can choose on other grounds (mounting, packaging, cost). A
+unique optimum — like the standard case — lists just one.
 
 ### How the constraints are added (penalty method)
 
