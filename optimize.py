@@ -80,9 +80,23 @@ MOMENT_ARM_TOL = 1.0e-3      # moment-arm clearance (dimensionless)
 # (Bigger per-seed populations and corner-seeded starts were both tried and gave
 # no reliability gain; independent restarts are the effective lever.)
 N_STARTS = 20
-# Two feasible geometries count as reaching "the same optimum" if their peak
-# forces are within this relative tolerance -- used to list equivalent designs.
-ALT_REL_TOL = 0.01
+# Near-optimal alternatives: designs whose peak force is within this relative
+# tolerance of the best are acceptable fallbacks. Instead of listing near-
+# duplicates, we surface a geometrically DIVERSE spread of them, so you can
+# trade a little force for an easier-to-build geometry. Each extra design is
+# found by re-optimizing with a repulsion penalty that pushes it away from the
+# designs already chosen -- i.e. the lowest-force geometry that is meaningfully
+# different from them -- and kept only if it stays within tolerance.
+ALT_REL_TOL = 0.15      # default: keep alternatives within 15% of the optimum's
+                        # peak force. A sharp optimum often sits alone in its own
+                        # basin, so the nearest genuinely different design can be
+                        # ~10% worse; 15% reliably surfaces at least one. The app
+                        # exposes this as a slider (alt_rel_tol) so you can tighten
+                        # it (fewer, closer designs) or loosen it (more options).
+N_ALTERNATIVES = 6      # most designs to return (including the optimum itself)
+ALT_TARGET_SEP = 0.20   # separation (normalized geometry distance) each new design aims for
+ALT_MIN_SEP = 0.08      # min separation to accept a design as genuinely distinct
+ALT_REPEL = 1.0e3       # repulsion strength enforcing separation during the search
 
 
 def _metrics(p, theta, x_cg, z_cg, m_cg, container_width, container_height,
@@ -134,7 +148,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
                       stroke_ratio_max=STROKE_RATIO_MAX,
                       roof_clearance=ROOF_CLEARANCE, locked=None, var_bounds=None,
                       n_theta=200, m_cg=1.0, seed=0, maxiter=300,
-                      n_starts=N_STARTS, popsize=None):
+                      n_starts=N_STARTS, popsize=None, alt_rel_tol=ALT_REL_TOL):
     """Search for the (a, b, d, f) minimizing peak piston force over 0-90 deg.
 
     Runs `n_starts` independent differential-evolution starts (fixed seeds, so the
@@ -150,9 +164,14 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     `var_bounds` optionally overrides the (lo, hi) search range per variable to a
     sub-range (e.g. mounting limits). A zero-width range is treated as a lock.
 
+    `alt_rel_tol` sets how far above the optimum's peak force an alternative may
+    sit (a fraction, e.g. 0.15 = within 15%).
+
     Returns a dict with the geometry and resulting metrics, plus `alternatives`:
-    the distinct feasible geometries whose peak force ties the best (within
-    ALT_REL_TOL), so a flat optimum surfaces as several equivalent designs.
+    a geometrically DIVERSE set of near-optimal designs (each within
+    `alt_rel_tol` of the best peak force, tagged with its `penalty_pct`), so you
+    can trade a little force for an easier-to-build geometry. The optimum itself
+    is always `alternatives[0]`.
     """
     locked = dict(locked or {})
     n_starts = max(1, int(n_starts))   # at least one start
@@ -234,21 +253,74 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
         success = True
         runs = [best]
 
-    # Alternatives: distinct feasible geometries whose peak force ties the best
-    # (within ALT_REL_TOL). A unique optimum yields one; a flat optimum surfaces
-    # several equally-good designs. Deduped at slider precision (2 decimals).
-    tied = [r for r in runs
-            if r["feasible"] and r["peak"] <= best["peak"] * (1 + ALT_REL_TOL)]
-    alternatives, seen = [], set()
-    # Sort by objective so the returned best (chosen by objective) is always the
-    # first alternative -- i.e. alternatives[0] is the geometry in the sliders.
-    for r in sorted(tied or [best], key=lambda r: r["fun"]):
-        key = tuple(round(v, 2) for v in r["geom"])
-        if key not in seen:
-            seen.add(key)
-            g = r["geom"]
-            alternatives.append({"a": g[0], "b": g[1], "d": g[2], "f": g[3],
-                                 "peak_force": r["peak"]})
+    # Alternatives: geometrically DIVERSE designs whose peak force is within
+    # ALT_REL_TOL of the best -- near-optimal fallbacks for when the true optimum
+    # is awkward to build. Because the optimum typically sits on a constraint
+    # boundary (e.g. the stroke limit), the feasible near-optimal set is thin and
+    # jittering around the optimum finds nothing new. Instead we seed with any
+    # distinct feasible multi-start winners, then repeatedly RE-OPTIMIZE with a
+    # repulsion penalty that pushes the search away from the designs already
+    # chosen -- yielding, each time, the lowest-force geometry that is genuinely
+    # different from them. The global best is always first, so alternatives[0] is
+    # the geometry shown in the sliders.
+    best_peak = best["peak"]
+    threshold = best_peak * (1 + alt_rel_tol)
+    ranges = {v: max(full_bounds[v][1] - full_bounds[v][0], 1e-9) for v in free}
+
+    def _norm_dist(g1, g2):
+        """Geometry distance over the FREE variables, each normalized by its
+        search range so every dimension contributes comparably."""
+        if not free:
+            return 0.0
+        return float(np.sqrt(sum(
+            ((g1[VAR_NAMES.index(v)] - g2[VAR_NAMES.index(v)]) / ranges[v]) ** 2
+            for v in free)))
+
+    def _min_sep(geom, chosen):
+        return min((_norm_dist(geom, g) for g in chosen), default=float("inf"))
+
+    selected = [(best["geom"], best_peak)]   # (geom, peak); the optimum is first
+
+    # First, reuse any feasible multi-start winners that are already distinct --
+    # they're free (already computed) and capture separate basins.
+    for r in sorted((r for r in runs if r["feasible"] and r["peak"] <= threshold),
+                    key=lambda r: r["fun"]):
+        if len(selected) >= N_ALTERNATIVES:
+            break
+        if _min_sep(r["geom"], [g for g, _ in selected]) >= ALT_MIN_SEP:
+            selected.append((r["geom"], r["peak"]))
+
+    # Then top up by re-optimizing with a repulsion penalty away from the chosen
+    # designs. Stop as soon as the best distinct design exceeds tolerance.
+    if free and best["feasible"]:
+        alt_de_kwargs = {"maxiter": 80, "tol": 1e-7, "polish": True}
+        while len(selected) < N_ALTERNATIVES:
+            chosen = [g for g, _ in selected]
+
+            def repelled(free_vals):
+                geom = assemble(free_vals)
+                penalty = 0.0
+                for g in chosen:
+                    gap = ALT_TARGET_SEP - _norm_dist(geom, g)
+                    if gap > 0.0:
+                        penalty += ALT_REPEL * gap ** 2
+                return objective(free_vals) + penalty
+
+            result = differential_evolution(
+                repelled, bounds, seed=seed + 1000 + len(selected), **alt_de_kwargs)
+            geom = assemble(result.x)
+            ev = evaluate(geom)
+            if not (ev["feasible"] and np.isfinite(ev["peak"])
+                    and ev["peak"] <= threshold):
+                break   # no distinct design left within tolerance
+            if _min_sep(geom, chosen) < ALT_MIN_SEP:
+                break   # search could not get far enough from the chosen designs
+            selected.append((geom, ev["peak"]))
+
+    alternatives = [
+        {"a": g[0], "b": g[1], "d": g[2], "f": g[3], "peak_force": p,
+         "penalty_pct": (p / best_peak - 1.0) * 100.0 if best_peak > 0 else 0.0}
+        for g, p in selected]
 
     a, b, d, f = best["geom"]
     return {
@@ -262,7 +334,8 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
         "moment_arm": best["moment_arm"],  # signed worst |sin(beta-phi)|; <0 over-centers
         "over_center": best["moment_arm"] < 0.0,
         "feasible": best["feasible"],
-        "alternatives": alternatives,   # distinct equally-good geometries
+        "alternatives": alternatives,   # diverse near-optimal geometries
+        "alt_rel_tol": alt_rel_tol,      # tolerance band the alternatives sit within
         "n_starts": n_starts if free else 0,
         "stroke_ratio_max": stroke_ratio_max,
         "x_cg": x_cg, "z_cg": z_cg,
@@ -305,6 +378,9 @@ def _build_parser():
                    help="Base random seed; multi-start uses seed .. seed+starts-1.")
     p.add_argument("--starts", type=int, default=N_STARTS,
                    help="Number of independent optimizer restarts (multi-start).")
+    p.add_argument("--alt-tol", type=float, default=ALT_REL_TOL,
+                   help="Alternatives tolerance: list diverse designs whose peak "
+                        "force is within this fraction of the optimum (e.g. 0.15).")
     return p
 
 
@@ -335,7 +411,7 @@ def main(argv=None):
         x_cg=args.x_cg, z_cg=args.z_cg,
         stroke_ratio_max=args.stroke_ratio, roof_clearance=args.clearance,
         locked=locked, n_theta=args.grid, m_cg=args.mass, seed=args.seed,
-        n_starts=args.starts,
+        n_starts=args.starts, alt_rel_tol=args.alt_tol,
     )
 
     print("\n=== Optimized actuator geometry ===")
@@ -374,11 +450,13 @@ def main(argv=None):
     alts = res["alternatives"]
     if len(alts) > 1:
         print(f"  ---------------------------------")
-        print(f"  {len(alts)} equally-good geometries reach this force "
-              f"(flat optimum — pick by build convenience):")
+        print(f"  {len(alts) - 1} near-optimal alternatives (diverse geometries "
+              f"within {res['alt_rel_tol'] * 100:.0f}% of the optimum — pick by "
+              f"build convenience):")
         for x in alts:
+            tag = "optimum" if x["penalty_pct"] < 1e-6 else f"+{x['penalty_pct']:.1f}%"
             print(f"    a={x['a']:.3f} b={x['b']:.3f} d={x['d']:.3f} "
-                  f"f={x['f']:.3f}  ({x['peak_force']:.3f} {force_unit})")
+                  f"f={x['f']:.3f}  ({x['peak_force']:.3f} {force_unit}, {tag})")
 
     # A line you can paste straight into app.py's sliders to visualize.
     print("\n  Paste into the app's sliders:")

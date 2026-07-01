@@ -20,7 +20,7 @@ STANDARD = CONTAINER_PRESETS["standard"]
 REQUIRED_KEYS = {
     "a", "b", "d", "f", "locked", "peak_force", "stroke_ratio", "L_min", "L_max",
     "ceiling_violation", "roof_clearance", "moment_arm", "over_center", "feasible",
-    "alternatives", "n_starts", "stroke_ratio_max", "x_cg", "z_cg",
+    "alternatives", "alt_rel_tol", "n_starts", "stroke_ratio_max", "x_cg", "z_cg",
     "container_width", "container_height", "success",
 }
 
@@ -35,12 +35,22 @@ def assert_result_invariants(res, ctx=""):
     for key in ("a", "b", "d", "f", "peak_force", "stroke_ratio", "L_min", "L_max"):
         assert np.isfinite(res[key]), f"{ctx}: {key} is not finite ({res[key]})"
 
-    # The first alternative is, by contract, the geometry the sliders will show.
-    if res["alternatives"]:
-        first = res["alternatives"][0]
+    # The first alternative is, by contract, the optimum shown in the sliders,
+    # with zero force penalty; every alternative stays inside the tolerance band.
+    alts = res["alternatives"]
+    if alts:
+        first = alts[0]
         for key in ("a", "b", "d", "f"):
             assert abs(round(first[key], 2) - round(res[key], 2)) <= 0.02, (
                 f"{ctx}: alternatives[0].{key} disagrees with result.{key}")
+        assert first["penalty_pct"] == pytest.approx(0.0, abs=1e-6), (
+            f"{ctx}: alternatives[0] should be the optimum (0% penalty)")
+        band = res["peak_force"] * (1 + res["alt_rel_tol"]) + 1e-6
+        for alt in alts:
+            assert "penalty_pct" in alt
+            assert alt["peak_force"] <= band, (
+                f"{ctx}: alternative peak {alt['peak_force']:.3f} exceeds band "
+                f"{band:.3f}")
 
     # The over-center flag is exactly the sign of the worst moment arm.
     assert res["over_center"] == (res["moment_arm"] < 0.0), f"{ctx}: flag/sign disagree"
@@ -134,6 +144,46 @@ def test_result_is_deterministic():
         assert abs(first[key] - second[key]) < 1e-9
 
 
+@pytest.mark.parametrize("alt_tol", [0.0, 0.05, 0.15, 0.30])
+def test_alternatives_respect_tolerance(alt_tol):
+    """Whatever the tolerance, alternatives[0] is the optimum and every listed
+    design stays within the requested force band."""
+    res = optimize_actuator(*STANDARD, x_cg=1.2, z_cg=0.55, alt_rel_tol=alt_tol, **FAST)
+    assert res["alt_rel_tol"] == alt_tol
+    assert_result_invariants(res, f"alt_tol={alt_tol}")
+    # Zero tolerance -> nothing worse than the optimum is listed (only the
+    # optimum and any exact ties, all at ~0% penalty).
+    if alt_tol == 0.0:
+        assert all(alt["penalty_pct"] <= 0.5 for alt in res["alternatives"])
+
+
+def test_alternatives_are_geometrically_distinct():
+    """Any two listed alternatives differ by a real amount in geometry (they are
+    fallbacks, not near-duplicates)."""
+    res = optimize_actuator(*STANDARD, x_cg=1.2, z_cg=0.55, alt_rel_tol=0.15)
+    alts = res["alternatives"]
+    for i in range(len(alts)):
+        for j in range(i + 1, len(alts)):
+            gi, gj = alts[i], alts[j]
+            spread = max(abs(gi[k] - gj[k]) for k in ("a", "b", "d", "f"))
+            assert spread > 0.02, f"alternatives {i},{j} are near-duplicates"
+
+
+@pytest.mark.slow
+def test_diverse_alternatives_surface_for_standard_container():
+    """On the standard container the sharp optimum (~12.94, base at the ceiling)
+    has a genuinely different near-optimal basin ~10% worse (base near the
+    floor); a 15% band must surface at least one such fallback."""
+    res = optimize_actuator(*STANDARD, x_cg=1.20, z_cg=0.55, alt_rel_tol=0.15)
+    assert len(res["alternatives"]) > 1, "expected diverse fallbacks within 15%"
+    fallback = res["alternatives"][1]
+    assert fallback["penalty_pct"] > 0.0
+    # The optimum mounts the base high; the fallback should differ in geometry.
+    optimum = res["alternatives"][0]
+    spread = max(abs(fallback[k] - optimum[k]) for k in ("a", "b", "d", "f"))
+    assert spread > 0.1, "fallback is not geometrically distinct from the optimum"
+
+
 def test_finds_known_standard_optimum():
     """The full multi-start search on the standard container reaches the known
     global optimum (~12.94 N/kg), well below the local basin (~14.30) a single
@@ -156,7 +206,7 @@ def test_exhaustive_input_sweep(container):
                 for clearance in (0.0, 0.05, 0.2):
                     res = optimize_actuator(
                         width, height, x_cg, z_cg, stroke_ratio_max=stroke,
-                        roof_clearance=clearance, **FAST)
+                        roof_clearance=clearance, alt_rel_tol=0.0, **FAST)
                     assert_result_invariants(
                         res, f"{container} cg=({x_cg},{z_cg}) sr={stroke} clr={clearance}")
                     checked += 1

@@ -106,6 +106,42 @@ def test_narrowed_mounting_limits():
     run_ok(at, "mounting limits narrowed")
 
 
+def test_untouched_mounting_limits_grow_with_container():
+    """Switching Standard -> High-Cube must widen an *untouched* range (still at
+    the old full extent) to the taller container, but leave a user-narrowed range
+    alone."""
+    at = fresh_app()
+    at.session_state["size_key"] = STANDARD_KEY
+    run_ok(at, "standard")
+    assert at.session_state["rng_b"][1] == pytest.approx(2.591, abs=1e-3)
+    # Narrow f deliberately; leave b untouched.
+    at.session_state["rng_f"] = (0.3, 1.0)
+    at.session_state["size_key"] = HIGHCUBE_KEY
+    run_ok(at, "highcube")
+    # Untouched b grew to the High-Cube height...
+    assert at.session_state["rng_b"][1] == pytest.approx(2.896, abs=1e-3)
+    # ...but the deliberately narrowed f range was preserved.
+    assert at.session_state["rng_f"] == pytest.approx((0.3, 1.0), abs=1e-6)
+
+
+def test_overlay_two_designs_renders():
+    """Save A, change geometry, save B, then overlay — the plots must render both
+    designs without error."""
+    at = fresh_app()
+    save_a = next(b for b in at.button if b.label == "📌 Save as A")
+    save_a.click()
+    run_ok(at, "save A")
+    at.session_state["a"] = 0.40
+    at.session_state["b"] = 2.50
+    run_ok(at, "change geometry")
+    save_b = next(b for b in at.button if b.label == "📌 Save as B")
+    save_b.click()
+    run_ok(at, "save B")
+    at.session_state["overlay"] = True
+    run_ok(at, "overlay on")
+    assert "design_A" in at.session_state and "design_B" in at.session_state
+
+
 def test_malformed_url_params_fall_back():
     at = AppTest.from_file(APP_PATH, default_timeout=90)
     at.query_params["a"] = "not-a-number"

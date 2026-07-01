@@ -109,8 +109,9 @@ achievable force can only rise.
 | ------- | ------- |
 | **Optimize geometry** button | Searches for the `a, b, d, f` that minimize the worst-case piston force for the current container, cg, and constraints, then fills them in. See [section 6](#6-optimizing-the-geometry-optimizepy). |
 | 🔒 lock (beside `a`, `b`, `d`, `f`) | Hold that dimension at its current value so the optimizer searches only the unlocked ones. Lock all four to just evaluate that exact geometry. |
+| Show alternatives within __% | How far above the optimum's force a listed alternative may sit. The true optimum is often awkward to build (on the standard container it wants the cylinder base right at the ceiling); a design a few percent worse can be far easier. A **sharp** optimum sits alone, so you may need ~10% before a genuinely different design appears. `0` keeps just the optimum (and exact ties). |
 | Result banner | The optimizer **never returns an impossible (over-center) geometry**. After it runs, a banner reports the design: **green** = buildable and all limits met; **yellow** = best buildable design, but a stroke/roof limit can't be met (still usable — you'd just need different hardware); **red** = the (locked) geometry over-centers and can't be built, so unlock something. |
-| Equally-good geometries | When several distinct designs tie for the best peak force (a flat optimum), they appear in an expander below the button. **Click any one to load it into the geometry and diagrams** — pick by build convenience without re-running the search. |
+| Near-optimal alternatives | A **geometrically diverse** set of designs within your tolerance of the optimum appears in an expander below the button, each tagged with its force penalty (e.g. `+10.5%`). **Click any one to load it into the geometry and diagrams.** The first is the optimum itself. |
 
 ### Geometry
 
@@ -129,6 +130,15 @@ The optimizer writes its result here; you can also edit any value by hand.
 | ----------- | ------------------------------------ |
 | `theta_deg` | Current angle for the side-view diagram. Slide it to scrub through the motion; both plots mark the current angle in red. |
 | ▶ Sweep θ   | Toggle to **continuously animate** the wall opening and closing (0 → 90 → 0°). The angle slider sweeps along; toggle off to freeze and scrub manually. |
+
+### Compare designs
+
+Weigh two designs side by side — typically the optimum against a near-optimal
+alternative you clicked in. **📌 Save as A** / **📌 Save as B** snapshot the
+current geometry; **Overlay A & B on plots** (enabled once both are saved) draws
+each design's force and length curve as a dashed line (🟩 A, 🟧 B) alongside the
+current one, with a caption reporting each design's peak force. **Clear A/B**
+removes a snapshot.
 
 ---
 
@@ -259,11 +269,22 @@ gave **no** reliability gain — only independent restarts help — so they
 aren't used. The trade-off: the Optimize button takes ~20 s; `n_starts` is
 tunable (`--starts` on the CLI).
 
-If several **distinct** feasible geometries tie for the best force (a *flat*
-optimum), they're returned as `alternatives` — listed by the CLI and shown in
-the app as **clickable buttons** (click one to load it into the geometry and
-diagrams) — so you can choose on other grounds (mounting, packaging, cost). A
-unique optimum — like the standard case — lists just one.
+**Near-optimal alternatives.** The true optimum is often the *least* buildable
+design — on the standard container it wants the cylinder base right at the
+ceiling (`f` at its max). So alongside the optimum, `optimize_actuator` returns
+`alternatives`: a geometrically **diverse** set of near-optimal designs, each
+within `alt_rel_tol` of the optimum's peak force (default 15%; a slider in the
+app, `--alt-tol` on the CLI) and tagged with its `penalty_pct`.
+
+Because a sharp optimum sits alone in a narrow basin, jittering around it finds
+nothing new — the nearest genuinely different design can be ~10% worse. So each
+extra design is found by **re-optimizing with a repulsion penalty** that pushes
+the search away from the designs already chosen: the result is the lowest-force
+geometry that is meaningfully different from them, kept only if it stays within
+tolerance. Feasible multi-start winners seed the set first (they're free). The
+optimum is always `alternatives[0]`; the app shows them as **clickable buttons**
+(click to load into the geometry and diagrams), so you can trade a few percent
+of force for a design that is far easier to mount.
 
 ### How the constraints are added (penalty method)
 
@@ -326,7 +347,9 @@ failure.
 |---|---|---|---|
 | `STROKE_RATIO_MAX` | `wall.py` | `1.8` | Max extended/retracted cylinder length ratio. **Shared** by the app's length plot and the optimizer so the two never disagree — change it in one place. |
 | `N_STARTS` | `optimize.py` | `20` | Independent optimizer restarts (multi-start); the best is kept. More = more reliably global, but slower. |
-| `ALT_REL_TOL` | `optimize.py` | `0.01` | Two designs count as the "same optimum" if their peak forces are within this fraction — used to list equivalent geometries. |
+| `ALT_REL_TOL` | `optimize.py` | `0.15` | Default force tolerance for near-optimal `alternatives` (within 15% of the optimum). Overridable per call (`alt_rel_tol`), by the app's slider, or `--alt-tol`. |
+| `N_ALTERNATIVES` | `optimize.py` | `6` | Most designs returned in `alternatives` (including the optimum). |
+| `ALT_TARGET_SEP` / `ALT_MIN_SEP` | `optimize.py` | `0.20` / `0.08` | Normalized geometry separation each new alternative *aims for* / must *at least* reach to count as genuinely distinct. |
 | `ROOF_CLEARANCE` | `optimize.py` | `0.0` m | Mechanical margin: how far below the ceiling the endpoint must stay. Effective ceiling = `height − ROOF_CLEARANCE`. |
 | `MIN_MOMENT_ARM` | `optimize.py` | `0.05` | Smallest allowed `|sin(β − φ)|` over the swing — the over-center floor. Larger = more clearance from the singularity (and a lower force ceiling), at the cost of a smaller feasible set. |
 | `STROKE_PENALTY` | `optimize.py` | `1e6` | Weight on the stroke-limit penalty. |

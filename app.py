@@ -176,6 +176,20 @@ def range_input(label, key, full_lo, full_hi, disp_factor=1.0, disp_step=0.01,
     U = disp_factor
     st.session_state.setdefault(key, (full_lo, full_hi))
     lo, hi = st.session_state[key]
+    # If the container changed the full range (e.g. Standard -> High-Cube makes
+    # the wall taller), grow any endpoint that was still pinned to the OLD full
+    # extent -- i.e. an untouched limit -- out to the new one. This keeps an
+    # untouched range spanning the whole container instead of freezing at the
+    # previous container's size, while leaving user-narrowed ranges alone.
+    full_key = f"{key}__full"
+    prev_full = st.session_state.get(full_key)
+    if prev_full is not None and prev_full != (full_lo, full_hi):
+        prev_lo, prev_hi = prev_full
+        if lo == prev_lo:
+            lo = full_lo
+        if hi == prev_hi:
+            hi = full_hi
+    st.session_state[full_key] = (full_lo, full_hi)
     lo = min(max(lo, full_lo), full_hi)
     hi = min(max(hi, full_lo), full_hi)
     if hi < lo:
@@ -267,6 +281,13 @@ for _k in ("a", "b", "d", "f"):
 
 # --- Optimize: fill the geometry with the force-minimizing design ---
 st.sidebar.header("Optimize")
+st.session_state.setdefault("alt_pct", 15)
+alt_pct = st.sidebar.slider(
+    "Show alternatives within __% of the optimum", 0, 30, key="alt_pct", step=1,
+    help="After optimizing, also list geometrically DIFFERENT designs whose peak "
+         "force is within this percent of the optimum — fallbacks for when the "
+         "optimum is awkward to build. 0 keeps only the optimum (and any exact "
+         "ties). A sharp optimum may need ~10% before a different design appears.")
 if st.sidebar.button("Optimize geometry for current settings"):
     try:
         # Locked variables are held at their current value; the rest are searched.
@@ -282,6 +303,7 @@ if st.sidebar.button("Optimize geometry for current settings"):
                 stroke_ratio_max=st.session_state["stroke_ratio"],
                 roof_clearance=st.session_state["roof_clearance"],
                 locked=locked, var_bounds=USER_BOUNDS,
+                alt_rel_tol=st.session_state["alt_pct"] / 100.0,
             )
         # Snap to the active slider precision AND clamp into the (possibly
         # narrowed) mounting-limit range, so the value can't exceed the slider and
@@ -316,9 +338,9 @@ if st.sidebar.button("Optimize geometry for current settings"):
                 f"{action}{held} — best buildable design, but not all limits are met "
                 f"(usable; may need different hardware or looser settings): {detail}.")
 
-        # Persist the distinct equally-good geometries (a flat optimum) so they
-        # render as clickable buttons below — outside this click block, so they
-        # survive later reruns and let you load any one into the sliders.
+        # Persist the diverse near-optimal alternatives so they render as
+        # clickable buttons below — outside this click block, so they survive
+        # later reruns and let you load any one into the sliders.
         st.session_state["_alts"] = res.get("alternatives", [])
     except TypeError as exc:  # e.g. new app.py calling an old optimize.py
         if "unexpected keyword argument" in str(exc):
@@ -331,19 +353,23 @@ if st.sidebar.button("Optimize geometry for current settings"):
     except Exception as exc:  # surface any other optimizer error in the UI
         st.sidebar.error(f"Optimizer failed: {exc}")
 
-# Clickable list of the last optimize's equally-good geometries. Rendered here —
+# Clickable list of the last optimize's near-optimal alternatives. Rendered here —
 # above the Geometry sliders and outside the Optimize click block — so a click
 # loads the chosen geometry into a/b/d/f and the sliders + diagrams below re-seed
 # from it in the same run (no st.rerun needed, same reason as the Optimize path).
 _alts = st.session_state.get("_alts", [])
 if len(_alts) > 1:
     with st.sidebar.expander(
-            f"{len(_alts)} equally-good geometries (same peak force)"):
-        st.caption("Same force — click one to load it into the diagrams.")
+            f"{len(_alts) - 1} near-optimal alternatives (click to load)"):
+        st.caption("Geometrically different designs within your tolerance of the "
+                   "optimum. The first is the optimum; the rest trade a little "
+                   "force for a possibly easier build. Click one to load it.")
         for _i, _x in enumerate(_alts):
+            _pen = _x.get("penalty_pct", 0.0)
+            _tag = "optimum" if _pen < 1e-6 else f"+{_pen:.1f}%"
             _lbl = (f"a={_x['a'] * U:.2f}  b={_x['b'] * U:.2f}  "
                     f"d={_x['d'] * U:.2f}  f={_x['f'] * U:.2f} {ULABEL}  "
-                    f"— {_x['peak_force']:.2f} N/kg")
+                    f"— {_x['peak_force']:.2f} N/kg ({_tag})")
             if st.button(_lbl, key=f"alt_{_i}", use_container_width=True):
                 for _k in ("a", "b", "d", "f"):
                     _lo, _hi = USER_BOUNDS[_k]
@@ -380,6 +406,41 @@ else:
 theta_deg = linked_input("theta (degrees)", "theta_deg", 0.0, 90.0,
                          step=1.0, fmt="%.0f")
 theta = np.radians(theta_deg)
+
+# --- Compare: snapshot two designs and overlay their curves ---
+# Save the current geometry as A or B, then overlay both on the plots to weigh,
+# say, the optimum against a near-optimal alternative you clicked in.
+def _fmt_design(design):
+    if not design:
+        return "empty"
+    return (f"a={design['a'] * U:.2f} b={design['b'] * U:.2f} "
+            f"d={design['d'] * U:.2f} f={design['f'] * U:.2f} {ULABEL}")
+
+st.sidebar.header("Compare designs")
+with st.sidebar.expander("Save & overlay two designs"):
+    st.caption("Snapshot the current geometry as A or B, then overlay both "
+               "force and length curves to compare them.")
+    _current = dict(a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
+    _save_a, _save_b = st.columns(2)
+    if _save_a.button("📌 Save as A", use_container_width=True):
+        st.session_state["design_A"] = _current
+    if _save_b.button("📌 Save as B", use_container_width=True):
+        st.session_state["design_B"] = _current
+    _clear_a, _clear_b = st.columns(2)
+    if _clear_a.button("Clear A", use_container_width=True):
+        st.session_state.pop("design_A", None)
+    if _clear_b.button("Clear B", use_container_width=True):
+        st.session_state.pop("design_B", None)
+    design_A = st.session_state.get("design_A")
+    design_B = st.session_state.get("design_B")
+    st.caption(f"**A** (green): {_fmt_design(design_A)}")
+    st.caption(f"**B** (orange): {_fmt_design(design_B)}")
+    st.toggle("Overlay A & B on plots", key="overlay",
+              disabled=not (design_A and design_B),
+              help="Needs both A and B saved. Draws each design's force and "
+                   "length curve as a dashed line alongside the current one.")
+# Only overlay when the toggle is on AND both snapshots still exist.
+overlay = bool(st.session_state.get("overlay")) and bool(design_A) and bool(design_B)
 
 # Push current values back into the URL so reloads / shared links restore them.
 # Skip while animating: it reruns ~20x/sec, and browsers throttle history updates
@@ -515,6 +576,16 @@ with col_force:
     fig.add_trace(go.Scatter(
         x=[theta_deg], y=[F_here], mode="markers",
         marker=dict(size=14, color="red"), name="current"))
+    if overlay:
+        for _lab, _dd, _col in (("A", design_A, "green"), ("B", design_B, "darkorange")):
+            with np.errstate(divide="ignore", invalid="ignore"):
+                _Fd = compute_F_piston(theta_curve, a=_dd["a"], b=_dd["b"],
+                                       d=_dd["d"], f=_dd["f"],
+                                       x_cg=_dd["x_cg"], z_cg=_dd["z_cg"])
+            _Fd = np.where(np.isfinite(_Fd) & (np.abs(_Fd) <= F_CAP), _Fd, np.nan)
+            fig.add_trace(go.Scatter(
+                x=np.degrees(theta_curve), y=_Fd, mode="lines",
+                name=f"design {_lab}", line=dict(color=_col, dash="dash")))
     if F_valid.size:
         fig.add_hline(y=F_min, line=dict(color="green", dash="dot"),
                        annotation_text=f"F_min = {F_min:.2f} N/kg",
@@ -531,9 +602,11 @@ with col_force:
         xaxis_title="theta (degrees)",
         yaxis_title="Piston force (N per kg of wall + equipment mass)",
         xaxis=dict(range=[0, 90]),
-        yaxis=dict(range=y_range),
+        # Autoscale y when overlaying so A/B curves fit; otherwise frame the
+        # current design's extremes.
+        yaxis=dict(range=None if overlay else y_range),
         height=500,
-        showlegend=False,
+        showlegend=overlay,
         margin=dict(l=10, r=10, t=40, b=10),
     )
     st.plotly_chart(fig, width="stretch")
@@ -551,6 +624,13 @@ fig_len.add_trace(go.Scatter(
 fig_len.add_trace(go.Scatter(
     x=[theta_deg], y=[L_here * U], mode="markers",
     marker=dict(size=14, color="red"), name="current"))
+if overlay:
+    for _lab, _dd, _col in (("A", design_A, "green"), ("B", design_B, "darkorange")):
+        _Ld = compute_cylinder_length(theta_curve, a=_dd["a"], b=_dd["b"],
+                                      d=_dd["d"], f=_dd["f"])
+        fig_len.add_trace(go.Scatter(
+            x=np.degrees(theta_curve), y=_Ld * U, mode="lines",
+            name=f"design {_lab}", line=dict(color=_col, dash="dash")))
 fig_len.add_hline(y=L_min * U, line=dict(color="green", dash="dot"),
                    annotation_text=f"L_min = {L_min * U:.2f} {ULABEL}",
                    annotation_position="bottom right")
@@ -564,7 +644,7 @@ fig_len.update_layout(
     yaxis_title=f"Cylinder length ({ULABEL})",
     xaxis=dict(range=[0, 90]),
     height=350,
-    showlegend=False,
+    showlegend=overlay,
     margin=dict(l=10, r=10, t=40, b=10),
 )
 st.plotly_chart(fig_len, width="stretch")
@@ -580,6 +660,19 @@ st.caption(
     f"**stroke = {(L_max - L_min) * U:.2f} {ULABEL}** "
     f"(ratio = **{L_ratio:.2f}**, {stroke_status})."
 )
+
+if overlay:
+    def _peak_force(design):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            fd = compute_F_piston(theta_curve, a=design["a"], b=design["b"],
+                                  d=design["d"], f=design["f"],
+                                  x_cg=design["x_cg"], z_cg=design["z_cg"])
+        fd = fd[np.isfinite(fd) & (np.abs(fd) <= F_CAP)]
+        return float(np.max(np.abs(fd))) if fd.size else float("nan")
+    st.caption(
+        f"**Overlay** — 🟩 A ({_fmt_design(design_A)}): peak "
+        f"**{_peak_force(design_A):.2f} N/kg**   ·   🟧 B ({_fmt_design(design_B)}): "
+        f"peak **{_peak_force(design_B):.2f} N/kg**.")
 
 # --- Animation driver -------------------------------------------------------
 # Streamlit has no background loop, so we animate by advancing the sweep angle
