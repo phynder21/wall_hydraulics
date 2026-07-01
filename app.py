@@ -154,6 +154,34 @@ def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
                     help="Hold this value fixed when you press Optimize.")
     return st.session_state[key]
 
+
+MIN_SPAN = 0.01   # smallest allowed mounting range (m); tighter than this, use 🔒
+
+
+def range_input(label, key, full_lo, full_hi, disp_factor=1.0, disp_step=0.01):
+    """A range slider setting a [min, max] sub-range within [full_lo, full_hi].
+
+    The canonical (min, max) in METERS is our own state in session_state[key];
+    the widget shows it in display units and is driven by `value=` each run (so
+    it tracks unit/container changes). Enforces a minimum span so a downstream
+    value slider never gets a zero-width range.
+    """
+    U = disp_factor
+    st.session_state.setdefault(key, (full_lo, full_hi))
+    lo, hi = st.session_state[key]
+    lo = min(max(lo, full_lo), full_hi)
+    hi = min(max(hi, full_lo), full_hi)
+    if hi < lo:
+        lo, hi = hi, lo
+    rng = st.slider(label, full_lo * U, full_hi * U,
+                    value=(lo * U, hi * U), step=disp_step)
+    new_lo, new_hi = rng[0] / U, rng[1] / U
+    if new_hi - new_lo < MIN_SPAN:               # never collapse to zero width
+        new_hi = min(new_lo + MIN_SPAN, full_hi)
+        new_lo = max(new_hi - MIN_SPAN, full_lo)
+    st.session_state[key] = (new_lo, new_hi)
+    return (new_lo, new_hi)
+
 # --- Animation -----------------------------------------------------------
 ANIM_STEP_DEG = 3.0     # degrees advanced per frame
 FRAME_DELAY_S = 0.05    # pause between frames (~ steady frame rate)
@@ -183,12 +211,29 @@ roof_clearance = linked_input(
     disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT,
     help="Gap the actuator endpoint must keep below the ceiling.")
 
+# --- Mounting limits: restrict where the optimizer may place each dimension ---
+st.sidebar.header("Mounting limits")
+with st.sidebar.expander("Restrict a variable's range (optimizer + slider)"):
+    st.caption("Narrow a dimension to your real mounting window; the optimizer "
+               "searches only within it and the value slider follows. Leave at "
+               "full range for no restriction; use 🔒 to pin an exact value.")
+    USER_BOUNDS = {
+        v: range_input(f"{lbl} [{ULABEL}]", f"rng_{v}", *GEOM_BOUNDS[v],
+                       disp_factor=U, disp_step=LEN_STEP)
+        for v, lbl in (("a", "a — floor position"), ("b", "b — along wall"),
+                       ("d", "d — bracket length"), ("f", "f — base height"))
+    }
+# Keep each geometry value inside its (possibly narrowed) range before the value
+# sliders and the optimizer see it.
+for _k in ("a", "b", "d", "f"):
+    _clamp(_k, *USER_BOUNDS[_k])
+
 # --- Optimize: fill the geometry with the force-minimizing design ---
 st.sidebar.header("Optimize")
 if st.sidebar.button("Optimize geometry for current settings"):
     try:
         # Locked variables are held at their current value; the rest are searched.
-        locked = {k: round(st.session_state[k], 2)
+        locked = {k: round(st.session_state[k], ROUND_DP)
                   for k in ("a", "b", "d", "f")
                   if st.session_state.get(f"lock_{k}", False)}
         with st.spinner("Running multiple searches for the global optimum "
@@ -199,14 +244,14 @@ if st.sidebar.button("Optimize geometry for current settings"):
                 x_cg=st.session_state["x_cg"], z_cg=st.session_state["z_cg"],
                 stroke_ratio_max=st.session_state["stroke_ratio"],
                 roof_clearance=st.session_state["roof_clearance"],
-                locked=locked,
+                locked=locked, var_bounds=USER_BOUNDS,
             )
-        # Snap to the active slider precision AND clamp into the widget bounds, so
-        # a value the optimizer lands at the very top of a range (e.g. b ≈ container
-        # height on High-Cube) can't exceed the slider and error out. GEOM_BOUNDS is
-        # the same source the sliders use; ROUND_DP tracks the precision toggle.
+        # Snap to the active slider precision AND clamp into the (possibly
+        # narrowed) mounting-limit range, so the value can't exceed the slider and
+        # error out. USER_BOUNDS is the same source the value sliders use;
+        # ROUND_DP tracks the precision toggle.
         for k in ("a", "b", "d", "f"):
-            lo, hi = GEOM_BOUNDS[k]
+            lo, hi = USER_BOUNDS[k]
             st.session_state[k] = float(min(max(round(res[k], ROUND_DP), lo), hi))
         held = f" (held: {', '.join(sorted(locked))})" if locked else ""
         action = "Evaluated" if len(locked) == 4 else "Optimized"
@@ -254,15 +299,15 @@ st.sidebar.header(f"Geometry ({UWORD})")
 st.sidebar.caption("🔒 a value to hold it fixed while the others are optimized.")
 _geom = dict(disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT, lockable=True)
 a = linked_input(f"a — hinge to cylinder base (along floor) [{ULABEL}]", "a",
-                 *GEOM_BOUNDS["a"], **_geom,
+                 *USER_BOUNDS["a"], **_geom,
                  help=f"Limited to half the floor width "
                       f"({container_width / 2 * U:.2f} {ULABEL}).")
 b = linked_input(f"b — hinge to piston attachment (along wall) [{ULABEL}]", "b",
-                 *GEOM_BOUNDS["b"], **_geom)
+                 *USER_BOUNDS["b"], **_geom)
 d = linked_input(f"d — wall to piston attachment (perpendicular) [{ULABEL}]", "d",
-                 *GEOM_BOUNDS["d"], **_geom)
+                 *USER_BOUNDS["d"], **_geom)
 f = linked_input(f"f — cylinder base height above floor [{ULABEL}]", "f",
-                 *GEOM_BOUNDS["f"], **_geom)
+                 *USER_BOUNDS["f"], **_geom)
 
 st.sidebar.header("Wall angle")
 animating = st.sidebar.toggle(

@@ -109,6 +109,18 @@ These bound what counts as a valid design and feed the optimizer (below).
 | 🔒 lock (beside `a`, `b`, `d`, `f`) | Hold that dimension at its current value so the optimizer searches only the unlocked ones. Lock all four to just evaluate that exact geometry. |
 | Result banner | The optimizer **never returns an impossible (over-center) geometry**. After it runs, a banner reports the design: **green** = buildable and all limits met; **yellow** = best buildable design, but a stroke/roof limit can't be met (still usable — you'd just need different hardware); **red** = the (locked) geometry over-centers and can't be built, so unlock something. |
 
+### Mounting limits
+
+Real installs constrain a dimension to a *window*, not a single value (a
+bracket that can go anywhere from 0.3 to 0.8 m up, say). The **Mounting
+limits** expander has a range slider for each of `a, b, d, f`: narrow a
+variable's `[min, max]` and both the **value slider** and the **optimizer's
+search** are restricted to that window — so you get the best design *you can
+actually build*, not an optimal-but-unmountable one (e.g. the base pinned at
+the ceiling). Leave a range at full for no restriction; to pin an exact value
+use the 🔒 lock instead. Tighter ranges = less freedom, so the best
+achievable force can only rise.
+
 ---
 
 ## 4. How the math works
@@ -209,6 +221,11 @@ In the app, tick the 🔒 box next to `a`, `b`, `d`, or `f` to do the same.
 Locking removes design freedom, so the best achievable peak force can only
 stay equal or rise, and tight locks may make the constraints infeasible
 (reported as such). Locking all four just evaluates that fixed geometry.
+
+**Restricting a range.** To search only a *sub-range* of a variable rather
+than pin it, pass `var_bounds={"f": (0.0, 1.0)}` to `optimize_actuator` (this
+is what the app's **Mounting limits** range sliders do). A zero-width range is
+treated as a lock. The CLI currently exposes locking but not ranges.
 
 ### How it works
 

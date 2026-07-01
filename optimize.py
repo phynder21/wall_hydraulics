@@ -132,7 +132,7 @@ def _metrics(p, theta, x_cg, z_cg, m_cg, container_width, container_height,
 
 def optimize_actuator(container_width, container_height, x_cg, z_cg,
                       stroke_ratio_max=STROKE_RATIO_MAX,
-                      roof_clearance=ROOF_CLEARANCE, locked=None,
+                      roof_clearance=ROOF_CLEARANCE, locked=None, var_bounds=None,
                       n_theta=200, m_cg=1.0, seed=0, maxiter=300,
                       n_starts=N_STARTS, popsize=None):
     """Search for the (a, b, d, f) minimizing peak piston force over 0-90 deg.
@@ -147,6 +147,9 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     variables fixed; only the remaining variables are optimized. If all four are
     locked, the fixed geometry is simply evaluated.
 
+    `var_bounds` optionally overrides the (lo, hi) search range per variable to a
+    sub-range (e.g. mounting limits). A zero-width range is treated as a lock.
+
     Returns a dict with the geometry and resulting metrics, plus `alternatives`:
     the distinct feasible geometries whose peak force ties the best (within
     ALT_REL_TOL), so a flat optimum surfaces as several equivalent designs.
@@ -155,14 +158,21 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     n_starts = max(1, int(n_starts))   # at least one start
     theta = np.linspace(0.0, np.pi / 2, n_theta)
 
-    # Full box bounds (mirror the slider ranges in app.py); we keep only the
-    # unlocked variables for the actual search.
+    # Search box per variable: the full physical range, unless var_bounds narrows
+    # it (mounting limits). Mirrors the slider ranges in app.py.
     full_bounds = {
         "a": (0.05, container_width / 2),   # hinge to cylinder base, along floor
         "b": (0.05, container_height),      # hinge to attachment, along wall
         "d": (0.00, 1.00),                  # wall to attachment, perpendicular
         "f": (0.00, container_height),      # cylinder base height above floor
     }
+    if var_bounds:
+        full_bounds.update({k: tuple(v) for k, v in var_bounds.items()})
+    # A zero-width range pins that variable -> treat as locked at its value.
+    for v in VAR_NAMES:
+        lo, hi = full_bounds[v]
+        if v not in locked and hi - lo < 1e-9:
+            locked[v] = lo
     free = [v for v in VAR_NAMES if v not in locked]
     bounds = [full_bounds[v] for v in free]
 
