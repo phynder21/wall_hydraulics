@@ -93,11 +93,22 @@ _clamp("roof_clearance", 0.0, 0.5)
 st.sidebar.header("Display units")
 units = st.sidebar.radio("Length units", ["meters", "inches"], key="units",
                          horizontal=True, label_visibility="collapsed")
+fine = st.sidebar.toggle(
+    "Fine precision", key="fine",
+    help="Finer slider/number steps for exact values (0.001 m / 0.01 in), and "
+         "the optimizer rounds to that precision — so the plotted force matches "
+         "the reported one more closely.")
 inches = units == "inches"
 U = 39.3700787 if inches else 1.0    # meters -> display-unit factor
 ULABEL = "in" if inches else "m"      # short unit label
 UWORD = "inches" if inches else "meters"
-LEN_STEP = 0.1 if inches else 0.01    # slider/number step in display units
+# Step (display units), number format, and the decimals the optimizer rounds
+# geometry to (in meters). Fine mode makes all three finer.
+if inches:
+    LEN_STEP, LEN_FMT = (0.01, "%.3f") if fine else (0.1, "%.2f")
+else:
+    LEN_STEP, LEN_FMT = (0.001, "%.3f") if fine else (0.01, "%.2f")
+ROUND_DP = 3 if fine else 2           # meters precision the optimize button snaps to
 
 
 def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
@@ -169,7 +180,7 @@ stroke_ratio = st.sidebar.number_input(
     help="Hydraulic cylinders extend at most ~1.8–2× their retracted length.")
 roof_clearance = linked_input(
     f"Roof clearance [{ULABEL}]", "roof_clearance", 0.0, 0.5,
-    disp_factor=U, disp_step=LEN_STEP,
+    disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT,
     help="Gap the actuator endpoint must keep below the ceiling.")
 
 # --- Optimize: fill the geometry with the force-minimizing design ---
@@ -190,13 +201,13 @@ if st.sidebar.button("Optimize geometry for current settings"):
                 roof_clearance=st.session_state["roof_clearance"],
                 locked=locked,
             )
-        # Snap to slider precision AND clamp into the widget bounds, so a value
-        # the optimizer lands at the very top of a range (e.g. b ≈ container
-        # height on High-Cube, which rounds just above the max) can't exceed the
-        # slider and error out. GEOM_BOUNDS is the same source the sliders use.
+        # Snap to the active slider precision AND clamp into the widget bounds, so
+        # a value the optimizer lands at the very top of a range (e.g. b ≈ container
+        # height on High-Cube) can't exceed the slider and error out. GEOM_BOUNDS is
+        # the same source the sliders use; ROUND_DP tracks the precision toggle.
         for k in ("a", "b", "d", "f"):
             lo, hi = GEOM_BOUNDS[k]
-            st.session_state[k] = float(min(max(round(res[k], 2), lo), hi))
+            st.session_state[k] = float(min(max(round(res[k], ROUND_DP), lo), hi))
         held = f" (held: {', '.join(sorted(locked))})" if locked else ""
         action = "Evaluated" if len(locked) == 4 else "Optimized"
         detail = (f"peak {res['peak_force']:.2f} N/kg, "
@@ -241,7 +252,7 @@ if st.sidebar.button("Optimize geometry for current settings"):
 
 st.sidebar.header(f"Geometry ({UWORD})")
 st.sidebar.caption("🔒 a value to hold it fixed while the others are optimized.")
-_geom = dict(disp_factor=U, disp_step=LEN_STEP, lockable=True)
+_geom = dict(disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT, lockable=True)
 a = linked_input(f"a — hinge to cylinder base (along floor) [{ULABEL}]", "a",
                  *GEOM_BOUNDS["a"], **_geom,
                  help=f"Limited to half the floor width "
@@ -272,9 +283,9 @@ theta = np.radians(theta_deg)
 
 st.sidebar.header(f"Center of gravity ({UWORD})")
 x_cg = linked_input(f"x_cg — along wall from hinge [{ULABEL}]", "x_cg",
-                    0.0, container_height, disp_factor=U, disp_step=LEN_STEP)
+                    0.0, container_height, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
 z_cg = linked_input(f"z_cg — perpendicular off wall [{ULABEL}]", "z_cg",
-                    0.0, 1.5, disp_factor=U, disp_step=LEN_STEP)
+                    0.0, 1.5, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
 
 # Push current values back into the URL so reloads / shared links restore them.
 # Skip while animating: it reruns ~20x/sec, and browsers throttle history updates
