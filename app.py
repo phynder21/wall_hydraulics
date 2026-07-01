@@ -14,9 +14,16 @@ from wall import (
 # watcher tracks optimize.py and reloads it on edit, like wall.py.
 from optimize import optimize_actuator
 
+# Human-readable build marker. Bump on notable changes so you can tell at a
+# glance whether a running/deployed page has the latest code (a stale process
+# shows the OLD marker). If the app errors right after a push, check this — an
+# old marker means the deploy hasn't reloaded yet (reboot it).
+BUILD = "mounting-limits + typeable ranges · 2026-07-01"
+
 st.set_page_config(page_title="Container Wall Actuator", layout="wide")
 st.title("Shipping container hinged-wall actuator")
 st.caption("Looking down the long axis of the container. The hinged sidewall swings down to lie flat outside.")
+st.sidebar.caption(f"build: {BUILD}")
 
 # ISO container dimensions (external)
 CONTAINER_SIZES = {
@@ -158,13 +165,13 @@ def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
 MIN_SPAN = 0.01   # smallest allowed mounting range (m); tighter than this, use 🔒
 
 
-def range_input(label, key, full_lo, full_hi, disp_factor=1.0, disp_step=0.01):
-    """A range slider setting a [min, max] sub-range within [full_lo, full_hi].
-
-    The canonical (min, max) in METERS is our own state in session_state[key];
-    the widget shows it in display units and is driven by `value=` each run (so
-    it tracks unit/container changes). Enforces a minimum span so a downstream
-    value slider never gets a zero-width range.
+def range_input(label, key, full_lo, full_hi, disp_factor=1.0, disp_step=0.01,
+                fmt="%.2f"):
+    """A [min, max] sub-range control within [full_lo, full_hi]: a range slider
+    (drag) plus min/max number boxes (type). Canonical (min, max) in METERS is
+    our own state in session_state[key]; widgets show display units and track
+    unit/container changes. A minimum span is enforced so a downstream value
+    slider never gets a zero-width range.
     """
     U = disp_factor
     st.session_state.setdefault(key, (full_lo, full_hi))
@@ -173,14 +180,36 @@ def range_input(label, key, full_lo, full_hi, disp_factor=1.0, disp_step=0.01):
     hi = min(max(hi, full_lo), full_hi)
     if hi < lo:
         lo, hi = hi, lo
-    rng = st.slider(label, full_lo * U, full_hi * U,
-                    value=(lo * U, hi * U), step=disp_step)
-    new_lo, new_hi = rng[0] / U, rng[1] / U
-    if new_hi - new_lo < MIN_SPAN:               # never collapse to zero width
-        new_hi = min(new_lo + MIN_SPAN, full_hi)
-        new_lo = max(new_hi - MIN_SPAN, full_lo)
-    st.session_state[key] = (new_lo, new_hi)
-    return (new_lo, new_hi)
+    if hi - lo < MIN_SPAN:                        # never a zero-width range
+        hi = min(lo + MIN_SPAN, full_hi)
+        lo = max(hi - MIN_SPAN, full_lo)
+    st.session_state[key] = (lo, hi)
+
+    # All three widgets are keyed and re-seeded from the canonical range each run;
+    # each writes back via its on_change (so typed input isn't clobbered by the
+    # reseed). A tuple-seeded keyed slider renders as a range with no warning.
+    rk, lo_w, hi_w = f"{key}__rng", f"{key}__lo", f"{key}__hi"
+    st.session_state[rk] = (lo * U, hi * U)
+    st.session_state[lo_w] = lo * U
+    st.session_state[hi_w] = hi * U
+
+    def _from_slider():
+        wl, wh = st.session_state[rk]
+        st.session_state[key] = (wl / U, wh / U)
+
+    def _from_boxes():
+        wl, wh = st.session_state[lo_w] / U, st.session_state[hi_w] / U
+        st.session_state[key] = (min(wl, wh), max(wl, wh))
+
+    st.markdown(f"**{label}**")
+    st.slider(f"{key} range", full_lo * U, full_hi * U, step=disp_step, key=rk,
+              on_change=_from_slider, label_visibility="collapsed")
+    c1, c2 = st.columns(2)
+    c1.number_input("min", min_value=full_lo * U, max_value=full_hi * U,
+                    step=disp_step, format=fmt, key=lo_w, on_change=_from_boxes)
+    c2.number_input("max", min_value=full_lo * U, max_value=full_hi * U,
+                    step=disp_step, format=fmt, key=hi_w, on_change=_from_boxes)
+    return st.session_state[key]
 
 # --- Animation -----------------------------------------------------------
 ANIM_STEP_DEG = 3.0     # degrees advanced per frame
@@ -219,7 +248,7 @@ with st.sidebar.expander("Restrict a variable's range (optimizer + slider)"):
                "full range for no restriction; use 🔒 to pin an exact value.")
     USER_BOUNDS = {
         v: range_input(f"{lbl} [{ULABEL}]", f"rng_{v}", *GEOM_BOUNDS[v],
-                       disp_factor=U, disp_step=LEN_STEP)
+                       disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
         for v, lbl in (("a", "a — floor position"), ("b", "b — along wall"),
                        ("d", "d — bracket length"), ("f", "f — base height"))
     }
@@ -292,7 +321,15 @@ if st.sidebar.button("Optimize geometry for current settings"):
                         f"a={x['a'] * U:.2f}  b={x['b'] * U:.2f}  "
                         f"d={x['d'] * U:.2f}  f={x['f'] * U:.2f} {ULABEL}  "
                         f"— {x['peak_force']:.2f} N/kg")
-    except Exception as exc:  # surface any optimizer error in the UI
+    except TypeError as exc:  # e.g. new app.py calling an old optimize.py
+        if "unexpected keyword argument" in str(exc):
+            st.sidebar.error(
+                f"This page is running an **out-of-date** copy of the code "
+                f"(build: {BUILD}). Reboot the app / restart the server to load "
+                f"the latest, then try again. ({exc})")
+        else:
+            st.sidebar.error(f"Optimizer failed: {exc}")
+    except Exception as exc:  # surface any other optimizer error in the UI
         st.sidebar.error(f"Optimizer failed: {exc}")
 
 st.sidebar.header(f"Geometry ({UWORD})")

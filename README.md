@@ -113,9 +113,10 @@ These bound what counts as a valid design and feed the optimizer (below).
 
 Real installs constrain a dimension to a *window*, not a single value (a
 bracket that can go anywhere from 0.3 to 0.8 m up, say). The **Mounting
-limits** expander has a range slider for each of `a, b, d, f`: narrow a
-variable's `[min, max]` and both the **value slider** and the **optimizer's
-search** are restricted to that window — so you get the best design *you can
+limits** expander has, for each of `a, b, d, f`, a range slider **and**
+min/max number boxes — drag or type the `[min, max]`. Narrow a variable's
+range and both the **value slider** and the **optimizer's search** are
+restricted to that window — so you get the best design *you can
 actually build*, not an optimal-but-unmountable one (e.g. the base pinned at
 the ceiling). Leave a range at full for no restriction; to pin an exact value
 use the 🔒 lock instead. Tighter ranges = less freedom, so the best
