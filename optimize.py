@@ -73,6 +73,17 @@ STROKE_TOL = 1.0e-3          # stroke ratio (dimensionless)
 CEILING_TOL = 1.0e-3         # meters
 MOMENT_ARM_TOL = 1.0e-3      # moment-arm clearance (dimensionless)
 
+# Multi-start: one differential-evolution run can settle into a good-but-not-best
+# basin (its answer depends on the random seed). We run several independent
+# starts from fixed seeds and keep the best -- empirically ~28% of seeds find the
+# global basin for a hard case, so 20 starts finds it ~99.9% of the time.
+# (Bigger per-seed populations and corner-seeded starts were both tried and gave
+# no reliability gain; independent restarts are the effective lever.)
+N_STARTS = 20
+# Two feasible geometries count as reaching "the same optimum" if their peak
+# forces are within this relative tolerance -- used to list equivalent designs.
+ALT_REL_TOL = 0.01
+
 
 def _metrics(p, theta, x_cg, z_cg, m_cg, container_width, container_height,
              roof_clearance):
@@ -122,15 +133,26 @@ def _metrics(p, theta, x_cg, z_cg, m_cg, container_width, container_height,
 def optimize_actuator(container_width, container_height, x_cg, z_cg,
                       stroke_ratio_max=STROKE_RATIO_MAX,
                       roof_clearance=ROOF_CLEARANCE, locked=None,
-                      n_theta=200, m_cg=1.0, seed=0, maxiter=300):
+                      n_theta=200, m_cg=1.0, seed=0, maxiter=300,
+                      n_starts=N_STARTS, popsize=None):
     """Search for the (a, b, d, f) minimizing peak piston force over 0-90 deg.
+
+    Runs `n_starts` independent differential-evolution starts (fixed seeds, so the
+    result is reproducible) and keeps the best, because a single start can settle
+    into a good-but-not-best basin. `popsize` optionally overrides the per-start
+    population (None = SciPy default of 15 x n_free); it does not improve
+    reliability here, so it's a tuning knob rather than the fix.
 
     `locked` is an optional {name: value} dict (names in VAR_NAMES) holding those
     variables fixed; only the remaining variables are optimized. If all four are
-    locked, the fixed geometry is simply evaluated. Returns a dict with the
-    geometry and resulting metrics.
+    locked, the fixed geometry is simply evaluated.
+
+    Returns a dict with the geometry and resulting metrics, plus `alternatives`:
+    the distinct feasible geometries whose peak force ties the best (within
+    ALT_REL_TOL), so a flat optimum surfaces as several equivalent designs.
     """
     locked = dict(locked or {})
+    n_starts = max(1, int(n_starts))   # at least one start
     theta = np.linspace(0.0, np.pi / 2, n_theta)
 
     # Full box bounds (mirror the slider ranges in app.py); we keep only the
@@ -165,35 +187,73 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
             penalty += OVERCENTER_PENALTY * (MIN_MOMENT_ARM - moment_arm) ** 2
         return peak + penalty
 
+    def evaluate(geom):
+        """Full metrics + feasibility for an assembled (a,b,d,f) geometry."""
+        peak, ratio, L_min, L_max, ceiling, moment_arm = _metrics(
+            geom, theta, x_cg, z_cg, m_cg, container_width, container_height,
+            roof_clearance)
+        feasible = (ratio <= stroke_ratio_max + STROKE_TOL
+                    and ceiling <= CEILING_TOL
+                    and moment_arm >= MIN_MOMENT_ARM - MOMENT_ARM_TOL)
+        return {"geom": geom, "peak": peak, "ratio": ratio, "L_min": L_min,
+                "L_max": L_max, "ceiling": ceiling, "moment_arm": moment_arm,
+                "feasible": feasible}
+
+    de_kwargs = {"maxiter": maxiter, "tol": 1e-8, "polish": True}
+    if popsize is not None:
+        de_kwargs["popsize"] = popsize
+
     if free:
-        result = differential_evolution(
-            objective, bounds, seed=seed, maxiter=maxiter,
-            tol=1e-8, polish=True,
-        )
-        best = assemble(result.x)
-        success = bool(result.success)
+        # Multi-start: run n_starts independent DE searches from fixed seeds and
+        # keep the best. The objective already folds feasibility in as penalties,
+        # so the lowest objective is the best *feasible* design when one exists.
+        runs = []
+        for s in range(seed, seed + n_starts):
+            result = differential_evolution(objective, bounds, seed=s, **de_kwargs)
+            r = evaluate(assemble(result.x))
+            r["fun"] = float(result.fun)
+            r["success"] = bool(result.success)
+            runs.append(r)
+        best = min(runs, key=lambda r: r["fun"])
+        success = best["success"]
     else:
         # Everything locked: nothing to search, just evaluate the fixed geometry.
-        best = assemble([])
+        best = evaluate(assemble([]))
+        best["fun"] = best["peak"]
+        best["success"] = True
         success = True
+        runs = [best]
 
-    a, b, d, f = best
-    peak, ratio, L_min, L_max, ceiling, moment_arm = _metrics(
-        best, theta, x_cg, z_cg, m_cg, container_width, container_height,
-        roof_clearance)
+    # Alternatives: distinct feasible geometries whose peak force ties the best
+    # (within ALT_REL_TOL). A unique optimum yields one; a flat optimum surfaces
+    # several equally-good designs. Deduped at slider precision (2 decimals).
+    tied = [r for r in runs
+            if r["feasible"] and r["peak"] <= best["peak"] * (1 + ALT_REL_TOL)]
+    alternatives, seen = [], set()
+    # Sort by objective so the returned best (chosen by objective) is always the
+    # first alternative -- i.e. alternatives[0] is the geometry in the sliders.
+    for r in sorted(tied or [best], key=lambda r: r["fun"]):
+        key = tuple(round(v, 2) for v in r["geom"])
+        if key not in seen:
+            seen.add(key)
+            g = r["geom"]
+            alternatives.append({"a": g[0], "b": g[1], "d": g[2], "f": g[3],
+                                 "peak_force": r["peak"]})
+
+    a, b, d, f = best["geom"]
     return {
         "a": a, "b": b, "d": d, "f": f,
         "locked": locked,
-        "peak_force": peak,        # N per kg of wall+equipment mass
-        "stroke_ratio": ratio,     # L_max / L_min over the swing
-        "L_min": L_min, "L_max": L_max,
-        "ceiling_violation": ceiling,   # meters the endpoint breaches the roof
+        "peak_force": best["peak"],     # N per kg of wall+equipment mass
+        "stroke_ratio": best["ratio"],  # L_max / L_min over the swing
+        "L_min": best["L_min"], "L_max": best["L_max"],
+        "ceiling_violation": best["ceiling"],   # meters the endpoint breaches the roof
         "roof_clearance": roof_clearance,
-        "moment_arm": moment_arm,  # signed worst |sin(beta-phi)|; < 0 over-centers
-        "over_center": moment_arm < 0.0,
-        "feasible": (ratio <= stroke_ratio_max + STROKE_TOL
-                     and ceiling <= CEILING_TOL
-                     and moment_arm >= MIN_MOMENT_ARM - MOMENT_ARM_TOL),
+        "moment_arm": best["moment_arm"],  # signed worst |sin(beta-phi)|; <0 over-centers
+        "over_center": best["moment_arm"] < 0.0,
+        "feasible": best["feasible"],
+        "alternatives": alternatives,   # distinct equally-good geometries
+        "n_starts": n_starts if free else 0,
         "stroke_ratio_max": stroke_ratio_max,
         "x_cg": x_cg, "z_cg": z_cg,
         "container_width": container_width,
@@ -232,7 +292,9 @@ def _build_parser():
     p.add_argument("--mass", type=float, default=1.0,
                    help="Wall+equipment mass (kg); 1.0 gives per-kg force.")
     p.add_argument("--seed", type=int, default=0,
-                   help="Random seed for the global optimizer (reproducible).")
+                   help="Base random seed; multi-start uses seed .. seed+starts-1.")
+    p.add_argument("--starts", type=int, default=N_STARTS,
+                   help="Number of independent optimizer restarts (multi-start).")
     return p
 
 
@@ -263,6 +325,7 @@ def main(argv=None):
         x_cg=args.x_cg, z_cg=args.z_cg,
         stroke_ratio_max=args.stroke_ratio, roof_clearance=args.clearance,
         locked=locked, n_theta=args.grid, m_cg=args.mass, seed=args.seed,
+        n_starts=args.starts,
     )
 
     print("\n=== Optimized actuator geometry ===")
@@ -297,6 +360,15 @@ def main(argv=None):
     if not res["success"]:
         print("  note              : optimizer did not fully converge; "
               "try a finer --grid or different --seed.")
+
+    alts = res["alternatives"]
+    if len(alts) > 1:
+        print(f"  ---------------------------------")
+        print(f"  {len(alts)} equally-good geometries reach this force "
+              f"(flat optimum — pick by build convenience):")
+        for x in alts:
+            print(f"    a={x['a']:.3f} b={x['b']:.3f} d={x['d']:.3f} "
+                  f"f={x['f']:.3f}  ({x['peak_force']:.3f} {force_unit})")
 
     # A line you can paste straight into app.py's sliders to visualize.
     print("\n  Paste into the app's sliders:")

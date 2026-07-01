@@ -180,7 +180,8 @@ if st.sidebar.button("Optimize geometry for current settings"):
         locked = {k: round(st.session_state[k], 2)
                   for k in ("a", "b", "d", "f")
                   if st.session_state.get(f"lock_{k}", False)}
-        with st.spinner("Searching for the force-minimizing geometry…"):
+        with st.spinner("Running multiple searches for the global optimum "
+                        "(~20 s)…"):
             res = optimize_actuator(
                 container_width=container_width,
                 container_height=container_height,
@@ -221,6 +222,20 @@ if st.sidebar.button("Optimize geometry for current settings"):
             st.sidebar.warning(
                 f"{action}{held} — best buildable design, but not all limits are met "
                 f"(usable; may need different hardware or looser settings): {detail}.")
+
+        # If several distinct geometries tie for the best force (a flat optimum),
+        # list them so you can pick on other grounds. The sliders hold the first.
+        alts = res.get("alternatives", [])
+        if len(alts) > 1:
+            with st.sidebar.expander(
+                    f"{len(alts)} equally-good geometries (same peak force)"):
+                st.caption("Same force — pick by build convenience. The sliders "
+                           "show the first.")
+                for x in alts:
+                    st.write(
+                        f"a={x['a'] * U:.2f}  b={x['b'] * U:.2f}  "
+                        f"d={x['d'] * U:.2f}  f={x['f'] * U:.2f} {ULABEL}  "
+                        f"— {x['peak_force']:.2f} N/kg")
     except Exception as exc:  # surface any optimizer error in the UI
         st.sidebar.error(f"Optimizer failed: {exc}")
 

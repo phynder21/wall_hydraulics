@@ -218,6 +218,26 @@ single number — its peak magnitude. A global, gradient-free optimizer
 (SciPy's `differential_evolution`) then searches the geometry space for
 the candidate with the smallest peak.
 
+### Multi-start (finding the *global* optimum)
+
+A single `differential_evolution` run can settle into a good-but-not-best
+valley — its answer depends on the random seed. For some geometries the best
+design sits in a **narrow basin that most seeds miss**: on the standard
+container, the default seed lands on 14.30 N/kg while the true optimum is
+**12.94 N/kg (~10% lower)**. So `optimize_actuator` runs **`N_STARTS`
+(default 20) independent starts from fixed seeds and keeps the best** — at a
+~28% per-seed hit rate, 20 starts finds the global basin ~99.9% of the time,
+and *fixed* seeds keep the result reproducible (so shared URLs stay stable).
+Bigger per-seed populations and corner-seeded starts were both tested and
+gave **no** reliability gain — only independent restarts help — so they
+aren't used. The trade-off: the Optimize button takes ~20 s; `n_starts` is
+tunable (`--starts` on the CLI).
+
+If several **distinct** feasible geometries tie for the best force (a *flat*
+optimum), they're returned as `alternatives` and listed in the CLI and the
+app, so you can choose on other grounds (mounting, packaging, cost). A unique
+optimum — like the standard case — lists just one.
+
 ### How the constraints are added (penalty method)
 
 Rather than derive Lagrange/KKT multipliers by hand, each inequality
@@ -278,6 +298,8 @@ failure.
 | Constant | Where | Default | Meaning |
 |---|---|---|---|
 | `STROKE_RATIO_MAX` | `wall.py` | `1.8` | Max extended/retracted cylinder length ratio. **Shared** by the app's length plot and the optimizer so the two never disagree — change it in one place. |
+| `N_STARTS` | `optimize.py` | `20` | Independent optimizer restarts (multi-start); the best is kept. More = more reliably global, but slower. |
+| `ALT_REL_TOL` | `optimize.py` | `0.01` | Two designs count as the "same optimum" if their peak forces are within this fraction — used to list equivalent geometries. |
 | `ROOF_CLEARANCE` | `optimize.py` | `0.0` m | Mechanical margin: how far below the ceiling the endpoint must stay. Effective ceiling = `height − ROOF_CLEARANCE`. |
 | `MIN_MOMENT_ARM` | `optimize.py` | `0.05` | Smallest allowed `|sin(β − φ)|` over the swing — the over-center floor. Larger = more clearance from the singularity (and a lower force ceiling), at the cost of a smaller feasible set. |
 | `STROKE_PENALTY` | `optimize.py` | `1e6` | Weight on the stroke-limit penalty. |
