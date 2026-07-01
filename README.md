@@ -452,9 +452,10 @@ pytest tests/test_physics.py -v   # one file, verbose
 The heavier sweeps are marked `slow` and skipped by default, so the routine
 `pytest` run stays fast.
 
-For a **human-readable, reproducible test plan** — physics cases checkable by
-hand from the equations, plus optimizer and UI cases with expected values and
-tolerances — see [`docs/experiment_plan.md`](docs/experiment_plan.md) and the
+For a **human-readable, reproducible test plan** — a spreadsheet of optimizer
+points (each limiting factor and the optimized force it produces) plus physics
+anchor checks you can verify by hand from the equations — see
+[`docs/experiment_plan.md`](docs/experiment_plan.md) and the
 paste-into-a-spreadsheet [`docs/test_cases.csv`](docs/test_cases.csv).
 
 ### Troubleshooting
