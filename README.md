@@ -389,10 +389,14 @@ How it stays small and fast, from the physics:
   the table is **not** committed, it's regenerated), pruning over-center and
   over-stroke geometries. `lookup.py` filters + ranks a query in ~40 ms.
 
-Because a grid can't land exactly on a constraint boundary, the *best* row is a
-few percent above the true optimum (e.g. 13.5 vs 12.94). So the plots for any
-selected config are recomputed **exactly** from `wall.py`, and a **Refine**
-button runs the real optimizer once for the exact best-possible design.
+Because a grid can't land exactly on the stroke-limit boundary (where the
+optimum usually sits), a hard cutoff would hide every near-optimal design — the
+closest grid points are a step *over* the limit (e.g. ratio 1.81 for a 1.80
+limit). So the stroke filter allows a small grid tolerance (`STROKE_GRID_TOL`)
+and the real stroke ratio is shown in the results, so the ~12.9 N/kg designs
+appear (at ratio ~1.85, not exactly 1.80). Plots for any selected config are
+recomputed **exactly** from `wall.py`, and **Refine** runs the real optimizer
+for the exact-limit optimum.
 
 ---
 

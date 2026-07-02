@@ -22,6 +22,12 @@ CONTAINERS = {
     "Standard (8'6\") — 2.44 m W x 2.59 m H": CONTAINER_PRESETS["standard"],
     "High-Cube (9'6\") — 2.44 m W x 2.90 m H": CONTAINER_PRESETS["highcube"],
 }
+# Widest physical extents (High-Cube). Sliders use these FIXED ranges regardless
+# of the selected container, so switching container never changes a slider's
+# bounds and therefore never resets its value; the container is applied purely as
+# a search filter (b, f <= its height).
+WIDTH = CONTAINER_PRESETS["highcube"][0]
+HEIGHT_MAX = CONTAINER_PRESETS["highcube"][1]
 
 # Columns offerable in the results table (key -> label).
 COLUMNS = {
@@ -31,7 +37,7 @@ COLUMNS = {
     "L_min": "retracted (m)", "L_max": "extended (m)",
     "moment_arm": "over-center margin",
 }
-DEFAULT_COLUMNS = ["peak_force", "a", "b", "d", "f", "stroke"]
+DEFAULT_COLUMNS = ["peak_force", "a", "b", "d", "f", "stroke", "stroke_ratio"]
 
 
 @st.cache_resource(show_spinner=False)
@@ -69,16 +75,21 @@ def render_browse():
     st.header("Browse configurations")
     st.caption("Search a precomputed database of geometries — instant, no "
                "optimizer. Set your problem and mounting limits, then filter and "
-               "sort. Lengths are in meters.")
+               "sort. Lengths are in meters. Because the database is a grid, the "
+               "best rows may sit a hair over your stroke limit (see the *stroke "
+               "ratio* column); **Refine** below gives the exact-limit optimum.")
 
     with st.spinner("Building the configuration database (first time only, ~15 s)…"):
         table = _get_table(TABLE_RES)
 
     # --- Prompts (sidebar) ---
+    # Slider ranges are FIXED (High-Cube extents), never container-dependent, so
+    # switching containers doesn't reset any value. The container only filters the
+    # results (b, f must fit under its height).
     st.sidebar.header("Problem")
     size = st.sidebar.selectbox("Container", list(CONTAINERS), key="lk_size")
     width, height = CONTAINERS[size]
-    x_cg = st.sidebar.slider("x_cg — along wall from hinge (m)", 0.0, float(height),
+    x_cg = st.sidebar.slider("x_cg — along wall from hinge (m)", 0.0, HEIGHT_MAX,
                              1.20, 0.01, key="lk_xcg")
     z_cg = st.sidebar.slider("z_cg — off the wall (m)", 0.0, 1.5, 0.55, 0.01,
                              key="lk_zcg")
@@ -91,10 +102,10 @@ def render_browse():
     st.sidebar.caption("Narrow where each dimension may sit; the search only "
                        "keeps geometries inside these ranges.")
     ranges = {
-        "a": (0.05, width / 2, "a — base along floor (m)"),
-        "b": (0.05, float(height), "b — attachment along wall (m)"),
+        "a": (0.05, WIDTH / 2, "a — base along floor (m)"),
+        "b": (0.05, HEIGHT_MAX, "b — attachment along wall (m)"),
         "d": (0.0, 1.0, "d — bracket length (m)"),
-        "f": (0.0, float(height), "f — base height (m)"),
+        "f": (0.0, HEIGHT_MAX, "f — base height (m)"),
     }
     bounds = {}
     for v, (lo, hi, label) in ranges.items():

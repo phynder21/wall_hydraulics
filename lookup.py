@@ -16,6 +16,13 @@ import numpy as np
 from wall import g
 from optimize import MIN_MOMENT_ARM
 
+# The continuous optimum usually sits exactly on the stroke-ratio limit, but no
+# grid point lands precisely there — the nearest feasible ones are a step over
+# (e.g. 1.81 for a 1.80 limit), so a hard cutoff hides every near-optimal design.
+# Allow this much slack (about one grid step) so those designs appear; the real
+# stroke ratio is shown in the results, and Refine gives the exact-limit optimum.
+STROKE_GRID_TOL = 0.06
+
 
 def load_table(path="lookup_table.npz"):
     """Load a table built by lookup_build into a dict of numpy arrays."""
@@ -82,8 +89,8 @@ def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0
     # Container: the geometry must fit under this container's height.
     keep &= table["b"] <= container_height
     keep &= table["f"] <= container_height
-    # Constraints shared with the optimizer.
-    keep &= table["stroke_ratio"] <= stroke_max
+    # Constraints shared with the optimizer (stroke gets grid slack; see above).
+    keep &= table["stroke_ratio"] <= stroke_max + STROKE_GRID_TOL
     keep &= table["moment_arm"] >= MIN_MOMENT_ARM
     keep &= table["max_ceiling"] <= container_height - roof_clearance
     # Mounting limits.
