@@ -12,3 +12,6 @@ venv/
 # Editors
 .vscode/
 .idea/
+
+# Precomputed lookup table (generated on first run, not committed)
+lookup_table.npz

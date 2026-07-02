@@ -182,6 +182,25 @@ def test_clickable_alternatives_load_geometry():
         assert at.session_state[key] == pytest.approx(value, abs=0.02)
 
 
+def test_browse_view_renders():
+    """Switching to the Browse view builds a (small) lookup table and renders a
+    results table without error, and filtering/sorting reruns cleanly."""
+    import browse
+    browse.TABLE_RES = 12   # tiny grid so the build is fast in tests
+    at = AppTest.from_file(APP_PATH, default_timeout=120)
+    at.run()
+    assert not at.exception, at.exception
+    at.session_state["view"] = "🔎 Browse configurations"
+    at.run()
+    assert not at.exception, at.exception
+    assert len(at.dataframe) >= 1
+    # narrow a mounting limit and change the sort key -> still clean
+    at.session_state["lk_rng_f"] = (0.0, 0.8)
+    at.session_state["lk_sort"] = "f"
+    at.run()
+    assert not at.exception, at.exception
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("units", ["meters", "inches"])
 def test_optimize_through_ui(units):

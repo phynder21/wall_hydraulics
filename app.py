@@ -13,6 +13,7 @@ from wall import (
 # Imported at top level (not lazily inside the button) so Streamlit's file
 # watcher tracks optimize.py and reloads it on edit, like wall.py.
 from optimize import optimize_actuator
+from browse import render_browse
 
 # Human-readable build marker. Bump on notable changes so you can tell at a
 # glance whether a running/deployed page has the latest code (a stale process
@@ -24,6 +25,17 @@ st.set_page_config(page_title="Container Wall Actuator", layout="wide")
 st.title("Shipping container hinged-wall actuator")
 st.caption("Looking down the long axis of the container. The hinged sidewall swings down to lie flat outside.")
 st.sidebar.caption(f"build: {BUILD}")
+
+# Top-level view switch. Browse mode is a fully separate section (its own sidebar
+# and main area); st.stop() below keeps the Designer code from also running, so
+# the lookup table is only built when you actually open Browse — never on a
+# normal load.
+_view = st.sidebar.radio("View", ["🛠 Designer", "🔎 Browse configurations"],
+                         key="view", label_visibility="collapsed")
+if _view == "🔎 Browse configurations":
+    render_browse()
+    st.stop()
+st.sidebar.divider()
 
 # ISO container dimensions (external)
 CONTAINER_SIZES = {

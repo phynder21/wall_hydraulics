@@ -367,6 +367,33 @@ than past it; the `*_TOL` values are pure numerical slack that absorb the
 tiny residual violation penalty methods leave behind. `optimize.py`
 requires SciPy (already in `requirements.txt`).
 
+### Browse mode: a precomputed lookup (instant, no optimizer)
+
+The optimizer takes ~20 s per run. The **Browse configurations** view (the
+sidebar view switch at the top) trades that for *instant* search over a
+**precomputed database** of geometries. Set your problem (container, cg, stroke
+limit, roof clearance) and mounting limits, then filter and sort by any
+attribute — peak force, base height `f`, bracket length `d`, stroke — to find a
+buildable design, not just the single force-optimal one.
+
+How it stays small and fast, from the physics:
+
+- The force factorizes as `F(θ) = (z_cg·sinθ − x_cg·cosθ) · G(θ)`, where the
+  gain curve `G = g/D` depends **only on geometry**. So the table is indexed by
+  the 4-D geometry grid `(a, b, d, f)` alone; the cg is reconstructed at query
+  time (force is *linear* in the cg), never a table dimension.
+- Stroke ratio and the over-center margin are geometry-only, and roof clearance
+  is a threshold on a stored value — so every constraint and mounting limit is a
+  plain row filter, not a table dimension.
+- `lookup_build.py` sweeps the grid once (~15 s, cached in memory on first use —
+  the table is **not** committed, it's regenerated), pruning over-center and
+  over-stroke geometries. `lookup.py` filters + ranks a query in ~40 ms.
+
+Because a grid can't land exactly on a constraint boundary, the *best* row is a
+few percent above the true optimum (e.g. 13.5 vs 12.94). So the plots for any
+selected config are recomputed **exactly** from `wall.py`, and a **Refine**
+button runs the real optimizer once for the exact best-possible design.
+
 ---
 
 ## 7. Run it locally (for developers)
@@ -443,11 +470,15 @@ pytest tests/test_physics.py -v   # one file, verbose
 - **`test_optimize.py`** — result-shape and constraint *invariants* across
   varied cg, stroke ratios, clearances, locks, and mounting limits;
   determinism; and that multi-start still reaches the known global optimum.
+- **`test_lookup.py`** — the Browse-mode table and query layer: build-time
+  pruning invariants, the stored gain curve matching exact physics, that
+  filters/mounting-limits/sorting behave, and that the grid best is a valid
+  upper bound on the optimizer's answer.
 - **`test_app.py`** — renders the app headlessly (Streamlit's `AppTest`) in
   both unit systems and the fine-precision mode, with extreme geometries, cg,
-  constraints, container switches, malformed URL params, and the
-  clickable-alternatives flow. The animation bounce logic is unit-tested
-  directly (it can't be driven through `AppTest`'s rerun loop).
+  constraints, container switches, malformed URL params, the
+  clickable-alternatives flow, and the Browse view. The animation bounce logic
+  is unit-tested directly (it can't be driven through `AppTest`'s rerun loop).
 
 The heavier sweeps are marked `slow` and skipped by default, so the routine
 `pytest` run stays fast.
@@ -475,9 +506,12 @@ paste-into-a-spreadsheet [`docs/test_cases.csv`](docs/test_cases.csv).
 ```
 .
 ├── wall.py            # Physics + shared constants (e.g. STROKE_RATIO_MAX). No UI.
-├── app.py             # Streamlit UI. Sliders, plots, layout.
+├── app.py             # Streamlit UI. Sliders, plots, layout; Designer/Browse view switch.
 ├── optimize.py        # Geometry optimizer (CLI + importable function). Needs SciPy.
-├── tests/             # pytest suite (physics, optimizer, UI). See section 7.
+├── lookup_build.py    # Builds the precomputed geometry table (Browse mode).
+├── lookup.py          # Fast filter + rank query layer over that table.
+├── browse.py          # The "Browse configurations" view.
+├── tests/             # pytest suite (physics, optimizer, lookup, UI). See section 7.
 ├── docs/              # Reproducible test plan (experiment_plan.md + test_cases.csv).
 ├── pytest.ini         # Test config (adds repo root to the import path; markers).
 ├── requirements.txt   # Dependencies (streamlit, numpy, plotly, scipy, pytest).
