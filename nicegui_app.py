@@ -38,7 +38,7 @@ DEFAULT_STATE = {
     "a": 0.60, "b": 1.80, "d": 0.10, "f": 0.40,
     "x_cg": 1.20, "z_cg": 0.55, "theta_deg": 45.0,
     "stroke_ratio": STROKE_RATIO_MAX, "roof_clearance": 0.0,
-    "units": "meters", "fine": False,
+    "units": "meters", "fine": False, "alt_pct": 15,
 }
 
 
@@ -296,6 +296,12 @@ def index():
         li["slider"].value = li["number"].value = meters * uu
         reseeding["v"] = False
 
+    def load_alt(x):
+        """Load a near-optimal alternative geometry into the a/b/d/f controls."""
+        for k in ("a", "b", "d", "f"):
+            set_value(k, float(x[k]))
+        refresh()
+
     anim = {"dir": 1}
 
     def sweep_tick():
@@ -323,7 +329,7 @@ def index():
             res = await run.io_bound(
                 optimize_actuator, w, h, s["x_cg"], s["z_cg"],
                 stroke_ratio_max=s["stroke_ratio"], roof_clearance=s["roof_clearance"],
-                locked=locked)
+                locked=locked, alt_rel_tol=s["alt_pct"] / 100.0)
             for k in ("a", "b", "d", "f"):
                 s[k] = round(float(res[k]), round_dp)
             apply_units()   # reseed the a/b/d/f controls from the new meters + refresh
@@ -348,6 +354,22 @@ def index():
             opt_status.text = msg
             opt_status.classes(replace=css)
             ui.notify(action, type=ntype)
+
+            # Clickable near-optimal alternatives (rebuilt each optimize).
+            alts = res.get("alternatives", [])
+            alts_box.clear()
+            if len(alts) > 1:
+                with alts_box:
+                    ui.label(f"{len(alts) - 1} near-optimal alternatives "
+                             "(click to load):").classes("text-sm mt-2")
+                    for x in alts:
+                        pen = x.get("penalty_pct", 0.0)
+                        tag = "optimum" if pen < 1e-6 else f"+{pen:.1f}%"
+                        lab = (f"a={x['a'] * U:.2f}  b={x['b'] * U:.2f}  "
+                               f"d={x['d'] * U:.2f}  f={x['f'] * U:.2f} {ulabel}  — "
+                               f"{x['peak_force']:.2f} N/kg ({tag})")
+                        ui.button(lab, on_click=lambda e, xx=x: load_alt(xx)) \
+                            .props("flat dense no-caps align=left").classes("w-full")
         except Exception as exc:
             opt_status.text = f"Optimizer failed: {exc}"
             ui.notify("Optimizer failed", type="negative")
@@ -396,9 +418,13 @@ def index():
                 with ui.tab_panel("Optimize"):
                     ui.label("Find the a, b, d, f that minimize the worst-case "
                              "piston force for the current setup.").classes("text-sm")
+                    ui.label("Show alternatives within __% of the optimum").classes("text-sm mt-2 mb-0")
+                    ui.slider(min=0, max=30, step=1).props("label-always") \
+                        .bind_value(s, "alt_pct").classes("w-full")
                     opt_btn = ui.button("Optimize geometry", on_click=do_optimize
                                         ).props("color=primary").classes("w-full")
                     opt_status = ui.label("").classes("text-sm text-gray-600")
+                    alts_box = ui.column().classes("w-full gap-1")
 
         # ---- Right: visualization -----------------------------------------
         with ui.column().classes("flex-1 gap-3"):
