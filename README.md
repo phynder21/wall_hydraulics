@@ -66,10 +66,11 @@ in meters internally, so shared links are identical regardless of unit.
 | Container size     | Dropdown: Standard (2.44 m × 2.59 m) or High-Cube (2.44 m × 2.90 m). Sets `container_width` and `container_height`, which bound the other sliders. |
 
 The left panel groups the controls into tabs that follow the workflow:
-**Setup** (container, units, center of gravity, constraints, mounting limits),
-**Optimize** (run the search, pick an alternative), **Geometry** (read/tweak
-`a, b, d, f` and scrub the wall angle), and **Compare** (overlay two designs).
-The visualization is on the right.
+**Setup** (container, units, center of gravity, constraints), **Geometry**
+(the variable *ranges* that bound each dimension, the `a, b, d, f` *values*
+with 🔒 locks, and the wall angle), **Optimize** (run the search, pick an
+alternative), and **Compare** (overlay two designs). The visualization is on
+the right.
 
 ### Center of gravity
 

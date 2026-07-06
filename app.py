@@ -217,8 +217,8 @@ def _advance_angle(angle, direction, step=ANIM_STEP_DEG):
 # them, keeping the same-run "click optimize -> sliders update" behavior even
 # though the tabs sit side by side.
 # =============================================================================
-tab_setup, tab_optimize, tab_geometry, tab_compare = st.sidebar.tabs(
-    ["Setup", "Optimize", "Geometry", "Compare"])
+tab_setup, tab_geometry, tab_optimize, tab_compare = st.sidebar.tabs(
+    ["Setup", "Geometry", "Optimize", "Compare"])
 
 with tab_setup:
     st.subheader("Container")
@@ -285,9 +285,13 @@ with tab_setup:
         disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT,
         help="Gap the actuator endpoint must keep below the ceiling.")
 
-    # --- Mounting limits: restrict where each dimension may sit ---
-    st.subheader("Mounting limits")
-    with st.expander("Restrict a variable's range (optimizer + slider)"):
+# Variable ranges (mounting limits) belong with the Geometry variables they
+# bound. Rendered here — before the Optimize tab executes — so USER_BOUNDS is
+# defined for both the optimizer and the value sliders (which appear just below
+# it in the same Geometry tab).
+with tab_geometry:
+    st.subheader("Variable ranges")
+    with st.expander("Restrict where each dimension may sit (optimizer + slider)"):
         st.caption("Narrow a dimension to your real mounting window; the "
                    "optimizer searches only within it and the value slider "
                    "follows. Leave at full range for no restriction; use 🔒 to "
@@ -400,7 +404,7 @@ with tab_optimize:
                             min(max(round(_x[_k], ROUND_DP), _lo), _hi))
 
 with tab_geometry:
-    st.subheader(f"Geometry ({UWORD})")
+    st.subheader(f"Values ({UWORD})")
     st.caption("🔒 a value to hold it fixed while the others are optimized.")
     _geom = dict(disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT, lockable=True)
     a = linked_input(f"a — hinge to cylinder base (along floor) [{ULABEL}]", "a",
