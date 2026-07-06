@@ -1,0 +1,7 @@
+# Dependencies for the NiceGUI front-end (nicegui_app.py) ONLY.
+# The Streamlit app uses requirements.txt — this file keeps the two deploys
+# independent so the Streamlit site is never affected by NiceGUI.
+nicegui
+numpy
+plotly
+scipy

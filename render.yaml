@@ -1,0 +1,14 @@
+# Render.com Blueprint for the NiceGUI app — one-click public deploy.
+# In Render: New + -> Blueprint -> connect this repo. Render reads this file,
+# builds, and gives you a public URL like https://wall-actuator.onrender.com
+# Render injects the PORT env var; nicegui_app.py binds to it on 0.0.0.0.
+services:
+  - type: web
+    name: wall-actuator
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements-nicegui.txt"
+    startCommand: "python nicegui_app.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
