@@ -39,6 +39,7 @@ DEFAULT_STATE = {
     "x_cg": 1.20, "z_cg": 0.55, "theta_deg": 45.0,
     "stroke_ratio": STROKE_RATIO_MAX, "roof_clearance": 0.0,
     "units": "meters", "fine": False, "alt_pct": 15,
+    "design_A": None, "design_B": None, "overlay": False,
 }
 
 
@@ -94,13 +95,19 @@ def summary_metrics(a, b, d, f, x_cg, z_cg, theta_deg, stroke_ratio):
             "singular": valid.size < theta.size}
 
 
-def force_figure(a, b, d, f, x_cg, z_cg, theta_deg):
+def force_figure(a, b, d, f, x_cg, z_cg, theta_deg, overlays=()):
     theta, F_plot, valid, F_here = _force_curves(a, b, d, f, x_cg, z_cg, theta_deg)
+    deg = np.degrees(theta)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=np.degrees(theta), y=F_plot, mode="lines", name="F(θ)",
+    fig.add_trace(go.Scatter(x=deg, y=F_plot, mode="lines", name="F(θ)",
                              line=dict(color=PRIMARY, width=2.5)))
     fig.add_trace(go.Scatter(x=[theta_deg], y=[F_here], mode="markers",
                              marker=dict(size=13, color="red"), name="current"))
+    for lab, dd, col in overlays:
+        _, fp, _, _ = _force_curves(dd["a"], dd["b"], dd["d"], dd["f"],
+                                    dd["x_cg"], dd["z_cg"], theta_deg)
+        fig.add_trace(go.Scatter(x=deg, y=fp, mode="lines", name=lab,
+                                 line=dict(color=col, width=2, dash="dash")))
     if valid.size:
         fmin, fmax = float(valid.min()), float(valid.max())
         fig.add_hline(y=fmin, line=dict(color="green", dash="dot"),
@@ -110,21 +117,26 @@ def force_figure(a, b, d, f, x_cg, z_cg, theta_deg):
     fig.update_layout(template=PLOT_TEMPLATE, font=PLOT_FONT,
                       title="Piston force vs. wall angle",
                       xaxis_title="θ (deg)", yaxis_title="force (N/kg)",
-                      xaxis=dict(range=[0, 90]), height=340, showlegend=False,
+                      xaxis=dict(range=[0, 90]), height=340, showlegend=bool(overlays),
                       margin=dict(l=10, r=10, t=40, b=10))
     return fig
 
 
-def length_figure(a, b, d, f, theta_deg, stroke_ratio, u=1.0, ulabel="m"):
+def length_figure(a, b, d, f, theta_deg, stroke_ratio, u=1.0, ulabel="m", overlays=()):
     theta = np.linspace(0.0, np.pi / 2, 400)
+    deg = np.degrees(theta)
     L = compute_cylinder_length(theta, a=a, b=b, d=d, f=f) * u
     L_here = float(compute_cylinder_length(np.radians(theta_deg), a=a, b=b, d=d, f=f)) * u
     L_min = float(L.min())
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=np.degrees(theta), y=L, mode="lines", name="L(θ)",
+    fig.add_trace(go.Scatter(x=deg, y=L, mode="lines", name="L(θ)",
                              line=dict(color=PRIMARY, width=2.5)))
     fig.add_trace(go.Scatter(x=[theta_deg], y=[L_here], mode="markers",
                              marker=dict(size=13, color="red"), name="current"))
+    for lab, dd, col in overlays:
+        Ld = compute_cylinder_length(theta, a=dd["a"], b=dd["b"], d=dd["d"], f=dd["f"]) * u
+        fig.add_trace(go.Scatter(x=deg, y=Ld, mode="lines", name=lab,
+                                 line=dict(color=col, width=2, dash="dash")))
     fig.add_hline(y=L_min, line=dict(color="green", dash="dot"),
                   annotation_text=f"L_min = {L_min:.2f}")
     fig.add_hline(y=stroke_ratio * L_min, line=dict(color="red", dash="dot"),
@@ -132,7 +144,7 @@ def length_figure(a, b, d, f, theta_deg, stroke_ratio, u=1.0, ulabel="m"):
     fig.update_layout(template=PLOT_TEMPLATE, font=PLOT_FONT,
                       title="Cylinder length vs. wall angle",
                       xaxis_title="θ (deg)", yaxis_title=f"length ({ulabel})",
-                      xaxis=dict(range=[0, 90]), height=300, showlegend=False,
+                      xaxis=dict(range=[0, 90]), height=300, showlegend=bool(overlays),
                       margin=dict(l=10, r=10, t=40, b=10))
     return fig
 
@@ -211,13 +223,20 @@ def index():
             return
         U, _, _, ulabel, _ = disp(s["units"], s["fine"])
         w, h = CONTAINERS[s["container"]]
+        overlays = []
+        if s["overlay"] and s["design_A"] and s["design_B"]:
+            overlays = [("design A", s["design_A"], "green"),
+                        ("design B", s["design_B"], "darkorange")]
         diag_plot.update_figure(diagram_figure(
             s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"], s["theta_deg"],
             w, h, s["roof_clearance"], U, ulabel))
         force_plot.update_figure(force_figure(
-            s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"], s["theta_deg"]))
+            s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"], s["theta_deg"], overlays))
         length_plot.update_figure(length_figure(
-            s["a"], s["b"], s["d"], s["f"], s["theta_deg"], s["stroke_ratio"], U, ulabel))
+            s["a"], s["b"], s["d"], s["f"], s["theta_deg"], s["stroke_ratio"], U, ulabel,
+            overlays))
+        cmp_a.text = f"A (green): {_fmt_design(s['design_A'])}"
+        cmp_b.text = f"B (orange): {_fmt_design(s['design_B'])}"
         m = summary_metrics(s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"],
                             s["theta_deg"], s["stroke_ratio"])
         peak_m.text = f"{m['peak']:.2f} N/kg"
@@ -300,6 +319,22 @@ def index():
         """Load a near-optimal alternative geometry into the a/b/d/f controls."""
         for k in ("a", "b", "d", "f"):
             set_value(k, float(x[k]))
+        refresh()
+
+    def _fmt_design(dd):
+        if not dd:
+            return "empty"
+        U = disp(s["units"], s["fine"])[0]
+        ul = disp(s["units"], s["fine"])[3]
+        return (f"a={dd['a'] * U:.2f} b={dd['b'] * U:.2f} d={dd['d'] * U:.2f} "
+                f"f={dd['f'] * U:.2f} {ul}")
+
+    def save_design(tag):
+        s[f"design_{tag}"] = {k: s[k] for k in ("a", "b", "d", "f", "x_cg", "z_cg")}
+        refresh()
+
+    def clear_design(tag):
+        s[f"design_{tag}"] = None
         refresh()
 
     anim = {"dir": 1}
@@ -387,6 +422,7 @@ def index():
                 ui.tab("Setup")
                 ui.tab("Geometry")
                 ui.tab("Optimize")
+                ui.tab("Compare")
             with ui.tab_panels(tabs, value="Setup").classes("w-full"):
                 with ui.tab_panel("Setup"):
                     ui.select(list(CONTAINERS), value=s["container"], label="Container",
@@ -425,6 +461,23 @@ def index():
                                         ).props("color=primary").classes("w-full")
                     opt_status = ui.label("").classes("text-sm text-gray-600")
                     alts_box = ui.column().classes("w-full gap-1")
+                with ui.tab_panel("Compare"):
+                    ui.label("Snapshot the current geometry as A or B, then "
+                             "overlay both on the plots.").classes("text-sm")
+                    with ui.row().classes("gap-2 w-full"):
+                        ui.button("📌 Save as A", on_click=lambda: save_design("A")
+                                  ).props("outline no-caps").classes("grow")
+                        ui.button("📌 Save as B", on_click=lambda: save_design("B")
+                                  ).props("outline no-caps").classes("grow")
+                    with ui.row().classes("gap-2 w-full"):
+                        ui.button("Clear A", on_click=lambda: clear_design("A")
+                                  ).props("flat no-caps").classes("grow")
+                        ui.button("Clear B", on_click=lambda: clear_design("B")
+                                  ).props("flat no-caps").classes("grow")
+                    cmp_a = ui.label("A (green): empty").classes("text-sm")
+                    cmp_b = ui.label("B (orange): empty").classes("text-sm")
+                    ui.switch("Overlay A & B on plots",
+                              on_change=lambda: refresh()).bind_value(s, "overlay")
 
         # ---- Right: visualization -----------------------------------------
         with ui.column().classes("flex-1 gap-3"):

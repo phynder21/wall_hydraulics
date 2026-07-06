@@ -89,6 +89,18 @@ def test_advance_angle_bounces_and_stays_in_range():
         assert 0.0 <= a <= 90.0
 
 
+def test_overlays_add_traces():
+    design = dict(a=0.4, b=2.3, d=0.3, f=0.8, x_cg=1.2, z_cg=0.55)
+    base = na.force_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0)
+    over = na.force_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0,
+                           overlays=[("A", design, "green")])
+    assert len(over.data) == len(base.data) + 1
+    lbase = na.length_figure(0.6, 1.8, 0.1, 0.4, 45.0, 1.8)
+    lover = na.length_figure(0.6, 1.8, 0.1, 0.4, 45.0, 1.8,
+                             overlays=[("A", design, "green")])
+    assert len(lover.data) == len(lbase.data) + 1
+
+
 def test_default_state_is_within_slider_ranges():
     """Every default value sits inside the fixed slider extents the UI uses."""
     s = na.DEFAULT_STATE
