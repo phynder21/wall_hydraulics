@@ -209,9 +209,10 @@ def index():
         stroke_m.text = f"{m['stroke'] * U:.2f} {ulabel}"
         ratio_m.text = f"{m['ratio']:.2f}" + ("  ✓" if m["ok"] else "  ⚠ over")
 
-    def linked(base, key, lo_m, hi_m, is_length=True):
+    def linked(base, key, lo_m, hi_m, is_length=True, lockable=False):
         """Slider + number box for one value, shown in the current display units
-        but stored in METERS at s[key]. Registered so a units change re-scales it."""
+        but stored in METERS at s[key]. Registered so a units change re-scales it.
+        When lockable, a 🔒 checkbox pins the value so Optimize holds it fixed."""
         U, step, fmt, ulabel, _ = disp(s["units"], s["fine"])
         du, st_, ft = (U, step, fmt) if is_length else (1.0, 1.0, "%.0f")
         lbl = ui.label(f"{base} ({ulabel})" if is_length else base).classes("text-sm mt-2 mb-0")
@@ -220,6 +221,10 @@ def index():
                             ).props("label-always").classes("grow")
             num = ui.number(min=lo_m * du, max=hi_m * du, step=st_, value=s[key] * du,
                             format=ft).classes("w-24")
+            if lockable:
+                s.setdefault(f"lock_{key}", False)
+                ui.checkbox("🔒").bind_value(s, f"lock_{key}").props("dense") \
+                    .tooltip("Hold this value fixed when you press Optimize")
 
         def commit(value):
             uu = disp(s["units"], s["fine"])[0] if is_length else 1.0
@@ -263,13 +268,17 @@ def index():
         opt_status.text = "Optimizing… (~20 s)"
         try:
             w, h = CONTAINERS[s["container"]]
+            _, _, _, _, round_dp = disp(s["units"], s["fine"])
+            # Locked variables are held fixed; only the rest are searched.
+            locked = {k: round(float(s[k]), round_dp)
+                      for k in ("a", "b", "d", "f") if s.get(f"lock_{k}")}
             # io_bound (thread) rather than cpu_bound (process): no subprocess to
             # re-import this module, and numpy/scipy release the GIL during the
             # search so the event loop stays responsive.
             res = await run.io_bound(
                 optimize_actuator, w, h, s["x_cg"], s["z_cg"],
-                stroke_ratio_max=s["stroke_ratio"], roof_clearance=s["roof_clearance"])
-            _, _, _, _, round_dp = disp(s["units"], s["fine"])
+                stroke_ratio_max=s["stroke_ratio"], roof_clearance=s["roof_clearance"],
+                locked=locked)
             for k in ("a", "b", "d", "f"):
                 s[k] = round(float(res[k]), round_dp)
             apply_units()   # reseed the a/b/d/f controls from the new meters + refresh
@@ -313,10 +322,10 @@ def index():
                               ).classes("w-full")
                     linked("Roof clearance", "roof_clearance", 0.0, 0.5)
                 with ui.tab_panel("Geometry"):
-                    ga = linked("a — base along floor", "a", 0.05, WIDTH / 2)
-                    gb = linked("b — attachment along wall", "b", 0.05, HEIGHT_MAX)
-                    gd = linked("d — bracket length", "d", 0.0, 1.0)
-                    gf = linked("f — base height", "f", 0.0, HEIGHT_MAX)
+                    ga = linked("a — base along floor", "a", 0.05, WIDTH / 2, lockable=True)
+                    gb = linked("b — attachment along wall", "b", 0.05, HEIGHT_MAX, lockable=True)
+                    gd = linked("d — bracket length", "d", 0.0, 1.0, lockable=True)
+                    gf = linked("f — base height", "f", 0.0, HEIGHT_MAX, lockable=True)
                     ui.separator()
                     linked("Wall angle θ (deg)", "theta_deg", 0.0, 90.0, is_length=False)
                 with ui.tab_panel("Optimize"):
