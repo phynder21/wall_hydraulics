@@ -80,6 +80,15 @@ def test_diagram_scales_with_units():
     assert "in" in d_in.layout.xaxis.title.text
 
 
+def test_advance_angle_bounces_and_stays_in_range():
+    assert na.advance_angle(89.0, 1) == (90.0, -1)
+    assert na.advance_angle(1.0, -1) == (0.0, 1)
+    a, d = 45.0, 1
+    for _ in range(400):
+        a, d = na.advance_angle(a, d)
+        assert 0.0 <= a <= 90.0
+
+
 def test_default_state_is_within_slider_ranges():
     """Every default value sits inside the fixed slider extents the UI uses."""
     s = na.DEFAULT_STATE

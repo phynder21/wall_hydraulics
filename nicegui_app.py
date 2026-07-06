@@ -56,6 +56,19 @@ def disp(units, fine):
     return U, step, fmt, ulabel, round_dp
 
 
+ANIM_STEP_DEG = 3.0     # degrees advanced per animation frame
+
+
+def advance_angle(angle, direction, step=ANIM_STEP_DEG):
+    """Next sweep angle, bouncing back at the 0 and 90 degree limits."""
+    nxt = angle + direction * step
+    if nxt >= 90.0:
+        return 90.0, -1
+    if nxt <= 0.0:
+        return 0.0, 1
+    return nxt, direction
+
+
 # --- Pure computation + plot builders (no UI framework; reusable and testable)
 def _force_curves(a, b, d, f, x_cg, z_cg, theta_deg):
     theta = np.linspace(0.0, np.pi / 2, 400)
@@ -191,7 +204,7 @@ def index():
                                  # ignore refresh until the plots exist.
 
     reseeding = {"v": False}     # suppress input on_change while we set values
-    length_inputs = []           # length controls, re-scaled when units change
+    inputs = []                  # every linked control (for reseed / units re-scale)
 
     def refresh():
         if guard["building"]:
@@ -252,24 +265,42 @@ def index():
 
         sld.on_value_change(lambda: reseeding["v"] or commit(sld.value))
         num.on_value_change(lambda: reseeding["v"] or commit(num.value))
-        if is_length:
-            length_inputs.append({"slider": sld, "number": num, "key": key,
-                                  "lo": lo_m, "hi": hi_m, "base": base, "label": lbl})
+        inputs.append({"slider": sld, "number": num, "key": key, "lo": lo_m,
+                       "hi": hi_m, "base": base, "label": lbl, "is_length": is_length})
         return sld
 
     def apply_units():
-        """Re-scale every length control to the current units + precision."""
+        """Re-scale every control to the current units + precision (lengths only)."""
         U, step, fmt, ulabel, _ = disp(s["units"], s["fine"])
         reseeding["v"] = True
-        for li in length_inputs:
+        for li in inputs:
+            uu = U if li["is_length"] else 1.0
+            st_ = step if li["is_length"] else 1.0
             for el in (li["slider"], li["number"]):
-                el._props["min"] = li["lo"] * U
-                el._props["max"] = li["hi"] * U
-                el._props["step"] = step
-                el.value = s[li["key"]] * U
+                el._props["min"] = li["lo"] * uu
+                el._props["max"] = li["hi"] * uu
+                el._props["step"] = st_
+                el.value = s[li["key"]] * uu
                 el.update()
-            li["label"].text = f'{li["base"]} ({ulabel})'
+            li["label"].text = (f'{li["base"]} ({ulabel})' if li["is_length"]
+                                else li["base"])
         reseeding["v"] = False
+        refresh()
+
+    def set_value(key, meters):
+        """Set one control's value from meters (used by the sweep animation)."""
+        li = next(x for x in inputs if x["key"] == key)
+        uu = disp(s["units"], s["fine"])[0] if li["is_length"] else 1.0
+        s[key] = meters
+        reseeding["v"] = True
+        li["slider"].value = li["number"].value = meters * uu
+        reseeding["v"] = False
+
+    anim = {"dir": 1}
+
+    def sweep_tick():
+        new, anim["dir"] = advance_angle(s["theta_deg"], anim["dir"])
+        set_value("theta_deg", new)
         refresh()
 
     def metric(title):
@@ -359,6 +390,9 @@ def index():
                     gf = linked("f — base height", "f", 0.0, HEIGHT_MAX, lockable=True)
                     ui.separator()
                     linked("Wall angle θ (deg)", "theta_deg", 0.0, 90.0, is_length=False)
+                    _sweep = ui.timer(0.05, sweep_tick, active=False)
+                    ui.switch("▶ Sweep θ (0 → 90 → 0)",
+                              on_change=lambda e: setattr(_sweep, "active", bool(e.value)))
                 with ui.tab_panel("Optimize"):
                     ui.label("Find the a, b, d, f that minimize the worst-case "
                              "piston force for the current setup.").classes("text-sm")
