@@ -167,8 +167,12 @@ def diagram_figure(a, b, d, f, x_cg, z_cg, theta_deg, width, height, roof_cleara
 def index():
     ui.colors(primary=PRIMARY)
     s = dict(DEFAULT_STATE)
+    guard = {"building": True}   # bound inputs fire on_change while being built;
+                                 # ignore refresh until the plots exist.
 
     def refresh():
+        if guard["building"]:
+            return
         w, h = CONTAINERS[s["container"]]
         diag_plot.update_figure(diagram_figure(
             s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"], s["theta_deg"],
@@ -184,11 +188,16 @@ def index():
         stroke_m.text = f"{m['stroke']:.2f} m"
         ratio_m.text = f"{m['ratio']:.2f}" + ("  ✓" if m["ok"] else "  ⚠ over")
 
-    def slider(label, key, lo, hi, step=0.01):
+    def linked(label, key, lo, hi, step=0.01, fmt="%.2f"):
+        """A slider AND a typeable number box, both bound to s[key] (so they stay
+        in sync) — the NiceGUI equivalent of the Streamlit linked_input."""
         ui.label(label).classes("text-sm mt-2 mb-0")
-        return ui.slider(min=lo, max=hi, step=step, value=s[key],
-                         on_change=lambda e, k=key: (s.__setitem__(k, e.value), refresh())
-                         ).props("label-always").classes("w-full")
+        with ui.row().classes("w-full items-center no-wrap gap-2"):
+            sld = (ui.slider(min=lo, max=hi, step=step, on_change=refresh)
+                   .bind_value(s, key).props("label-always").classes("grow"))
+            (ui.number(min=lo, max=hi, step=step, format=fmt, on_change=refresh)
+             .bind_value(s, key).classes("w-24"))
+        return sld
 
     def metric(title):
         with ui.column().classes("items-center gap-0"):
@@ -236,20 +245,20 @@ def index():
                     ui.select(list(CONTAINERS), value=s["container"], label="Container",
                               on_change=lambda e: (s.__setitem__("container", e.value), refresh())
                               ).classes("w-full")
-                    slider("x_cg — along wall (m)", "x_cg", 0.0, HEIGHT_MAX)
-                    slider("z_cg — off the wall (m)", "z_cg", 0.0, 1.5)
+                    linked("x_cg — along wall (m)", "x_cg", 0.0, HEIGHT_MAX)
+                    linked("z_cg — off the wall (m)", "z_cg", 0.0, 1.5)
                     ui.label("Max stroke ratio").classes("text-sm mt-2 mb-0")
                     ui.number(value=s["stroke_ratio"], min=1.0, max=3.0, step=0.05,
                               on_change=lambda e: (s.__setitem__("stroke_ratio", e.value), refresh())
                               ).classes("w-full")
-                    slider("Roof clearance (m)", "roof_clearance", 0.0, 0.5, 0.01)
+                    linked("Roof clearance (m)", "roof_clearance", 0.0, 0.5, 0.01)
                 with ui.tab_panel("Geometry"):
-                    ga = slider("a — base along floor (m)", "a", 0.05, WIDTH / 2)
-                    gb = slider("b — attachment along wall (m)", "b", 0.05, HEIGHT_MAX)
-                    gd = slider("d — bracket length (m)", "d", 0.0, 1.0)
-                    gf = slider("f — base height (m)", "f", 0.0, HEIGHT_MAX)
+                    ga = linked("a — base along floor (m)", "a", 0.05, WIDTH / 2)
+                    gb = linked("b — attachment along wall (m)", "b", 0.05, HEIGHT_MAX)
+                    gd = linked("d — bracket length (m)", "d", 0.0, 1.0)
+                    gf = linked("f — base height (m)", "f", 0.0, HEIGHT_MAX)
                     ui.separator()
-                    slider("Wall angle θ (deg)", "theta_deg", 0.0, 90.0, 1.0)
+                    linked("Wall angle θ (deg)", "theta_deg", 0.0, 90.0, 1.0, "%.0f")
                 with ui.tab_panel("Optimize"):
                     ui.label("Find the a, b, d, f that minimize the worst-case "
                              "piston force for the current setup.").classes("text-sm")
@@ -277,6 +286,7 @@ def index():
                 s["a"], s["b"], s["d"], s["f"], s["theta_deg"], s["stroke_ratio"])
                 ).classes("w-full")
 
+    guard["building"] = False   # layout complete; refresh may touch the plots now
     refresh()   # first paint of the metrics
 
 
