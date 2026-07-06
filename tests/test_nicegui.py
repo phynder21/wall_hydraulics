@@ -44,6 +44,32 @@ def test_stroke_ok_flag_tracks_limit():
     assert tight["ok"] is False
 
 
+def test_disp_units_and_precision():
+    U, step, fmt, ulabel, dp = na.disp("meters", False)
+    assert (U, ulabel, dp) == (1.0, "m", 2)
+    Ui, _, _, uli, _ = na.disp("inches", False)
+    assert uli == "in" and Ui == pytest.approx(39.3700787)
+    # fine precision tightens the step and rounding in both unit systems
+    assert na.disp("meters", True)[1] < na.disp("meters", False)[1]
+    assert na.disp("meters", True)[4] == 3
+
+
+def test_length_figure_scales_with_units():
+    L_m = na.length_figure(0.6, 1.8, 0.1, 0.4, 45.0, 1.8, u=1.0, ulabel="m")
+    L_in = na.length_figure(0.6, 1.8, 0.1, 0.4, 45.0, 1.8, u=39.3700787, ulabel="in")
+    ym = float(np.nanmax(L_m.data[0].y))
+    yi = float(np.nanmax(L_in.data[0].y))
+    assert yi == pytest.approx(ym * 39.3700787, rel=1e-6)
+    assert "in" in L_in.layout.yaxis.title.text
+
+
+def test_diagram_scales_with_units():
+    W, H = CONTAINER_PRESETS["standard"]
+    d_in = na.diagram_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0, W, H, 0.0,
+                             u=39.3700787, ulabel="in")
+    assert "in" in d_in.layout.xaxis.title.text
+
+
 def test_default_state_is_within_slider_ranges():
     """Every default value sits inside the fixed slider extents the UI uses."""
     s = na.DEFAULT_STATE

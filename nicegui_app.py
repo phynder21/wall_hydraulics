@@ -38,7 +38,22 @@ DEFAULT_STATE = {
     "a": 0.60, "b": 1.80, "d": 0.10, "f": 0.40,
     "x_cg": 1.20, "z_cg": 0.55, "theta_deg": 45.0,
     "stroke_ratio": STROKE_RATIO_MAX, "roof_clearance": 0.0,
+    "units": "meters", "fine": False,
 }
+
+
+def disp(units, fine):
+    """Display factor/step/format for the current units + precision. Values are
+    stored in METERS; this only governs how lengths are shown/entered."""
+    inches = units == "inches"
+    U = 39.3700787 if inches else 1.0
+    ulabel = "in" if inches else "m"
+    if inches:
+        step, fmt = (0.01, "%.3f") if fine else (0.1, "%.2f")
+    else:
+        step, fmt = (0.001, "%.3f") if fine else (0.01, "%.2f")
+    round_dp = 3 if fine else 2          # meters precision the optimizer snaps to
+    return U, step, fmt, ulabel, round_dp
 
 
 # --- Pure computation + plot builders (no UI framework; reusable and testable)
@@ -84,10 +99,10 @@ def force_figure(a, b, d, f, x_cg, z_cg, theta_deg):
     return fig
 
 
-def length_figure(a, b, d, f, theta_deg, stroke_ratio):
+def length_figure(a, b, d, f, theta_deg, stroke_ratio, u=1.0, ulabel="m"):
     theta = np.linspace(0.0, np.pi / 2, 400)
-    L = compute_cylinder_length(theta, a=a, b=b, d=d, f=f)
-    L_here = float(compute_cylinder_length(np.radians(theta_deg), a=a, b=b, d=d, f=f))
+    L = compute_cylinder_length(theta, a=a, b=b, d=d, f=f) * u
+    L_here = float(compute_cylinder_length(np.radians(theta_deg), a=a, b=b, d=d, f=f)) * u
     L_min = float(L.min())
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=np.degrees(theta), y=L, mode="lines", name="L(θ)",
@@ -100,22 +115,24 @@ def length_figure(a, b, d, f, theta_deg, stroke_ratio):
                   annotation_text=f"{stroke_ratio:g}× limit")
     fig.update_layout(template=PLOT_TEMPLATE, font=PLOT_FONT,
                       title="Cylinder length vs. wall angle",
-                      xaxis_title="θ (deg)", yaxis_title="length (m)",
+                      xaxis_title="θ (deg)", yaxis_title=f"length ({ulabel})",
                       xaxis=dict(range=[0, 90]), height=300, showlegend=False,
                       margin=dict(l=10, r=10, t=40, b=10))
     return fig
 
 
-def diagram_figure(a, b, d, f, x_cg, z_cg, theta_deg, width, height, roof_clearance):
+def diagram_figure(a, b, d, f, x_cg, z_cg, theta_deg, width, height, roof_clearance,
+                   u=1.0, ulabel="m"):
     theta = np.radians(theta_deg)
     geom = compute_geometry(theta, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
-    x_att, z_att = (float(v) for v in geom["attachment"])
-    x_cgw, z_cgw = (float(v) for v in geom["cg"])
-    xb, zb = (float(v) for v in geom["cylinder_base"])
-    x_tip, z_tip = (float(v) for v in geom["wall_axis_at_b"])
-    x_cgf, z_cgf = (float(v) for v in geom["wall_axis_at_xcg"])
+    x_att, z_att = (float(v) * u for v in geom["attachment"])
+    x_cgw, z_cgw = (float(v) * u for v in geom["cg"])
+    xb, zb = (float(v) * u for v in geom["cylinder_base"])
+    x_tip, z_tip = (float(v) * u for v in geom["wall_axis_at_b"])
+    x_cgf, z_cgf = (float(v) * u for v in geom["wall_axis_at_xcg"])
+    width, height, roof_clearance = width * u, height * u, roof_clearance * u
     x_door, z_door = height * np.cos(theta), height * np.sin(theta)
-    pad = 0.5
+    pad = 0.5 * u
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=[-width - pad, height + pad], y=[0, 0], mode="lines",
                              line=dict(color="lightgray", dash="dash"),
@@ -148,14 +165,14 @@ def diagram_figure(a, b, d, f, x_cg, z_cg, theta_deg, width, height, roof_cleara
                              marker=dict(size=9, color="red"), name="attachment"))
     fig.add_trace(go.Scatter(x=[x_cgw], y=[z_cgw], mode="markers",
                              marker=dict(size=13, color="blue", symbol="cross"), name="cg"))
-    fig.add_annotation(x=x_cgw, y=z_cgw - 0.35, ax=x_cgw, ay=z_cgw,
+    fig.add_annotation(x=x_cgw, y=z_cgw - 0.35 * u, ax=x_cgw, ay=z_cgw,
                        xref="x", yref="y", axref="x", ayref="y", showarrow=True,
                        arrowhead=2, arrowsize=1, arrowwidth=2, arrowcolor="blue")
     fig.update_layout(template=PLOT_TEMPLATE, font=PLOT_FONT,
                       title=f"Side view (θ = {theta_deg:.0f}°)",
-                      xaxis=dict(range=[-width - pad, height + pad], title="x (m)",
+                      xaxis=dict(range=[-width - pad, height + pad], title=f"x ({ulabel})",
                                  zeroline=False),
-                      yaxis=dict(range=[-pad, height + pad], title="z (m)",
+                      yaxis=dict(range=[-pad, height + pad], title=f"z ({ulabel})",
                                  scaleanchor="x", scaleratio=1, zeroline=False),
                       height=440, legend=dict(orientation="h", y=-0.18),
                       margin=dict(l=10, r=10, t=40, b=10))
@@ -170,34 +187,71 @@ def index():
     guard = {"building": True}   # bound inputs fire on_change while being built;
                                  # ignore refresh until the plots exist.
 
+    reseeding = {"v": False}     # suppress input on_change while we set values
+    length_inputs = []           # length controls, re-scaled when units change
+
     def refresh():
         if guard["building"]:
             return
+        U, _, _, ulabel, _ = disp(s["units"], s["fine"])
         w, h = CONTAINERS[s["container"]]
         diag_plot.update_figure(diagram_figure(
             s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"], s["theta_deg"],
-            w, h, s["roof_clearance"]))
+            w, h, s["roof_clearance"], U, ulabel))
         force_plot.update_figure(force_figure(
             s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"], s["theta_deg"]))
         length_plot.update_figure(length_figure(
-            s["a"], s["b"], s["d"], s["f"], s["theta_deg"], s["stroke_ratio"]))
+            s["a"], s["b"], s["d"], s["f"], s["theta_deg"], s["stroke_ratio"], U, ulabel))
         m = summary_metrics(s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"],
                             s["theta_deg"], s["stroke_ratio"])
         peak_m.text = f"{m['peak']:.2f} N/kg"
         here_m.text = f"{m['here']:.2f} N/kg"
-        stroke_m.text = f"{m['stroke']:.2f} m"
+        stroke_m.text = f"{m['stroke'] * U:.2f} {ulabel}"
         ratio_m.text = f"{m['ratio']:.2f}" + ("  ✓" if m["ok"] else "  ⚠ over")
 
-    def linked(label, key, lo, hi, step=0.01, fmt="%.2f"):
-        """A slider AND a typeable number box, both bound to s[key] (so they stay
-        in sync) — the NiceGUI equivalent of the Streamlit linked_input."""
-        ui.label(label).classes("text-sm mt-2 mb-0")
+    def linked(base, key, lo_m, hi_m, is_length=True):
+        """Slider + number box for one value, shown in the current display units
+        but stored in METERS at s[key]. Registered so a units change re-scales it."""
+        U, step, fmt, ulabel, _ = disp(s["units"], s["fine"])
+        du, st_, ft = (U, step, fmt) if is_length else (1.0, 1.0, "%.0f")
+        lbl = ui.label(f"{base} ({ulabel})" if is_length else base).classes("text-sm mt-2 mb-0")
         with ui.row().classes("w-full items-center no-wrap gap-2"):
-            sld = (ui.slider(min=lo, max=hi, step=step, on_change=refresh)
-                   .bind_value(s, key).props("label-always").classes("grow"))
-            (ui.number(min=lo, max=hi, step=step, format=fmt, on_change=refresh)
-             .bind_value(s, key).classes("w-24"))
+            sld = ui.slider(min=lo_m * du, max=hi_m * du, step=st_, value=s[key] * du
+                            ).props("label-always").classes("grow")
+            num = ui.number(min=lo_m * du, max=hi_m * du, step=st_, value=s[key] * du,
+                            format=ft).classes("w-24")
+
+        def commit(value):
+            uu = disp(s["units"], s["fine"])[0] if is_length else 1.0
+            value = min(max(value if value is not None else s[key] * uu,
+                            lo_m * uu), hi_m * uu)
+            reseeding["v"] = True
+            sld.value = num.value = value
+            reseeding["v"] = False
+            s[key] = value / uu
+            refresh()
+
+        sld.on_value_change(lambda: reseeding["v"] or commit(sld.value))
+        num.on_value_change(lambda: reseeding["v"] or commit(num.value))
+        if is_length:
+            length_inputs.append({"slider": sld, "number": num, "key": key,
+                                  "lo": lo_m, "hi": hi_m, "base": base, "label": lbl})
         return sld
+
+    def apply_units():
+        """Re-scale every length control to the current units + precision."""
+        U, step, fmt, ulabel, _ = disp(s["units"], s["fine"])
+        reseeding["v"] = True
+        for li in length_inputs:
+            for el in (li["slider"], li["number"]):
+                el._props["min"] = li["lo"] * U
+                el._props["max"] = li["hi"] * U
+                el._props["step"] = step
+                el.value = s[li["key"]] * U
+                el.update()
+            li["label"].text = f'{li["base"]} ({ulabel})'
+        reseeding["v"] = False
+        refresh()
 
     def metric(title):
         with ui.column().classes("items-center gap-0"):
@@ -215,10 +269,10 @@ def index():
             res = await run.io_bound(
                 optimize_actuator, w, h, s["x_cg"], s["z_cg"],
                 stroke_ratio_max=s["stroke_ratio"], roof_clearance=s["roof_clearance"])
-            for sld, k in ((ga, "a"), (gb, "b"), (gd, "d"), (gf, "f")):
-                s[k] = round(float(res[k]), 3)
-                sld.value = s[k]
-            refresh()
+            _, _, _, _, round_dp = disp(s["units"], s["fine"])
+            for k in ("a", "b", "d", "f"):
+                s[k] = round(float(res[k]), round_dp)
+            apply_units()   # reseed the a/b/d/f controls from the new meters + refresh
             opt_status.text = (f"Optimized — peak {res['peak_force']:.2f} N/kg, "
                                f"stroke ratio {res['stroke_ratio']:.2f}"
                                + ("" if res["feasible"] else " (limits not all met)"))
@@ -245,20 +299,26 @@ def index():
                     ui.select(list(CONTAINERS), value=s["container"], label="Container",
                               on_change=lambda e: (s.__setitem__("container", e.value), refresh())
                               ).classes("w-full")
-                    linked("x_cg — along wall (m)", "x_cg", 0.0, HEIGHT_MAX)
-                    linked("z_cg — off the wall (m)", "z_cg", 0.0, 1.5)
+                    with ui.row().classes("items-center gap-3 mt-1"):
+                        ui.toggle({"meters": "m", "inches": "in"}, value=s["units"],
+                                  on_change=lambda e: (s.__setitem__("units", e.value), apply_units())
+                                  ).props("dense")
+                        ui.switch("Fine precision", value=s["fine"],
+                                  on_change=lambda e: (s.__setitem__("fine", e.value), apply_units()))
+                    linked("x_cg — along wall", "x_cg", 0.0, HEIGHT_MAX)
+                    linked("z_cg — off the wall", "z_cg", 0.0, 1.5)
                     ui.label("Max stroke ratio").classes("text-sm mt-2 mb-0")
                     ui.number(value=s["stroke_ratio"], min=1.0, max=3.0, step=0.05,
                               on_change=lambda e: (s.__setitem__("stroke_ratio", e.value), refresh())
                               ).classes("w-full")
-                    linked("Roof clearance (m)", "roof_clearance", 0.0, 0.5, 0.01)
+                    linked("Roof clearance", "roof_clearance", 0.0, 0.5)
                 with ui.tab_panel("Geometry"):
-                    ga = linked("a — base along floor (m)", "a", 0.05, WIDTH / 2)
-                    gb = linked("b — attachment along wall (m)", "b", 0.05, HEIGHT_MAX)
-                    gd = linked("d — bracket length (m)", "d", 0.0, 1.0)
-                    gf = linked("f — base height (m)", "f", 0.0, HEIGHT_MAX)
+                    ga = linked("a — base along floor", "a", 0.05, WIDTH / 2)
+                    gb = linked("b — attachment along wall", "b", 0.05, HEIGHT_MAX)
+                    gd = linked("d — bracket length", "d", 0.0, 1.0)
+                    gf = linked("f — base height", "f", 0.0, HEIGHT_MAX)
                     ui.separator()
-                    linked("Wall angle θ (deg)", "theta_deg", 0.0, 90.0, 1.0, "%.0f")
+                    linked("Wall angle θ (deg)", "theta_deg", 0.0, 90.0, is_length=False)
                 with ui.tab_panel("Optimize"):
                     ui.label("Find the a, b, d, f that minimize the worst-case "
                              "piston force for the current setup.").classes("text-sm")
