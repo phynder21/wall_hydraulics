@@ -101,6 +101,18 @@ def test_overlays_add_traces():
     assert len(lover.data) == len(lbase.data) + 1
 
 
+def test_browse_table_and_search():
+    """The Browse view builds and queries the shared lookup table."""
+    na.TABLE_RES = 12          # tiny grid for a fast test
+    na._TABLE["data"] = None
+    import lookup
+    table = na.get_table()
+    assert table["a"].size > 0
+    W, H = CONTAINER_PRESETS["standard"]
+    res = lookup.search(table, H, 1.2, 0.55, stroke_max=1.8)
+    assert res["peak_force"].size > 0
+
+
 def test_default_state_is_within_slider_ranges():
     """Every default value sits inside the fixed slider extents the UI uses."""
     s = na.DEFAULT_STATE

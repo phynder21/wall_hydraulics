@@ -20,6 +20,17 @@ from nicegui import ui, run, app
 from wall import (STROKE_RATIO_MAX, compute_F_piston, compute_geometry,
                   compute_cylinder_length)
 from optimize import optimize_actuator, CONTAINER_PRESETS
+import lookup
+import lookup_build
+
+TABLE_RES = 40                 # lookup-table grid resolution (tests lower this)
+_TABLE = {"data": None}        # process-wide cache (shared, read-only)
+
+
+def get_table():
+    if _TABLE["data"] is None:
+        _TABLE["data"] = lookup_build.build_table(res=TABLE_RES)[0]
+    return _TABLE["data"]
 
 PRIMARY = "#2563EB"
 PLOT_TEMPLATE = "plotly_white"
@@ -467,7 +478,8 @@ def index():
 
     with ui.header().classes("items-center justify-between bg-primary text-white"):
         ui.label("Container wall actuator").classes("text-lg font-medium")
-        ui.label("hinged-wall hydraulic sizing").classes("text-sm opacity-80")
+        ui.button("🔎 Browse configurations", on_click=lambda: ui.navigate.to("/browse")) \
+            .props("flat color=white no-caps")
 
     with ui.row().classes("w-full no-wrap gap-4 p-2"):
         # ---- Left: control panel with tabs --------------------------------
@@ -565,6 +577,103 @@ def index():
 
     guard["building"] = False   # layout complete; refresh may touch the plots now
     refresh()   # first paint of the metrics
+
+
+BROWSE_COLS = ["peak_force", "a", "b", "d", "f", "stroke", "stroke_ratio"]
+BROWSE_LABELS = {"peak_force": "peak (N/kg)", "a": "a", "b": "b", "d": "d",
+                 "f": "f", "stroke": "stroke", "stroke_ratio": "ratio",
+                 "L_min": "retracted", "L_max": "extended", "moment_arm": "OC margin"}
+
+
+@ui.page("/browse")
+def browse_page():
+    ui.colors(primary=PRIMARY)
+    b = {"container": next(iter(CONTAINERS)), "x_cg": 1.20, "z_cg": 0.55,
+         "stroke": float(STROKE_RATIO_MAX), "clear": 0.0, "sort": "peak_force",
+         "asc": True, "topn": 100, "max_f": 0.0, "max_d": 0.0, "results": None}
+
+    with ui.header().classes("items-center justify-between bg-primary text-white"):
+        ui.label("Browse configurations").classes("text-lg font-medium")
+        ui.button("🛠 Designer", on_click=lambda: ui.navigate.to("/")) \
+            .props("flat color=white no-caps")
+
+    async def run_search():
+        search_btn.disable()
+        if _TABLE["data"] is None:
+            ui.notify("Building the configuration database (first time, ~15 s)…")
+            await run.io_bound(get_table)
+        table = get_table()
+        w, h = CONTAINERS[b["container"]]
+        filters = {}
+        if b["max_f"] > 0:
+            filters["f"] = (None, b["max_f"])
+        if b["max_d"] > 0:
+            filters["d"] = (None, b["max_d"])
+        res = lookup.search(table, h, b["x_cg"], b["z_cg"], stroke_max=b["stroke"],
+                            roof_clearance=b["clear"], filters=filters,
+                            sort_by=b["sort"], ascending=b["asc"], limit=int(b["topn"]))
+        b["results"] = res
+        n = res["peak_force"].size
+        rows = [{"rank": i + 1, **{c: round(float(res[c][i]), 3) for c in BROWSE_COLS}}
+                for i in range(n)]
+        table_el.rows = rows
+        table_el.update()
+        count_lbl.text = f"{n} matching configurations" if n else "No matches — loosen the settings."
+        rank_in.max = max(n, 1)
+        inspect()
+        search_btn.enable()
+
+    def inspect():
+        res = b["results"]
+        if not res or res["peak_force"].size == 0:
+            return
+        i = int(min(max(rank_in.value or 1, 1), res["peak_force"].size)) - 1
+        a, bb, d, f = (float(res["a"][i]), float(res["b"][i]),
+                       float(res["d"][i]), float(res["f"][i]))
+        pick_lbl.text = (f"#{i+1}:  a={a:.3f} b={bb:.3f} d={d:.3f} f={f:.3f} m  —  "
+                         f"peak {float(res['peak_force'][i]):.2f} N/kg, "
+                         f"ratio {float(res['stroke_ratio'][i]):.2f}")
+        force_el.update_figure(force_figure(a, bb, d, f, b["x_cg"], b["z_cg"], 45.0))
+        length_el.update_figure(length_figure(a, bb, d, f, 45.0, b["stroke"]))
+
+    async def refine():
+        w, h = CONTAINERS[b["container"]]
+        ui.notify("Optimizing for the exact optimum…")
+        opt = await run.io_bound(optimize_actuator, w, h, b["x_cg"], b["z_cg"],
+                                 stroke_ratio_max=b["stroke"], roof_clearance=b["clear"])
+        ui.notify(f"Exact optimum: {opt['peak_force']:.2f} N/kg at a={opt['a']:.3f} "
+                  f"b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f}", type="positive")
+
+    with ui.row().classes("w-full no-wrap gap-4 p-2"):
+        with ui.card().classes("w-96 shrink-0"):
+            ui.label("Problem").classes("font-medium")
+            ui.select(list(CONTAINERS), label="Container").bind_value(b, "container")
+            ui.number("x_cg (m)", min=0, max=HEIGHT_MAX, step=0.01).bind_value(b, "x_cg").classes("w-full")
+            ui.number("z_cg (m)", min=0, max=1.5, step=0.01).bind_value(b, "z_cg").classes("w-full")
+            ui.number("Max stroke ratio", min=1.0, max=3.0, step=0.05).bind_value(b, "stroke").classes("w-full")
+            ui.number("Roof clearance (m)", min=0.0, max=0.5, step=0.01).bind_value(b, "clear").classes("w-full")
+            ui.label("Filter / sort").classes("font-medium mt-2")
+            ui.select({c: BROWSE_LABELS[c] for c in BROWSE_LABELS}, label="Sort by").bind_value(b, "sort")
+            ui.switch("Ascending", value=True).bind_value(b, "asc")
+            ui.number("Max base height f (0 = any)", min=0.0, max=3.0, step=0.05).bind_value(b, "max_f").classes("w-full")
+            ui.number("Max bracket d (0 = any)", min=0.0, max=1.0, step=0.05).bind_value(b, "max_d").classes("w-full")
+            ui.number("Show top N", min=10, max=1000, step=10).bind_value(b, "topn").classes("w-full")
+            search_btn = ui.button("Search", on_click=run_search).props("color=primary").classes("w-full")
+
+        with ui.column().classes("flex-1 gap-2"):
+            count_lbl = ui.label("Set your query and press Search.").classes("text-sm")
+            cols = [{"name": "rank", "label": "#", "field": "rank", "align": "left"}]
+            cols += [{"name": c, "label": BROWSE_LABELS[c], "field": c} for c in BROWSE_COLS]
+            table_el = ui.table(columns=cols, rows=[], row_key="rank").classes("w-full").props("dense")
+            with ui.row().classes("items-center gap-2"):
+                ui.label("Inspect rank")
+                rank_in = ui.number(value=1, min=1, max=1, step=1,
+                                    on_change=lambda: inspect()).classes("w-24")
+                ui.button("Refine — exact optimizer", on_click=refine).props("outline no-caps")
+            pick_lbl = ui.label("").classes("text-sm")
+            with ui.row().classes("w-full no-wrap gap-2"):
+                force_el = ui.plotly(force_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0)).classes("w-1/2")
+                length_el = ui.plotly(length_figure(0.6, 1.8, 0.1, 0.4, 45.0, 1.8)).classes("w-1/2")
 
 
 if __name__ in {"__main__", "__mp_main__"}:
