@@ -217,6 +217,7 @@ def index():
 
     reseeding = {"v": False}     # suppress input on_change while we set values
     inputs = []                  # every linked control (for reseed / units re-scale)
+    range_inputs = []            # mounting-limit range controls
 
     def refresh():
         if guard["building"]:
@@ -303,8 +304,47 @@ def index():
                 el.update()
             li["label"].text = (f'{li["base"]} ({ulabel})' if li["is_length"]
                                 else li["base"])
+        for ri in range_inputs:
+            lo, hi = s[f"rng_{ri['key']}"]
+            rng = ri["range"]
+            rng._props["min"] = ri["full_lo"] * U
+            rng._props["max"] = ri["full_hi"] * U
+            rng._props["step"] = step
+            rng.value = {"min": lo * U, "max": hi * U}
+            rng.update()
+            ri["label"].text = f'{ri["base"]} range ({ulabel})'
         reseeding["v"] = False
         refresh()
+
+    def range_control(base, key, full_lo, full_hi):
+        """Mounting-limit [min, max] range for one variable, in display units,
+        stored in METERS at s['rng_<key>']. Narrowing it restricts the optimizer
+        AND the value slider for that variable."""
+        s.setdefault(f"rng_{key}", (full_lo, full_hi))
+        U, step, fmt, ulabel, _ = disp(s["units"], s["fine"])
+        lo, hi = s[f"rng_{key}"]
+        lbl = ui.label(f"{base} range ({ulabel})").classes("text-xs mt-2 mb-0")
+        rng = ui.range(min=full_lo * U, max=full_hi * U, step=step,
+                       value={"min": lo * U, "max": hi * U}).props("label-always").classes("w-full")
+
+        def on_range():
+            uu = disp(s["units"], s["fine"])[0]
+            v = rng.value
+            lo_m, hi_m = v["min"] / uu, v["max"] / uu
+            if hi_m - lo_m < 0.01:                       # keep a non-zero window
+                hi_m = min(lo_m + 0.01, full_hi)
+                lo_m = max(hi_m - 0.01, full_lo)
+            s[f"rng_{key}"] = (lo_m, hi_m)
+            gi = next((x for x in inputs if x["key"] == key), None)
+            if gi:                                       # restrict the value slider
+                gi["lo"], gi["hi"] = lo_m, hi_m
+                s[key] = min(max(s[key], lo_m), hi_m)
+            apply_units()
+
+        rng.on_value_change(lambda: reseeding["v"] or on_range())
+        range_inputs.append({"range": rng, "key": key, "full_lo": full_lo,
+                             "full_hi": full_hi, "base": base, "label": lbl})
+        return rng
 
     def set_value(key, meters):
         """Set one control's value from meters (used by the sweep animation)."""
@@ -358,13 +398,14 @@ def index():
             # Locked variables are held fixed; only the rest are searched.
             locked = {k: round(float(s[k]), round_dp)
                       for k in ("a", "b", "d", "f") if s.get(f"lock_{k}")}
+            var_bounds = {k: tuple(s[f"rng_{k}"]) for k in ("a", "b", "d", "f")}
             # io_bound (thread) rather than cpu_bound (process): no subprocess to
             # re-import this module, and numpy/scipy release the GIL during the
             # search so the event loop stays responsive.
             res = await run.io_bound(
                 optimize_actuator, w, h, s["x_cg"], s["z_cg"],
                 stroke_ratio_max=s["stroke_ratio"], roof_clearance=s["roof_clearance"],
-                locked=locked, alt_rel_tol=s["alt_pct"] / 100.0)
+                locked=locked, var_bounds=var_bounds, alt_rel_tol=s["alt_pct"] / 100.0)
             for k in ("a", "b", "d", "f"):
                 s[k] = round(float(res[k]), round_dp)
             apply_units()   # reseed the a/b/d/f controls from the new meters + refresh
@@ -442,6 +483,13 @@ def index():
                               ).classes("w-full")
                     linked("Roof clearance", "roof_clearance", 0.0, 0.5)
                 with ui.tab_panel("Geometry"):
+                    with ui.expansion("Variable ranges (mounting limits)").classes("w-full"):
+                        ui.label("Narrow where a dimension may sit; the optimizer "
+                                 "and its value slider stay within it.").classes("text-xs")
+                        range_control("a — floor position", "a", 0.05, WIDTH / 2)
+                        range_control("b — along wall", "b", 0.05, HEIGHT_MAX)
+                        range_control("d — bracket length", "d", 0.0, 1.0)
+                        range_control("f — base height", "f", 0.0, HEIGHT_MAX)
                     ga = linked("a — base along floor", "a", 0.05, WIDTH / 2, lockable=True)
                     gb = linked("b — attachment along wall", "b", 0.05, HEIGHT_MAX, lockable=True)
                     gd = linked("d — bracket length", "d", 0.0, 1.0, lockable=True)
