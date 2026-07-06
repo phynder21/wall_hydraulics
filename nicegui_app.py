@@ -268,7 +268,7 @@ def index():
         opt_status.text = "Optimizing… (~20 s)"
         try:
             w, h = CONTAINERS[s["container"]]
-            _, _, _, _, round_dp = disp(s["units"], s["fine"])
+            U, _, _, ulabel, round_dp = disp(s["units"], s["fine"])
             # Locked variables are held fixed; only the rest are searched.
             locked = {k: round(float(s[k]), round_dp)
                       for k in ("a", "b", "d", "f") if s.get(f"lock_{k}")}
@@ -282,10 +282,27 @@ def index():
             for k in ("a", "b", "d", "f"):
                 s[k] = round(float(res[k]), round_dp)
             apply_units()   # reseed the a/b/d/f controls from the new meters + refresh
-            opt_status.text = (f"Optimized — peak {res['peak_force']:.2f} N/kg, "
-                               f"stroke ratio {res['stroke_ratio']:.2f}"
-                               + ("" if res["feasible"] else " (limits not all met)"))
-            ui.notify("Optimized", type="positive")
+            held = f" (held: {', '.join(sorted(locked))})" if locked else ""
+            action = "Evaluated" if len(locked) == 4 else "Optimized"
+            detail = (f"peak {res['peak_force']:.2f} N/kg, stroke ratio "
+                      f"{res['stroke_ratio']:.2f}, roof breach "
+                      f"{res['ceiling_violation'] * U:.3f} {ulabel}")
+            if res.get("over_center"):
+                msg, css, ntype = (
+                    f"{action}{held}: OVER-CENTERS — the cylinder line crosses the "
+                    "hinge so the force diverges and it can't be built. Unlock a "
+                    "variable (or change the pinned values) and re-optimize.",
+                    "text-sm text-red-600", "negative")
+            elif res["feasible"]:
+                msg, css, ntype = (f"{action}{held} — buildable, all limits met: "
+                                   f"{detail}.", "text-sm text-green-700", "positive")
+            else:
+                msg, css, ntype = (f"{action}{held} — best buildable design, but not "
+                                   f"all limits are met: {detail}.",
+                                   "text-sm text-amber-600", "warning")
+            opt_status.text = msg
+            opt_status.classes(replace=css)
+            ui.notify(action, type=ntype)
         except Exception as exc:
             opt_status.text = f"Optimizer failed: {exc}"
             ui.notify("Optimizer failed", type="negative")
