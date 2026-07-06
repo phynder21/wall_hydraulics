@@ -15,7 +15,7 @@ import os
 
 import numpy as np
 import plotly.graph_objects as go
-from nicegui import ui, run
+from nicegui import ui, run, app
 
 from wall import (STROKE_RATIO_MAX, compute_F_piston, compute_geometry,
                   compute_cylinder_length)
@@ -212,8 +212,19 @@ def diagram_figure(a, b, d, f, x_cg, z_cg, theta_deg, width, height, roof_cleara
 def index():
     ui.colors(primary=PRIMARY)
     s = dict(DEFAULT_STATE)
+    # Restore this browser's last session (persists across reloads).
+    saved = app.storage.user.get("wall_state")
+    if isinstance(saved, dict):
+        for k, v in saved.items():
+            if k in DEFAULT_STATE or k.startswith(("rng_", "lock_")):
+                s[k] = v
     guard = {"building": True}   # bound inputs fire on_change while being built;
                                  # ignore refresh until the plots exist.
+
+    def save_state():
+        app.storage.user["wall_state"] = {
+            k: v for k, v in s.items()
+            if k in DEFAULT_STATE or k.startswith(("rng_", "lock_"))}
 
     reseeding = {"v": False}     # suppress input on_change while we set values
     inputs = []                  # every linked control (for reseed / units re-scale)
@@ -238,6 +249,8 @@ def index():
             overlays))
         cmp_a.text = f"A (green): {_fmt_design(s['design_A'])}"
         cmp_b.text = f"B (orange): {_fmt_design(s['design_B'])}"
+        if not s.get("_anim"):      # don't hit storage 20×/s during the sweep
+            save_state()
         m = summary_metrics(s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"],
                             s["theta_deg"], s["stroke_ratio"])
         peak_m.text = f"{m['peak']:.2f} N/kg"
@@ -498,7 +511,8 @@ def index():
                     linked("Wall angle θ (deg)", "theta_deg", 0.0, 90.0, is_length=False)
                     _sweep = ui.timer(0.05, sweep_tick, active=False)
                     ui.switch("▶ Sweep θ (0 → 90 → 0)",
-                              on_change=lambda e: setattr(_sweep, "active", bool(e.value)))
+                              on_change=lambda e: (setattr(_sweep, "active", bool(e.value)),
+                                                   s.__setitem__("_anim", bool(e.value))))
                 with ui.tab_panel("Optimize"):
                     ui.label("Find the a, b, d, f that minimize the worst-case "
                              "piston force for the current setup.").classes("text-sm")
@@ -555,4 +569,5 @@ def index():
 
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)),
-           title="Container Wall Actuator", reload=False, show=False)
+           title="Container Wall Actuator", reload=False, show=False,
+           storage_secret=os.environ.get("STORAGE_SECRET", "wall-actuator-secret"))
