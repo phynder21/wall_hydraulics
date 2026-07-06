@@ -37,6 +37,16 @@ def test_metrics_match_shared_physics():
     assert m["ratio"] == pytest.approx(float(L.max() / L.min()), abs=1e-9)
 
 
+def test_summary_reports_lengths_and_singularity():
+    m = na.summary_metrics(**GEOM, stroke_ratio=1.8)
+    assert m["L_max"] >= m["L_min"] > 0
+    assert m["singular"] is False               # a sane geometry isn't singular
+    # a near-singular geometry (force diverges) is flagged
+    ms = na.summary_metrics(a=0.2, b=0.3, d=0.3, f=0.3, x_cg=1.2, z_cg=0.55,
+                            theta_deg=45.0, stroke_ratio=1.8)
+    assert ms["singular"] is True
+
+
 def test_stroke_ok_flag_tracks_limit():
     loose = na.summary_metrics(**GEOM, stroke_ratio=3.0)
     tight = na.summary_metrics(**GEOM, stroke_ratio=1.0)

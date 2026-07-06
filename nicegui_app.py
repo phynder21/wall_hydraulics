@@ -68,14 +68,17 @@ def _force_curves(a, b, d, f, x_cg, z_cg, theta_deg):
 
 
 def summary_metrics(a, b, d, f, x_cg, z_cg, theta_deg, stroke_ratio):
-    _, _, valid, F_here = _force_curves(a, b, d, f, x_cg, z_cg, theta_deg)
+    theta, _, valid, F_here = _force_curves(a, b, d, f, x_cg, z_cg, theta_deg)
     peak = (max(abs(float(valid.min())), abs(float(valid.max())))
             if valid.size else float("nan"))
     L = compute_cylinder_length(np.linspace(0, np.pi / 2, 400), a=a, b=b, d=d, f=f)
     L_min, L_max = float(L.min()), float(L.max())
+    L_here = float(compute_cylinder_length(np.radians(theta_deg), a=a, b=b, d=d, f=f))
     ratio = L_max / L_min if L_min > 0 else float("inf")
     return {"peak": peak, "here": F_here, "stroke": L_max - L_min,
-            "ratio": ratio, "ok": ratio <= stroke_ratio}
+            "ratio": ratio, "ok": ratio <= stroke_ratio,
+            "L_min": L_min, "L_max": L_max, "L_here": L_here,
+            "singular": valid.size < theta.size}
 
 
 def force_figure(a, b, d, f, x_cg, z_cg, theta_deg):
@@ -208,6 +211,17 @@ def index():
         here_m.text = f"{m['here']:.2f} N/kg"
         stroke_m.text = f"{m['stroke'] * U:.2f} {ulabel}"
         ratio_m.text = f"{m['ratio']:.2f}" + ("  ✓" if m["ok"] else "  ⚠ over")
+        sing_cap.text = ("⚠️ Part of the swing needs more than "
+                         f"{F_CAP:.0f} N/kg (near-singular geometry) and is hidden "
+                         "— the extremes shown are over the usable range only."
+                         if m["singular"] else "")
+        status = (f"within {s['stroke_ratio']:g}× limit" if m["ok"]
+                  else f"EXCEEDS {s['stroke_ratio']:g}× stroke limit")
+        summary_cap.text = (
+            f"At θ = {s['theta_deg']:.0f}°: force = {m['here']:.2f} N/kg, "
+            f"length = {m['L_here'] * U:.2f} {ulabel}.  Across 0–90°: "
+            f"L_min = {m['L_min'] * U:.2f}, L_max = {m['L_max'] * U:.2f}, "
+            f"stroke = {m['stroke'] * U:.2f} {ulabel} (ratio {m['ratio']:.2f}, {status}).")
 
     def linked(base, key, lo_m, hi_m, is_length=True, lockable=False):
         """Slider + number box for one value, shown in the current display units
@@ -371,6 +385,8 @@ def index():
             length_plot = ui.plotly(length_figure(
                 s["a"], s["b"], s["d"], s["f"], s["theta_deg"], s["stroke_ratio"])
                 ).classes("w-full")
+            sing_cap = ui.label("").classes("text-sm text-amber-600")
+            summary_cap = ui.label("").classes("text-sm text-gray-600")
 
     guard["building"] = False   # layout complete; refresh may touch the plots now
     refresh()   # first paint of the metrics
