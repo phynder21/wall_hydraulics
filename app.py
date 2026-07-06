@@ -19,7 +19,7 @@ from browse import render_browse
 # glance whether a running/deployed page has the latest code (a stale process
 # shows the OLD marker). If the app errors right after a push, check this — an
 # old marker means the deploy hasn't reloaded yet (reboot it).
-BUILD = "clickable alternatives + reordered sidebar · 2026-07-01"
+BUILD = "tabbed inspector layout · 2026-07-06"
 
 # Shared plot styling for a consistent, clean look across all charts.
 PLOT_TEMPLATE = "plotly_white"
@@ -27,20 +27,15 @@ PRIMARY = "#2563EB"        # accent blue, matches the app theme
 PLOT_FONT = dict(family="sans-serif", size=13, color="#0F172A")
 
 st.set_page_config(page_title="Container Wall Actuator", layout="wide")
-st.title("Shipping container hinged-wall actuator")
-st.caption("Looking down the long axis of the container. The hinged sidewall swings down to lie flat outside.")
-st.sidebar.caption(f"build: {BUILD}")
 
-# Top-level view switch. Browse mode is a fully separate section (its own sidebar
-# and main area); st.stop() below keeps the Designer code from also running, so
-# the lookup table is only built when you actually open Browse — never on a
-# normal load.
+# Left rail: view switch + a build marker, above the tabbed control panel.
+st.sidebar.markdown("### Wall actuator")
 _view = st.sidebar.radio("View", ["🛠 Designer", "🔎 Browse configurations"],
                          key="view", label_visibility="collapsed")
+st.sidebar.caption(f"build: {BUILD}")
 if _view == "🔎 Browse configurations":
     render_browse()
     st.stop()
-st.sidebar.divider()
 
 # ISO container dimensions (external)
 CONTAINER_SIZES = {
@@ -82,62 +77,17 @@ for key, default in DEFAULTS.items():
 if st.session_state["size_key"] not in CONTAINER_SIZES:
     st.session_state["size_key"] = DEFAULTS["size_key"]
 
-st.sidebar.header("Container")
-size_key = st.sidebar.selectbox("Container size", list(CONTAINER_SIZES.keys()), key="size_key")
-container_width, container_height = CONTAINER_SIZES[size_key]
 
-# Bounds for the four geometry variables — single source of truth shared by the
-# slider widgets, the clamp-on-resize logic, and the optimize button's clamp, so
-# they can never drift apart and let an optimized value fall outside a slider.
-GEOM_BOUNDS = {
-    "a": (0.05, container_width / 2),
-    "b": (0.05, container_height),
-    "d": (0.00, 1.00),
-    "f": (0.00, container_height),
-}
-
-# Clamp persisted values into the bounds the current container allows, so
-# changing container size doesn't trip a "value out of range" error on widgets.
 def _clamp(key, lo, hi):
+    """Clamp a persisted value into [lo, hi] so a container/unit change can't
+    trip a 'value out of range' error on the widget that reads it."""
     st.session_state[key] = float(min(max(st.session_state[key], lo), hi))
-
-for _k, (_lo, _hi) in GEOM_BOUNDS.items():
-    _clamp(_k, _lo, _hi)
-_clamp("x_cg", 0.00, container_height)
-_clamp("z_cg", 0.00, 1.50)
-_clamp("theta_deg", 0.0, 90.0)
-_clamp("stroke_ratio", 1.0, 3.0)
-_clamp("roof_clearance", 0.0, 0.5)
-
-# --- Display units -----------------------------------------------------------
-# All values are stored and computed in METERS internally (so the physics, the
-# optimizer, and shared URLs stay consistent). This toggle only changes how
-# lengths are *displayed*: widgets, plots, and captions multiply by `U`. Angles
-# (degrees) and force (N/kg) are not lengths and are unaffected.
-st.sidebar.header("Display units")
-units = st.sidebar.radio("Length units", ["meters", "inches"], key="units",
-                         horizontal=True, label_visibility="collapsed")
-fine = st.sidebar.toggle(
-    "Fine precision", key="fine",
-    help="Finer slider/number steps for exact values (0.001 m / 0.01 in), and "
-         "the optimizer rounds to that precision — so the plotted force matches "
-         "the reported one more closely.")
-inches = units == "inches"
-U = 39.3700787 if inches else 1.0    # meters -> display-unit factor
-ULABEL = "in" if inches else "m"      # short unit label
-UWORD = "inches" if inches else "meters"
-# Step (display units), number format, and the decimals the optimizer rounds
-# geometry to (in meters). Fine mode makes all three finer.
-if inches:
-    LEN_STEP, LEN_FMT = (0.01, "%.3f") if fine else (0.1, "%.2f")
-else:
-    LEN_STEP, LEN_FMT = (0.001, "%.3f") if fine else (0.01, "%.2f")
-ROUND_DP = 3 if fine else 2           # meters precision the optimize button snaps to
 
 
 def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
                  lockable=False, disp_factor=1.0, disp_step=None):
-    """A draggable slider AND a typeable number box bound to one value.
+    """A draggable slider AND a typeable number box bound to one value, rendered
+    into the CURRENT container (call it inside a `with tab:`/sidebar block).
 
     `st.session_state[key]` is the single source of truth (URL-persisted). The
     two widgets get their own keys and are re-seeded from the canonical value
@@ -165,9 +115,9 @@ def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
 
     if lockable:
         st.session_state.setdefault(f"lock_{key}", False)
-        c1, c2, c3 = st.sidebar.columns([2, 1, 0.7])
+        c1, c2, c3 = st.columns([2, 1, 0.7])
     else:
-        c1, c2 = st.sidebar.columns([2, 1])
+        c1, c2 = st.columns([2, 1])
     c1.slider(label, lo * U, hi * U, step=dstep, key=skey,
               on_change=_from_sld, help=help)
     c2.number_input(label, min_value=lo * U, max_value=hi * U, step=dstep,
@@ -242,6 +192,7 @@ def range_input(label, key, full_lo, full_hi, disp_factor=1.0, disp_step=0.01,
                     step=disp_step, format=fmt, key=hi_w, on_change=_from_boxes)
     return st.session_state[key]
 
+
 # --- Animation -----------------------------------------------------------
 ANIM_STEP_DEG = 3.0     # degrees advanced per frame
 FRAME_DELAY_S = 0.05    # pause between frames (~ steady frame rate)
@@ -260,181 +211,236 @@ def _advance_angle(angle, direction, step=ANIM_STEP_DEG):
     return nxt, direction
 
 
-# --- Center of gravity: the load the actuator must hold, part of the problem
-# statement — placed before the constraints/optimizer that consume it. ---
-st.sidebar.header(f"Center of gravity ({UWORD})")
-x_cg = linked_input(f"x_cg — along wall from hinge [{ULABEL}]", "x_cg",
-                    0.0, container_height, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
-z_cg = linked_input(f"z_cg — perpendicular off wall [{ULABEL}]", "z_cg",
-                    0.0, 1.5, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
+# =============================================================================
+# LEFT PANEL — tabbed controls. Tabs render in code order, so the Optimize tab
+# (whose button writes a/b/d/f) is executed before the Geometry tab that reads
+# them, keeping the same-run "click optimize -> sliders update" behavior even
+# though the tabs sit side by side.
+# =============================================================================
+tab_setup, tab_optimize, tab_geometry, tab_compare = st.sidebar.tabs(
+    ["Setup", "Optimize", "Geometry", "Compare"])
 
-# --- Constraints (shared with the optimizer) ---
-st.sidebar.header("Constraints")
-stroke_ratio = st.sidebar.number_input(
-    "Max stroke ratio (L_max / L_min)", min_value=1.0, max_value=3.0,
-    step=0.05, key="stroke_ratio",
-    help="Hydraulic cylinders extend at most ~1.8–2× their retracted length.")
-roof_clearance = linked_input(
-    f"Roof clearance [{ULABEL}]", "roof_clearance", 0.0, 0.5,
-    disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT,
-    help="Gap the actuator endpoint must keep below the ceiling.")
+with tab_setup:
+    st.subheader("Container")
+    size_key = st.selectbox("Container size", list(CONTAINER_SIZES.keys()),
+                            key="size_key")
+    container_width, container_height = CONTAINER_SIZES[size_key]
 
-# --- Mounting limits: restrict where the optimizer may place each dimension ---
-st.sidebar.header("Mounting limits")
-with st.sidebar.expander("Restrict a variable's range (optimizer + slider)"):
-    st.caption("Narrow a dimension to your real mounting window; the optimizer "
-               "searches only within it and the value slider follows. Leave at "
-               "full range for no restriction; use 🔒 to pin an exact value.")
-    USER_BOUNDS = {
-        v: range_input(f"{lbl} [{ULABEL}]", f"rng_{v}", *GEOM_BOUNDS[v],
-                       disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
-        for v, lbl in (("a", "a — floor position"), ("b", "b — along wall"),
-                       ("d", "d — bracket length"), ("f", "f — base height"))
+    # Bounds for the four geometry variables — single source of truth shared by
+    # the slider widgets, the clamp-on-resize logic, and the optimize button's
+    # clamp, so they can never drift apart and let an optimized value fall
+    # outside a slider.
+    GEOM_BOUNDS = {
+        "a": (0.05, container_width / 2),
+        "b": (0.05, container_height),
+        "d": (0.00, 1.00),
+        "f": (0.00, container_height),
     }
-# Keep each geometry value inside its (possibly narrowed) range before the value
-# sliders and the optimizer see it.
-for _k in ("a", "b", "d", "f"):
-    _clamp(_k, *USER_BOUNDS[_k])
+    for _k, (_lo, _hi) in GEOM_BOUNDS.items():
+        _clamp(_k, _lo, _hi)
+    _clamp("x_cg", 0.00, container_height)
+    _clamp("z_cg", 0.00, 1.50)
+    _clamp("theta_deg", 0.0, 90.0)
+    _clamp("stroke_ratio", 1.0, 3.0)
+    _clamp("roof_clearance", 0.0, 0.5)
 
-# --- Optimize: fill the geometry with the force-minimizing design ---
-st.sidebar.header("Optimize")
-st.session_state.setdefault("alt_pct", 15)
-alt_pct = st.sidebar.slider(
-    "Show alternatives within __% of the optimum", 0, 30, key="alt_pct", step=1,
-    help="After optimizing, also list geometrically DIFFERENT designs whose peak "
-         "force is within this percent of the optimum — fallbacks for when the "
-         "optimum is awkward to build. 0 keeps only the optimum (and any exact "
-         "ties). A sharp optimum may need ~10% before a different design appears.")
-if st.sidebar.button("Optimize geometry for current settings"):
-    try:
-        # Locked variables are held at their current value; the rest are searched.
-        locked = {k: round(st.session_state[k], ROUND_DP)
-                  for k in ("a", "b", "d", "f")
-                  if st.session_state.get(f"lock_{k}", False)}
-        with st.spinner("Running multiple searches for the global optimum "
-                        "(~20 s)…"):
-            res = optimize_actuator(
-                container_width=container_width,
-                container_height=container_height,
-                x_cg=st.session_state["x_cg"], z_cg=st.session_state["z_cg"],
-                stroke_ratio_max=st.session_state["stroke_ratio"],
-                roof_clearance=st.session_state["roof_clearance"],
-                locked=locked, var_bounds=USER_BOUNDS,
-                alt_rel_tol=st.session_state["alt_pct"] / 100.0,
-            )
-        # Snap to the active slider precision AND clamp into the (possibly
-        # narrowed) mounting-limit range, so the value can't exceed the slider and
-        # error out. USER_BOUNDS is the same source the value sliders use;
-        # ROUND_DP tracks the precision toggle.
-        for k in ("a", "b", "d", "f"):
-            lo, hi = USER_BOUNDS[k]
-            st.session_state[k] = float(min(max(round(res[k], ROUND_DP), lo), hi))
-        held = f" (held: {', '.join(sorted(locked))})" if locked else ""
-        action = "Evaluated" if len(locked) == 4 else "Optimized"
-        detail = (f"peak {res['peak_force']:.2f} N/kg, "
-                  f"stroke {(res['L_max'] - res['L_min']) * U:.2f} {ULABEL} "
-                  f"(ratio {res['stroke_ratio']:.2f}), "
-                  f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}")
-        # No st.rerun(): the geometry widgets below re-seed from these canonical
-        # values in this same run, so they update immediately. Skipping the
-        # rerun also keeps the lock checkboxes (rendered later) from being reset,
-        # since an aborted run would drop their not-yet-rendered widget state.
-        # .get() guards against a stale optimize.py that predates these keys.
-        if res.get("over_center", False):
-            # Reached only when the geometry is forced to over-center — in
-            # practice the all-four-locked "evaluate" case (pinned to an
-            # impossible geometry), since the search hard-rejects crossings.
-            st.sidebar.error(
-                f"{action}{held}: this geometry OVER-CENTERS — the cylinder line "
-                "crosses the hinge so the force diverges, and it can't be built. "
-                "Unlock a variable (or change the pinned values) and re-optimize.")
-        elif res["feasible"]:
-            st.sidebar.success(f"{action}{held} — buildable, all limits met: {detail}.")
-        else:
-            st.sidebar.warning(
-                f"{action}{held} — best buildable design, but not all limits are met "
-                f"(usable; may need different hardware or looser settings): {detail}.")
+    # --- Display units ---
+    # All values are stored and computed in METERS internally (so the physics,
+    # the optimizer, and shared URLs stay consistent). This toggle only changes
+    # how lengths are *displayed*: widgets, plots, and captions multiply by `U`.
+    st.subheader("Display units")
+    units = st.radio("Length units", ["meters", "inches"], key="units",
+                     horizontal=True, label_visibility="collapsed")
+    fine = st.toggle(
+        "Fine precision", key="fine",
+        help="Finer slider/number steps for exact values (0.001 m / 0.01 in), "
+             "and the optimizer rounds to that precision — so the plotted force "
+             "matches the reported one more closely.")
+    inches = units == "inches"
+    U = 39.3700787 if inches else 1.0    # meters -> display-unit factor
+    ULABEL = "in" if inches else "m"      # short unit label
+    UWORD = "inches" if inches else "meters"
+    if inches:
+        LEN_STEP, LEN_FMT = (0.01, "%.3f") if fine else (0.1, "%.2f")
+    else:
+        LEN_STEP, LEN_FMT = (0.001, "%.3f") if fine else (0.01, "%.2f")
+    ROUND_DP = 3 if fine else 2           # meters precision the optimize snaps to
 
-        # Persist the diverse near-optimal alternatives so they render as
-        # clickable buttons below — outside this click block, so they survive
-        # later reruns and let you load any one into the sliders.
-        st.session_state["_alts"] = res.get("alternatives", [])
-    except TypeError as exc:  # e.g. new app.py calling an old optimize.py
-        if "unexpected keyword argument" in str(exc):
-            st.sidebar.error(
-                f"This page is running an **out-of-date** copy of the code "
-                f"(build: {BUILD}). Reboot the app / restart the server to load "
-                f"the latest, then try again. ({exc})")
-        else:
-            st.sidebar.error(f"Optimizer failed: {exc}")
-    except Exception as exc:  # surface any other optimizer error in the UI
-        st.sidebar.error(f"Optimizer failed: {exc}")
+    # --- Center of gravity: the load the actuator must hold ---
+    st.subheader(f"Center of gravity ({UWORD})")
+    x_cg = linked_input(f"x_cg — along wall from hinge [{ULABEL}]", "x_cg",
+                        0.0, container_height, disp_factor=U, disp_step=LEN_STEP,
+                        fmt=LEN_FMT)
+    z_cg = linked_input(f"z_cg — perpendicular off wall [{ULABEL}]", "z_cg",
+                        0.0, 1.5, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
 
-# Clickable list of the last optimize's near-optimal alternatives. Rendered here —
-# above the Geometry sliders and outside the Optimize click block — so a click
-# loads the chosen geometry into a/b/d/f and the sliders + diagrams below re-seed
-# from it in the same run (no st.rerun needed, same reason as the Optimize path).
-_alts = st.session_state.get("_alts", [])
-if len(_alts) > 1:
-    with st.sidebar.expander(
-            f"{len(_alts) - 1} near-optimal alternatives (click to load)"):
-        st.caption("Geometrically different designs within your tolerance of the "
-                   "optimum. The first is the optimum; the rest trade a little "
-                   "force for a possibly easier build. Click one to load it.")
-        for _i, _x in enumerate(_alts):
-            _pen = _x.get("penalty_pct", 0.0)
-            _tag = "optimum" if _pen < 1e-6 else f"+{_pen:.1f}%"
-            _lbl = (f"a={_x['a'] * U:.2f}  b={_x['b'] * U:.2f}  "
-                    f"d={_x['d'] * U:.2f}  f={_x['f'] * U:.2f} {ULABEL}  "
-                    f"— {_x['peak_force']:.2f} N/kg ({_tag})")
-            if st.button(_lbl, key=f"alt_{_i}", use_container_width=True):
-                for _k in ("a", "b", "d", "f"):
-                    _lo, _hi = USER_BOUNDS[_k]
-                    st.session_state[_k] = float(
-                        min(max(round(_x[_k], ROUND_DP), _lo), _hi))
+    # --- Constraints (shared with the optimizer) ---
+    st.subheader("Constraints")
+    stroke_ratio = st.number_input(
+        "Max stroke ratio (L_max / L_min)", min_value=1.0, max_value=3.0,
+        step=0.05, key="stroke_ratio",
+        help="Hydraulic cylinders extend at most ~1.8–2× their retracted length.")
+    roof_clearance = linked_input(
+        f"Roof clearance [{ULABEL}]", "roof_clearance", 0.0, 0.5,
+        disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT,
+        help="Gap the actuator endpoint must keep below the ceiling.")
 
-st.sidebar.header(f"Geometry ({UWORD})")
-st.sidebar.caption("🔒 a value to hold it fixed while the others are optimized.")
-_geom = dict(disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT, lockable=True)
-a = linked_input(f"a — hinge to cylinder base (along floor) [{ULABEL}]", "a",
-                 *USER_BOUNDS["a"], **_geom,
-                 help=f"Limited to half the floor width "
-                      f"({container_width / 2 * U:.2f} {ULABEL}).")
-b = linked_input(f"b — hinge to piston attachment (along wall) [{ULABEL}]", "b",
-                 *USER_BOUNDS["b"], **_geom)
-d = linked_input(f"d — wall to piston attachment (perpendicular) [{ULABEL}]", "d",
-                 *USER_BOUNDS["d"], **_geom)
-f = linked_input(f"f — cylinder base height above floor [{ULABEL}]", "f",
-                 *USER_BOUNDS["f"], **_geom)
+    # --- Mounting limits: restrict where each dimension may sit ---
+    st.subheader("Mounting limits")
+    with st.expander("Restrict a variable's range (optimizer + slider)"):
+        st.caption("Narrow a dimension to your real mounting window; the "
+                   "optimizer searches only within it and the value slider "
+                   "follows. Leave at full range for no restriction; use 🔒 to "
+                   "pin an exact value.")
+        USER_BOUNDS = {
+            v: range_input(f"{lbl} [{ULABEL}]", f"rng_{v}", *GEOM_BOUNDS[v],
+                           disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
+            for v, lbl in (("a", "a — floor position"), ("b", "b — along wall"),
+                           ("d", "d — bracket length"), ("f", "f — base height"))
+        }
+    # Keep each geometry value inside its (possibly narrowed) range before the
+    # value sliders and the optimizer see it.
+    for _k in ("a", "b", "d", "f"):
+        _clamp(_k, *USER_BOUNDS[_k])
 
-st.sidebar.header("Wall angle")
-animating = st.sidebar.toggle(
-    "▶ Sweep θ (0 → 90 → 0)", key="animating",
-    help="Continuously animate the wall opening and closing. "
-         "Toggle off to scrub the angle manually.")
-st.session_state.setdefault("anim_theta", float(st.session_state["theta_deg"]))
-st.session_state.setdefault("anim_dir", 1)
-if animating:
-    # Drive the angle from the sweep state; the slider below follows along.
-    st.session_state["theta_deg"] = st.session_state["anim_theta"]
-else:
-    # Idle: keep the sweep ready to resume from the current manual angle.
-    st.session_state["anim_theta"] = float(st.session_state["theta_deg"])
-theta_deg = linked_input("theta (degrees)", "theta_deg", 0.0, 90.0,
-                         step=1.0, fmt="%.0f")
-theta = np.radians(theta_deg)
+with tab_optimize:
+    st.subheader("Optimize")
+    st.session_state.setdefault("alt_pct", 15)
+    alt_pct = st.slider(
+        "Show alternatives within __% of the optimum", 0, 30, key="alt_pct",
+        step=1,
+        help="After optimizing, also list geometrically DIFFERENT designs whose "
+             "peak force is within this percent of the optimum — fallbacks for "
+             "when the optimum is awkward to build. 0 keeps only the optimum "
+             "(and any exact ties). A sharp optimum may need ~10% before a "
+             "different design appears.")
+    if st.button("Optimize geometry for current settings", type="primary",
+                 use_container_width=True):
+        try:
+            # Locked variables held at their current value; the rest are searched.
+            locked = {k: round(st.session_state[k], ROUND_DP)
+                      for k in ("a", "b", "d", "f")
+                      if st.session_state.get(f"lock_{k}", False)}
+            with st.spinner("Running multiple searches for the global optimum "
+                            "(~20 s)…"):
+                res = optimize_actuator(
+                    container_width=container_width,
+                    container_height=container_height,
+                    x_cg=st.session_state["x_cg"], z_cg=st.session_state["z_cg"],
+                    stroke_ratio_max=st.session_state["stroke_ratio"],
+                    roof_clearance=st.session_state["roof_clearance"],
+                    locked=locked, var_bounds=USER_BOUNDS,
+                    alt_rel_tol=st.session_state["alt_pct"] / 100.0,
+                )
+            # Snap to the active slider precision AND clamp into the (possibly
+            # narrowed) mounting-limit range, so the value can't exceed the
+            # slider and error out. USER_BOUNDS is the same source the value
+            # sliders use; ROUND_DP tracks the precision toggle.
+            for k in ("a", "b", "d", "f"):
+                lo, hi = USER_BOUNDS[k]
+                st.session_state[k] = float(min(max(round(res[k], ROUND_DP), lo), hi))
+            held = f" (held: {', '.join(sorted(locked))})" if locked else ""
+            action = "Evaluated" if len(locked) == 4 else "Optimized"
+            detail = (f"peak {res['peak_force']:.2f} N/kg, "
+                      f"stroke {(res['L_max'] - res['L_min']) * U:.2f} {ULABEL} "
+                      f"(ratio {res['stroke_ratio']:.2f}), "
+                      f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}")
+            # No st.rerun(): the geometry widgets (rendered in the Geometry tab,
+            # which executes after this block) re-seed from these canonical
+            # values in the same run, so they update immediately.
+            if res.get("over_center", False):
+                st.error(
+                    f"{action}{held}: this geometry OVER-CENTERS — the cylinder "
+                    "line crosses the hinge so the force diverges, and it can't "
+                    "be built. Unlock a variable (or change the pinned values) "
+                    "and re-optimize.")
+            elif res["feasible"]:
+                st.success(f"{action}{held} — buildable, all limits met: {detail}.")
+            else:
+                st.warning(
+                    f"{action}{held} — best buildable design, but not all limits "
+                    f"are met (usable; may need different hardware or looser "
+                    f"settings): {detail}.")
 
-# --- Compare: snapshot two designs and overlay their curves ---
-# Save the current geometry as A or B, then overlay both on the plots to weigh,
-# say, the optimum against a near-optimal alternative you clicked in.
+            # Persist the diverse near-optimal alternatives so they render as
+            # clickable buttons below — outside this click block, so they survive
+            # later reruns and let you load any one into the sliders.
+            st.session_state["_alts"] = res.get("alternatives", [])
+        except TypeError as exc:  # e.g. new app.py calling an old optimize.py
+            if "unexpected keyword argument" in str(exc):
+                st.error(
+                    f"This page is running an **out-of-date** copy of the code "
+                    f"(build: {BUILD}). Reboot the app / restart the server to "
+                    f"load the latest, then try again. ({exc})")
+            else:
+                st.error(f"Optimizer failed: {exc}")
+        except Exception as exc:  # surface any other optimizer error in the UI
+            st.error(f"Optimizer failed: {exc}")
+
+    # Clickable list of the last optimize's near-optimal alternatives. Rendered
+    # here — before the Geometry tab executes — so a click loads the chosen
+    # geometry into a/b/d/f and the sliders re-seed from it in the same run.
+    _alts = st.session_state.get("_alts", [])
+    if len(_alts) > 1:
+        with st.expander(
+                f"{len(_alts) - 1} near-optimal alternatives (click to load)"):
+            st.caption("Geometrically different designs within your tolerance of "
+                       "the optimum. The first is the optimum; the rest trade a "
+                       "little force for a possibly easier build. Click to load.")
+            for _i, _x in enumerate(_alts):
+                _pen = _x.get("penalty_pct", 0.0)
+                _tag = "optimum" if _pen < 1e-6 else f"+{_pen:.1f}%"
+                _lbl = (f"a={_x['a'] * U:.2f}  b={_x['b'] * U:.2f}  "
+                        f"d={_x['d'] * U:.2f}  f={_x['f'] * U:.2f} {ULABEL}  "
+                        f"— {_x['peak_force']:.2f} N/kg ({_tag})")
+                if st.button(_lbl, key=f"alt_{_i}", use_container_width=True):
+                    for _k in ("a", "b", "d", "f"):
+                        _lo, _hi = USER_BOUNDS[_k]
+                        st.session_state[_k] = float(
+                            min(max(round(_x[_k], ROUND_DP), _lo), _hi))
+
+with tab_geometry:
+    st.subheader(f"Geometry ({UWORD})")
+    st.caption("🔒 a value to hold it fixed while the others are optimized.")
+    _geom = dict(disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT, lockable=True)
+    a = linked_input(f"a — hinge to cylinder base (along floor) [{ULABEL}]", "a",
+                     *USER_BOUNDS["a"], **_geom,
+                     help=f"Limited to half the floor width "
+                          f"({container_width / 2 * U:.2f} {ULABEL}).")
+    b = linked_input(f"b — hinge to piston attachment (along wall) [{ULABEL}]", "b",
+                     *USER_BOUNDS["b"], **_geom)
+    d = linked_input(f"d — wall to piston attachment (perpendicular) [{ULABEL}]", "d",
+                     *USER_BOUNDS["d"], **_geom)
+    f = linked_input(f"f — cylinder base height above floor [{ULABEL}]", "f",
+                     *USER_BOUNDS["f"], **_geom)
+
+    st.subheader("Wall angle")
+    animating = st.toggle(
+        "▶ Sweep θ (0 → 90 → 0)", key="animating",
+        help="Continuously animate the wall opening and closing. "
+             "Toggle off to scrub the angle manually.")
+    st.session_state.setdefault("anim_theta", float(st.session_state["theta_deg"]))
+    st.session_state.setdefault("anim_dir", 1)
+    if animating:
+        # Drive the angle from the sweep state; the slider below follows along.
+        st.session_state["theta_deg"] = st.session_state["anim_theta"]
+    else:
+        # Idle: keep the sweep ready to resume from the current manual angle.
+        st.session_state["anim_theta"] = float(st.session_state["theta_deg"])
+    theta_deg = linked_input("theta (degrees)", "theta_deg", 0.0, 90.0,
+                             step=1.0, fmt="%.0f")
+    theta = np.radians(theta_deg)
+
+
 def _fmt_design(design):
     if not design:
         return "empty"
     return (f"a={design['a'] * U:.2f} b={design['b'] * U:.2f} "
             f"d={design['d'] * U:.2f} f={design['f'] * U:.2f} {ULABEL}")
 
-st.sidebar.header("Compare designs")
-with st.sidebar.expander("Save & overlay two designs"):
+
+with tab_compare:
+    st.subheader("Compare designs")
     st.caption("Snapshot the current geometry as A or B, then overlay both "
                "force and length curves to compare them.")
     _current = dict(a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
@@ -464,6 +470,13 @@ overlay = bool(st.session_state.get("overlay")) and bool(design_A) and bool(desi
 # (Safari errors past ~100/30s). The frozen value is written once on stop.
 if not animating:
     st.query_params.update({k: str(st.session_state[k]) for k in DEFAULTS})
+
+# =============================================================================
+# RIGHT PANEL — the visualization (main area).
+# =============================================================================
+st.title("Shipping container hinged-wall actuator")
+st.caption("Looking down the long axis of the container. The hinged sidewall "
+           "swings down to lie flat outside.")
 
 # --- Computations ---
 # Near-singular geometries make compute_F_piston divide by ~0; we mask those
@@ -504,22 +517,23 @@ z_door_tip = container_height * np.sin(theta) * U
 cw, ch = container_width * U, container_height * U   # display-unit container dims
 pad = 0.5 * U                                        # display-unit plot margin
 
-# --- Key results at a glance ---
+# --- Key results at a glance (a bordered results card) ---
 peak_mag = max(abs(F_min), abs(F_max)) if F_valid.size else float("nan")
 stroke_ok = L_ratio <= stroke_ratio
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Peak force (worst case)", f"{peak_mag:.2f} N/kg",
-          help="Largest |force| over the whole 0–90° swing — the number to size "
-               "the cylinder by. Multiply by the wall+equipment mass for newtons.")
-m2.metric(f"Force at θ = {theta_deg:.0f}°", f"{F_here:.2f} N/kg",
-          help="Force at the current wall angle (red marker on the plots).")
-m3.metric("Stroke", f"{(L_max - L_min) * U:.2f} {ULABEL}",
-          help="Rod travel you order a cylinder by (L_max − L_min).")
-m4.metric("Stroke ratio", f"{L_ratio:.2f}",
-          delta=("within limit" if stroke_ok else "over limit"),
-          delta_color=("off" if stroke_ok else "inverse"),
-          help=f"Extended/retracted length ratio vs. your {stroke_ratio:g}× limit.")
-st.divider()
+with st.container(border=True):
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Peak force (worst case)", f"{peak_mag:.2f} N/kg",
+              help="Largest |force| over the whole 0–90° swing — the number to "
+                   "size the cylinder by. Multiply by the wall+equipment mass "
+                   "for newtons.")
+    m2.metric(f"Force at θ = {theta_deg:.0f}°", f"{F_here:.2f} N/kg",
+              help="Force at the current wall angle (red marker on the plots).")
+    m3.metric("Stroke", f"{(L_max - L_min) * U:.2f} {ULABEL}",
+              help="Rod travel you order a cylinder by (L_max − L_min).")
+    m4.metric("Stroke ratio", f"{L_ratio:.2f}",
+              delta=("within limit" if stroke_ok else "over limit"),
+              delta_color=("off" if stroke_ok else "inverse"),
+              help=f"Extended/retracted length ratio vs. your {stroke_ratio:g}× limit.")
 
 # --- Top row: diagram + force ---
 col_diag, col_force = st.columns(2)

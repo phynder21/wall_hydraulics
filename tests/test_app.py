@@ -182,6 +182,14 @@ def test_clickable_alternatives_load_geometry():
         assert at.session_state[key] == pytest.approx(value, abs=0.02)
 
 
+def test_control_tabs_present():
+    """The Designer's controls are organized into the four left-panel tabs."""
+    at = fresh_app()
+    labels = [t.label for t in at.tabs]
+    for name in ("Setup", "Optimize", "Geometry", "Compare"):
+        assert name in labels, f"missing control tab: {name}"
+
+
 def test_summary_metrics_render():
     """The four glance metrics render with the expected labels and units."""
     at = fresh_app()
