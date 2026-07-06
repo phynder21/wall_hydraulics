@@ -21,6 +21,11 @@ from browse import render_browse
 # old marker means the deploy hasn't reloaded yet (reboot it).
 BUILD = "clickable alternatives + reordered sidebar · 2026-07-01"
 
+# Shared plot styling for a consistent, clean look across all charts.
+PLOT_TEMPLATE = "plotly_white"
+PRIMARY = "#2563EB"        # accent blue, matches the app theme
+PLOT_FONT = dict(family="sans-serif", size=13, color="#0F172A")
+
 st.set_page_config(page_title="Container Wall Actuator", layout="wide")
 st.title("Shipping container hinged-wall actuator")
 st.caption("Looking down the long axis of the container. The hinged sidewall swings down to lie flat outside.")
@@ -499,6 +504,23 @@ z_door_tip = container_height * np.sin(theta) * U
 cw, ch = container_width * U, container_height * U   # display-unit container dims
 pad = 0.5 * U                                        # display-unit plot margin
 
+# --- Key results at a glance ---
+peak_mag = max(abs(F_min), abs(F_max)) if F_valid.size else float("nan")
+stroke_ok = L_ratio <= stroke_ratio
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Peak force (worst case)", f"{peak_mag:.2f} N/kg",
+          help="Largest |force| over the whole 0–90° swing — the number to size "
+               "the cylinder by. Multiply by the wall+equipment mass for newtons.")
+m2.metric(f"Force at θ = {theta_deg:.0f}°", f"{F_here:.2f} N/kg",
+          help="Force at the current wall angle (red marker on the plots).")
+m3.metric("Stroke", f"{(L_max - L_min) * U:.2f} {ULABEL}",
+          help="Rod travel you order a cylinder by (L_max − L_min).")
+m4.metric("Stroke ratio", f"{L_ratio:.2f}",
+          delta=("within limit" if stroke_ok else "over limit"),
+          delta_color=("off" if stroke_ok else "inverse"),
+          help=f"Extended/retracted length ratio vs. your {stroke_ratio:g}× limit.")
+st.divider()
+
 # --- Top row: diagram + force ---
 col_diag, col_force = st.columns(2)
 
@@ -570,6 +592,7 @@ with col_diag:
         showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2, arrowcolor="blue")
 
     fig_geom.update_layout(
+        template=PLOT_TEMPLATE, font=PLOT_FONT,
         title=f"Side view (theta = {theta_deg:.0f} deg)",
         xaxis=dict(range=[-cw - pad, ch + pad],
                     title=f"x ({ULABEL})", zeroline=False),
@@ -584,7 +607,8 @@ with col_diag:
 with col_force:
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=np.degrees(theta_curve), y=F_plot, mode="lines", name="F(theta)"))
+        x=np.degrees(theta_curve), y=F_plot, mode="lines", name="F(theta)",
+        line=dict(color=PRIMARY, width=2.5)))
     fig.add_trace(go.Scatter(
         x=[theta_deg], y=[F_here], mode="markers",
         marker=dict(size=14, color="red"), name="current"))
@@ -610,6 +634,7 @@ with col_force:
     else:
         y_range = [-F_CAP, F_CAP]
     fig.update_layout(
+        template=PLOT_TEMPLATE, font=PLOT_FONT,
         title="Piston force vs. wall angle",
         xaxis_title="theta (degrees)",
         yaxis_title="Piston force (N per kg of wall + equipment mass)",
@@ -632,7 +657,8 @@ with col_force:
 # --- Bottom row: cylinder length plot (full width) ---
 fig_len = go.Figure()
 fig_len.add_trace(go.Scatter(
-    x=np.degrees(theta_curve), y=L_curve * U, mode="lines", name="L(theta)"))
+    x=np.degrees(theta_curve), y=L_curve * U, mode="lines", name="L(theta)",
+    line=dict(color=PRIMARY, width=2.5)))
 fig_len.add_trace(go.Scatter(
     x=[theta_deg], y=[L_here * U], mode="markers",
     marker=dict(size=14, color="red"), name="current"))
@@ -651,6 +677,7 @@ fig_len.add_hline(y=stroke_ratio * L_min * U, line=dict(color="red", dash="dot")
                                    f"{stroke_ratio * L_min * U:.2f} {ULABEL} (max stroke limit)",
                    annotation_position="top right")
 fig_len.update_layout(
+    template=PLOT_TEMPLATE, font=PLOT_FONT,
     title="Cylinder length vs. wall angle",
     xaxis_title="theta (degrees)",
     yaxis_title=f"Cylinder length ({ULABEL})",
@@ -661,7 +688,7 @@ fig_len.update_layout(
 )
 st.plotly_chart(fig_len, width="stretch")
 
-stroke_ok = L_ratio <= stroke_ratio
+# stroke_ok computed once, up with the summary metrics.
 stroke_status = (f"within {stroke_ratio:g}x limit" if stroke_ok
                  else f"EXCEEDS {stroke_ratio:g}x stroke limit")
 st.caption(

@@ -182,6 +182,18 @@ def test_clickable_alternatives_load_geometry():
         assert at.session_state[key] == pytest.approx(value, abs=0.02)
 
 
+def test_summary_metrics_render():
+    """The four glance metrics render with the expected labels and units."""
+    at = fresh_app()
+    labels = [m.label for m in at.metric]
+    assert len(at.metric) == 4
+    assert any("Peak force" in x for x in labels)
+    assert any("Stroke ratio" in x for x in labels)
+    # values carry their units
+    by_label = {m.label: m.value for m in at.metric}
+    assert "N/kg" in next(v for k, v in by_label.items() if "Peak force" in k)
+
+
 def test_browse_view_renders():
     """Switching to the Browse view builds a (small) lookup table and renders a
     results table without error, and filtering/sorting reruns cleanly."""

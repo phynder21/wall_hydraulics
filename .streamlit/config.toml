@@ -1,0 +1,8 @@
+# App theme — a clean, professional engineering look.
+[theme]
+base = "light"
+primaryColor = "#2563EB"           # blue-600: buttons, sliders, accents
+backgroundColor = "#FFFFFF"        # main canvas
+secondaryBackgroundColor = "#F1F5F9"  # slate-100: sidebar + cards
+textColor = "#0F172A"              # slate-900
+font = "sans serif"
