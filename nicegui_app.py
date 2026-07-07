@@ -711,7 +711,7 @@ def browse_page():
     b = {"container": next(iter(CONTAINERS)), "x_cg": 1.20, "z_cg": 0.55,
          "stroke": float(STROKE_RATIO_MAX), "clear": 0.0, "sort": "peak_force",
          "asc": True, "topn": 100, "max_force": 0.0, "results": None,
-         "cols": list(BROWSE_COLS),
+         "cols": list(BROWSE_COLS), "view_angle": 45.0,
          "rng_a": {"min": 0.05, "max": WIDTH / 2},
          "rng_b": {"min": 0.05, "max": HEIGHT_MAX},
          "rng_d": {"min": 0.0, "max": 1.0},
@@ -768,7 +768,7 @@ def browse_page():
                          f"ratio {float(res['stroke_ratio'][i]):.2f}")
         w, h = CONTAINERS[b["container"]]
         diag_el.update_figure(diagram_figure(a, bb, d, f, b["x_cg"], b["z_cg"],
-                                             45.0, w, h, b["clear"], 1.0, "m"))
+                                             b["view_angle"], w, h, b["clear"], 1.0, "m"))
         force_el.update_figure(force_figure(a, bb, d, f, b["x_cg"], b["z_cg"], 45.0))
         length_el.update_figure(length_figure(a, bb, d, f, 45.0, b["stroke"]))
 
@@ -834,6 +834,10 @@ def browse_page():
                 ui.label("Inspect rank")
                 rank_in = ui.number(value=1, min=1, max=1, step=1,
                                     on_change=lambda: inspect()).classes("w-24")
+                ui.label("View θ")
+                ui.slider(min=0, max=90, step=5).props("label-always") \
+                    .bind_value(b, "view_angle").on_value_change(lambda: inspect()) \
+                    .classes("grow")
             pick_lbl = ui.label("").classes("text-sm")
             ui.separator()
             ui.label("The list is a precomputed GRID, so even its top row is only "
