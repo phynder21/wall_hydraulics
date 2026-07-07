@@ -43,6 +43,9 @@ PLOT_FONT = dict(family="ui-monospace, Menlo, Consolas, monospace", size=12, col
 # back up the WebSocket and the plots lag behind the drag. ~8 Hz keeps up.
 REFRESH_THROTTLE = 0.12
 F_CAP = 50.0   # N/kg; forces beyond this are "off the chart" near a singularity
+# Human-readable build marker (mirrors app.py); bump on notable changes so you can
+# tell at a glance whether a running/deployed page has the latest code.
+BUILD = "streamlit-parity · 2026-07-07"
 
 # On narrow screens (phones), containers tagged `.stack` switch to a vertical
 # layout and their children go full-width, so nothing overflows off-screen.
@@ -581,7 +584,9 @@ def index():
             opt_btn.enable()
 
     with ui.header(elevated=False).classes("items-center justify-between"):
-        ui.label("Container wall actuator").classes("text-lg font-medium")
+        with ui.column().classes("gap-0"):
+            ui.label("Container wall actuator").classes("text-lg font-medium")
+            ui.label(f"build: {BUILD}").classes("text-xs text-gray-400")
         ui.button("🔎 Browse configurations", on_click=lambda: ui.navigate.to("/browse")) \
             .props("flat color=dark no-caps")
 
@@ -718,7 +723,9 @@ def browse_page():
          "rng_f": {"min": 0.0, "max": HEIGHT_MAX}}
 
     with ui.header(elevated=False).classes("items-center justify-between"):
-        ui.label("Browse configurations").classes("text-lg font-medium")
+        with ui.column().classes("gap-0"):
+            ui.label("Browse configurations").classes("text-lg font-medium")
+            ui.label(f"build: {BUILD}").classes("text-xs text-gray-400")
         ui.button("🛠 Designer", on_click=lambda: ui.navigate.to("/")) \
             .props("flat color=dark no-caps")
 
