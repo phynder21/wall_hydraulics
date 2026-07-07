@@ -749,8 +749,10 @@ def browse_page():
         total = int(res.get("n_matches", n))    # true matches before the top-N cap
         chosen = [c for c in BROWSE_LABELS if c in b["cols"]] or BROWSE_COLS
         table_el.columns = (
-            [{"name": "rank", "label": "#", "field": "rank", "align": "left"}]
-            + [{"name": c, "label": BROWSE_LABELS[c], "field": c} for c in chosen])
+            [{"name": "rank", "label": "#", "field": "rank", "align": "left",
+              "sortable": True}]
+            + [{"name": c, "label": BROWSE_LABELS[c], "field": c, "sortable": True}
+               for c in chosen])
         rows = [{"rank": i + 1, **{c: round(float(res[c][i]), 3) for c in chosen}}
                 for i in range(n)]
         table_el.rows = rows
@@ -834,8 +836,10 @@ def browse_page():
 
         with ui.column().classes("flex-1 gap-2"):
             count_lbl = ui.label("Set your query and press Search.").classes("text-sm")
-            cols = [{"name": "rank", "label": "#", "field": "rank", "align": "left"}]
-            cols += [{"name": c, "label": BROWSE_LABELS[c], "field": c} for c in BROWSE_COLS]
+            cols = [{"name": "rank", "label": "#", "field": "rank", "align": "left",
+                     "sortable": True}]
+            cols += [{"name": c, "label": BROWSE_LABELS[c], "field": c,
+                      "sortable": True} for c in BROWSE_COLS]
             table_el = ui.table(columns=cols, rows=[], row_key="rank").classes("w-full").props("dense")
             with ui.row().classes("items-center gap-2"):
                 ui.label("Inspect rank")
