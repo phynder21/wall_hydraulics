@@ -376,36 +376,48 @@ def index():
         return sld
 
     def apply_units():
-        """Re-scale every control to the current units + precision (lengths only)."""
+        """Re-scale every control to the current units + precision, and re-cap
+        height-limited controls to the selected container (lengths only)."""
         U, step, fmt, ulabel, _ = disp(s["units"], s["fine"])
         reseeding["v"] = True
         for li in inputs:
             uu = U if li["is_length"] else 1.0
             st_ = step if li["is_length"] else 1.0
+            ehi = _eff_hi(li["hi"], li["hcap"])
+            s[li["key"]] = min(max(s[li["key"]], li["lo"]), ehi)
             for el in (li["slider"], li["number"]):
                 el._props["min"] = li["lo"] * uu
-                el._props["max"] = li["hi"] * uu
+                el._props["max"] = ehi * uu
                 el._props["step"] = st_
                 el.value = s[li["key"]] * uu
                 el.update()
             li["label"].text = (f'{li["base"]} ({ulabel})' if li["is_length"]
                                 else li["base"])
         for ri in range_inputs:
+            fhi = _eff_hi(ri["full_hi"], ri["hcap"])
             lo, hi = s[f"rng_{ri['key']}"]
+            lo = min(max(lo, ri["full_lo"]), fhi); hi = min(max(hi, lo), fhi)
+            s[f"rng_{ri['key']}"] = (lo, hi)
             rng = ri["range"]
             rng._props["min"] = ri["full_lo"] * U
-            rng._props["max"] = ri["full_hi"] * U
+            rng._props["max"] = fhi * U
             rng._props["step"] = step
             rng.value = {"min": lo * U, "max": hi * U}
             rng.update()
+            for el, val in ((ri["num_lo"], lo), (ri["num_hi"], hi)):
+                el._props["min"] = ri["full_lo"] * U
+                el._props["max"] = fhi * U
+                el._props["step"] = step
+                el.value = val * U
+                el.update()
             ri["label"].text = f'{ri["base"]} range ({ulabel})'
         reseeding["v"] = False
         refresh()
 
     def range_control(base, key, full_lo, full_hi, hcap=False):
         """Mounting-limit [min, max] range, stored in METERS at s['rng_<key>'].
-        Narrowing restricts the optimizer AND the value slider; hcap caps the
-        extent at the container height."""
+        Drag the range OR type the min/max boxes. Narrowing restricts the
+        optimizer AND the value slider; hcap caps the extent at container height."""
         s.setdefault(f"rng_{key}", (full_lo, full_hi))
         U, step, fmt, ulabel, _ = disp(s["units"], s["fine"])
         fhi = _eff_hi(full_hi, hcap)
@@ -415,12 +427,16 @@ def index():
         lbl = ui.label(f"{base} range ({ulabel})").classes("text-xs mt-2 mb-0")
         rng = ui.range(min=full_lo * U, max=fhi * U, step=step,
                        value={"min": lo * U, "max": hi * U}).props("label-always").classes("w-full")
+        with ui.row().classes("w-full no-wrap gap-2 items-center"):
+            num_lo = ui.number(value=lo * U, min=full_lo * U, max=fhi * U, step=step,
+                               format=fmt).props("dense").classes("grow")
+            num_hi = ui.number(value=hi * U, min=full_lo * U, max=fhi * U, step=step,
+                               format=fmt).props("dense").classes("grow")
 
-        def on_range():
-            uu = disp(s["units"], s["fine"])[0]
+        def _commit(lo_m, hi_m):
             cap = _eff_hi(full_hi, hcap)
-            v = rng.value
-            lo_m, hi_m = v["min"] / uu, v["max"] / uu
+            lo_m = min(max(lo_m, full_lo), cap)
+            hi_m = min(max(hi_m, lo_m), cap)
             if hi_m - lo_m < 0.01:                       # keep a non-zero window
                 hi_m = min(lo_m + 0.01, cap)
                 lo_m = max(hi_m - 0.01, full_lo)
@@ -431,10 +447,24 @@ def index():
                 s[key] = min(max(s[key], lo_m), hi_m)
             apply_units()
 
+        def on_range():
+            uu = disp(s["units"], s["fine"])[0]
+            v = rng.value
+            _commit(v["min"] / uu, v["max"] / uu)
+
+        def on_box():
+            uu = disp(s["units"], s["fine"])[0]
+            cur = s[f"rng_{key}"]
+            lo_m = (num_lo.value / uu) if num_lo.value is not None else cur[0]
+            hi_m = (num_hi.value / uu) if num_hi.value is not None else cur[1]
+            _commit(lo_m, hi_m)
+
         rng.on_value_change(lambda: reseeding["v"] or on_range())
-        range_inputs.append({"range": rng, "key": key, "full_lo": full_lo,
-                             "full_hi": full_hi, "base": base, "label": lbl,
-                             "hcap": hcap})
+        num_lo.on_value_change(lambda: reseeding["v"] or on_box())
+        num_hi.on_value_change(lambda: reseeding["v"] or on_box())
+        range_inputs.append({"range": rng, "num_lo": num_lo, "num_hi": num_hi,
+                             "key": key, "full_lo": full_lo, "full_hi": full_hi,
+                             "base": base, "label": lbl, "hcap": hcap})
         return rng
 
     def set_value(key, meters):
