@@ -36,6 +36,12 @@ PRIMARY = "#000000"          # ink black: primary UI + plot lines (brutalist)
 ACCENT = "#d40000"           # red accent (cylinder, current marker)
 PLOT_TEMPLATE = "plotly_white"
 PLOT_FONT = dict(family="Helvetica, Arial, sans-serif", size=12, color="#000000")
+
+# Coalesce the (heavy) 3-figure replot to this interval while a slider is dragged.
+# NiceGUI is server-side: every slider tick round-trips to rebuild + resend all
+# figures, so on a remote/throttled host (Render's free tier) unthrottled ticks
+# back up the WebSocket and the plots lag behind the drag. ~8 Hz keeps up.
+REFRESH_THROTTLE = 0.12
 F_CAP = 50.0   # N/kg; forces beyond this are "off the chart" near a singularity
 
 # On narrow screens (phones), containers tagged `.stack` switch to a vertical
@@ -339,10 +345,16 @@ def index():
             sld.value = num.value = value
             reseeding["v"] = False
             s[key] = value / uu
-            refresh()
 
+        # commit echoes the value live (cheap); the expensive 3-figure replot is
+        # throttled separately so a fast drag doesn't back up the WebSocket on a
+        # remote host. leading+trailing so it responds at once and the final
+        # position always renders.
         sld.on_value_change(lambda: reseeding["v"] or commit(sld.value))
         num.on_value_change(lambda: reseeding["v"] or commit(num.value))
+        for el in (sld, num):
+            el.on("update:model-value", lambda: reseeding["v"] or refresh(),
+                  throttle=REFRESH_THROTTLE, leading_events=True, trailing_events=True)
         inputs.append({"slider": sld, "number": num, "key": key, "lo": lo_m,
                        "hi": hi_m, "base": base, "label": lbl,
                        "is_length": is_length, "hcap": hc})
