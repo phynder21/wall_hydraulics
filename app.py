@@ -343,7 +343,7 @@ with tab_optimize:
             # sliders use; ROUND_DP tracks the precision toggle.
             for k in ("a", "b", "d", "f"):
                 lo, hi = USER_BOUNDS[k]
-                st.session_state[k] = float(min(max(round(res[k], ROUND_DP), lo), hi))
+                st.session_state[k] = float(min(max(round(res[k], 4), lo), hi))
             held = f" (held: {', '.join(sorted(locked))})" if locked else ""
             action = "Evaluated" if len(locked) == 4 else "Optimized"
             detail = (f"peak {res['peak_force']:.2f} N/kg, "

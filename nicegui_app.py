@@ -293,17 +293,24 @@ def index():
             f"L_min = {m['L_min'] * U:.2f}, L_max = {m['L_max'] * U:.2f}, "
             f"stroke = {m['stroke'] * U:.2f} {ulabel} (ratio {m['ratio']:.2f}, {status}).")
 
-    def linked(base, key, lo_m, hi_m, is_length=True, lockable=False):
-        """Slider + number box for one value, shown in the current display units
-        but stored in METERS at s[key]. Registered so a units change re-scales it.
-        When lockable, a 🔒 checkbox pins the value so Optimize holds it fixed."""
+    def _eff_hi(hi_m, hcap):
+        # container-height cap (like Streamlit's GEOM_BOUNDS) so b/f/x_cg can't
+        # exceed the selected container.
+        return min(hi_m, CONTAINERS[s["container"]][1]) if hcap else hi_m
+
+    def linked(base, key, lo_m, hi_m, is_length=True, lockable=False, hcap=False):
+        """Slider + number box for one value, stored in METERS at s[key]. hcap caps
+        the upper bound at the current container height. lockable adds a 🔒."""
         U, step, fmt, ulabel, _ = disp(s["units"], s["fine"])
         du, st_, ft = (U, step, fmt) if is_length else (1.0, 1.0, "%.0f")
+        hc = hcap and is_length
+        ehi = _eff_hi(hi_m, hc)
+        s[key] = min(max(s[key], lo_m), ehi)
         lbl = ui.label(f"{base} ({ulabel})" if is_length else base).classes("text-sm mt-2 mb-0")
         with ui.row().classes("w-full items-center no-wrap gap-2"):
-            sld = ui.slider(min=lo_m * du, max=hi_m * du, step=st_, value=s[key] * du
+            sld = ui.slider(min=lo_m * du, max=ehi * du, step=st_, value=s[key] * du
                             ).props("label-always").classes("grow")
-            num = ui.number(min=lo_m * du, max=hi_m * du, step=st_, value=s[key] * du,
+            num = ui.number(min=lo_m * du, max=ehi * du, step=st_, value=s[key] * du,
                             format=ft).classes("w-24")
             if lockable:
                 s.setdefault(f"lock_{key}", False)
@@ -312,8 +319,9 @@ def index():
 
         def commit(value):
             uu = disp(s["units"], s["fine"])[0] if is_length else 1.0
+            hi = _eff_hi(hi_m, hc)
             value = min(max(value if value is not None else s[key] * uu,
-                            lo_m * uu), hi_m * uu)
+                            lo_m * uu), hi * uu)
             reseeding["v"] = True
             sld.value = num.value = value
             reseeding["v"] = False
@@ -323,7 +331,8 @@ def index():
         sld.on_value_change(lambda: reseeding["v"] or commit(sld.value))
         num.on_value_change(lambda: reseeding["v"] or commit(num.value))
         inputs.append({"slider": sld, "number": num, "key": key, "lo": lo_m,
-                       "hi": hi_m, "base": base, "label": lbl, "is_length": is_length})
+                       "hi": hi_m, "base": base, "label": lbl,
+                       "is_length": is_length, "hcap": hc})
         return sld
 
     def apply_units():
@@ -353,23 +362,27 @@ def index():
         reseeding["v"] = False
         refresh()
 
-    def range_control(base, key, full_lo, full_hi):
-        """Mounting-limit [min, max] range for one variable, in display units,
-        stored in METERS at s['rng_<key>']. Narrowing it restricts the optimizer
-        AND the value slider for that variable."""
+    def range_control(base, key, full_lo, full_hi, hcap=False):
+        """Mounting-limit [min, max] range, stored in METERS at s['rng_<key>'].
+        Narrowing restricts the optimizer AND the value slider; hcap caps the
+        extent at the container height."""
         s.setdefault(f"rng_{key}", (full_lo, full_hi))
         U, step, fmt, ulabel, _ = disp(s["units"], s["fine"])
+        fhi = _eff_hi(full_hi, hcap)
         lo, hi = s[f"rng_{key}"]
+        lo = min(max(lo, full_lo), fhi); hi = min(max(hi, lo), fhi)
+        s[f"rng_{key}"] = (lo, hi)
         lbl = ui.label(f"{base} range ({ulabel})").classes("text-xs mt-2 mb-0")
-        rng = ui.range(min=full_lo * U, max=full_hi * U, step=step,
+        rng = ui.range(min=full_lo * U, max=fhi * U, step=step,
                        value={"min": lo * U, "max": hi * U}).props("label-always").classes("w-full")
 
         def on_range():
             uu = disp(s["units"], s["fine"])[0]
+            cap = _eff_hi(full_hi, hcap)
             v = rng.value
             lo_m, hi_m = v["min"] / uu, v["max"] / uu
             if hi_m - lo_m < 0.01:                       # keep a non-zero window
-                hi_m = min(lo_m + 0.01, full_hi)
+                hi_m = min(lo_m + 0.01, cap)
                 lo_m = max(hi_m - 0.01, full_lo)
             s[f"rng_{key}"] = (lo_m, hi_m)
             gi = next((x for x in inputs if x["key"] == key), None)
@@ -380,7 +393,8 @@ def index():
 
         rng.on_value_change(lambda: reseeding["v"] or on_range())
         range_inputs.append({"range": rng, "key": key, "full_lo": full_lo,
-                             "full_hi": full_hi, "base": base, "label": lbl})
+                             "full_hi": full_hi, "base": base, "label": lbl,
+                             "hcap": hcap})
         return rng
 
     def set_value(key, meters):
@@ -435,7 +449,12 @@ def index():
             # Locked variables are held fixed; only the rest are searched.
             locked = {k: round(float(s[k]), round_dp)
                       for k in ("a", "b", "d", "f") if s.get(f"lock_{k}")}
-            var_bounds = {k: tuple(s[f"rng_{k}"]) for k in ("a", "b", "d", "f")}
+            cb = {"a": (0.05, w / 2), "b": (0.05, h), "d": (0.0, 1.0), "f": (0.0, h)}
+            var_bounds = {}
+            for _k in ("a", "b", "d", "f"):
+                _lo = max(s[f"rng_{_k}"][0], cb[_k][0])
+                _hi = min(s[f"rng_{_k}"][1], cb[_k][1])
+                var_bounds[_k] = (min(_lo, _hi), _hi)
             # io_bound (thread) rather than cpu_bound (process): no subprocess to
             # re-import this module, and numpy/scipy release the GIL during the
             # search so the event loop stays responsive.
@@ -445,7 +464,8 @@ def index():
                 locked=locked, var_bounds=var_bounds, alt_rel_tol=s["alt_pct"] / 100.0,
                 fast=True)
             for k in ("a", "b", "d", "f"):
-                s[k] = round(float(res[k]), round_dp)
+                lo, hi = var_bounds[k]
+                s[k] = float(min(max(round(float(res[k]), 4), lo), hi))
             apply_units()   # reseed the a/b/d/f controls from the new meters + refresh
             held = f" (held: {', '.join(sorted(locked))})" if locked else ""
             action = "Evaluated" if len(locked) == 4 else "Optimized"
@@ -506,7 +526,7 @@ def index():
             with ui.tab_panels(tabs, value="Setup").classes("w-full"):
                 with ui.tab_panel("Setup"):
                     ui.select(list(CONTAINERS), value=s["container"], label="Container",
-                              on_change=lambda e: (s.__setitem__("container", e.value), refresh())
+                              on_change=lambda e: (s.__setitem__("container", e.value), apply_units())
                               ).classes("w-full")
                     with ui.row().classes("items-center gap-3 mt-1"):
                         ui.toggle({"meters": "m", "inches": "in"}, value=s["units"],
@@ -514,7 +534,7 @@ def index():
                                   ).props("dense")
                         ui.switch("Fine precision", value=s["fine"],
                                   on_change=lambda e: (s.__setitem__("fine", e.value), apply_units()))
-                    linked("x_cg — along wall", "x_cg", 0.0, HEIGHT_MAX)
+                    linked("x_cg — along wall", "x_cg", 0.0, HEIGHT_MAX, hcap=True)
                     linked("z_cg — off the wall", "z_cg", 0.0, 1.5)
                     ui.label("Max stroke ratio").classes("text-sm mt-2 mb-0")
                     ui.number(value=s["stroke_ratio"], min=1.0, max=3.0, step=0.05,
@@ -526,13 +546,13 @@ def index():
                         ui.label("Narrow where a dimension may sit; the optimizer "
                                  "and its value slider stay within it.").classes("text-xs")
                         range_control("a — floor position", "a", 0.05, WIDTH / 2)
-                        range_control("b — along wall", "b", 0.05, HEIGHT_MAX)
+                        range_control("b — along wall", "b", 0.05, HEIGHT_MAX, hcap=True)
                         range_control("d — bracket length", "d", 0.0, 1.0)
-                        range_control("f — base height", "f", 0.0, HEIGHT_MAX)
+                        range_control("f — base height", "f", 0.0, HEIGHT_MAX, hcap=True)
                     ga = linked("a — base along floor", "a", 0.05, WIDTH / 2, lockable=True)
-                    gb = linked("b — attachment along wall", "b", 0.05, HEIGHT_MAX, lockable=True)
+                    gb = linked("b — attachment along wall", "b", 0.05, HEIGHT_MAX, lockable=True, hcap=True)
                     gd = linked("d — bracket length", "d", 0.0, 1.0, lockable=True)
-                    gf = linked("f — base height", "f", 0.0, HEIGHT_MAX, lockable=True)
+                    gf = linked("f — base height", "f", 0.0, HEIGHT_MAX, lockable=True, hcap=True)
                     ui.separator()
                     linked("Wall angle θ (deg)", "theta_deg", 0.0, 90.0, is_length=False)
                     _sweep = ui.timer(0.05, sweep_tick, active=False)
