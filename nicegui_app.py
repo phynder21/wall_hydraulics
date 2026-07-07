@@ -315,7 +315,8 @@ def index():
         # exceed the selected container.
         return min(hi_m, CONTAINERS[s["container"]][1]) if hcap else hi_m
 
-    def linked(base, key, lo_m, hi_m, is_length=True, lockable=False, hcap=False):
+    def linked(base, key, lo_m, hi_m, is_length=True, lockable=False, hcap=False,
+               help=None):
         """Slider + number box for one value, stored in METERS at s[key]. hcap caps
         the upper bound at the current container height. lockable adds a 🔒."""
         U, step, fmt, ulabel, _ = disp(s["units"], s["fine"])
@@ -324,6 +325,8 @@ def index():
         ehi = _eff_hi(hi_m, hc)
         s[key] = min(max(s[key], lo_m), ehi)
         lbl = ui.label(f"{base} ({ulabel})" if is_length else base).classes("text-sm mt-2 mb-0")
+        if help:
+            lbl.tooltip(help)
         with ui.row().classes("w-full items-center no-wrap gap-2"):
             sld = ui.slider(min=lo_m * du, max=ehi * du, step=st_, value=s[key] * du
                             ).props("label-always").classes("grow")
@@ -556,14 +559,20 @@ def index():
                                   on_change=lambda e: (s.__setitem__("units", e.value), apply_units())
                                   ).props("dense")
                         ui.switch("Fine precision", value=s["fine"],
-                                  on_change=lambda e: (s.__setitem__("fine", e.value), apply_units()))
+                                  on_change=lambda e: (s.__setitem__("fine", e.value), apply_units())
+                                  ).tooltip("Finer slider steps (0.001 m / 0.01 in) and the "
+                                            "optimizer snaps geometry to 3 decimals, not 2.")
                     linked("x_cg — along wall", "x_cg", 0.0, HEIGHT_MAX, hcap=True)
                     linked("z_cg — off the wall", "z_cg", 0.0, 1.5)
                     ui.label("Max stroke ratio").classes("text-sm mt-2 mb-0")
                     ui.number(value=s["stroke_ratio"], min=1.0, max=3.0, step=0.05,
                               on_change=lambda e: (s.__setitem__("stroke_ratio", e.value), refresh())
-                              ).classes("w-full")
-                    linked("Roof clearance", "roof_clearance", 0.0, 0.5)
+                              ).classes("w-full").tooltip(
+                        "Max allowed L_max/L_min over the swing. Real hydraulic "
+                        "cylinders are typically ~1.8–2x.")
+                    linked("Roof clearance", "roof_clearance", 0.0, 0.5,
+                           help="Gap the piston attachment must keep below the "
+                                "ceiling through the swing.")
                 with ui.tab_panel("Geometry"):
                     with ui.expansion("Variable ranges (mounting limits)").classes("w-full"):
                         ui.label("Narrow where a dimension may sit; the optimizer "
