@@ -6,6 +6,7 @@ prompts you set, reconstructs peak force for your exact cg, and lets you sort by
 any attribute and inspect / refine any configuration.
 """
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -140,16 +141,23 @@ def render_browse():
     res = lookup.search(table, height, x_cg, z_cg, stroke_max=stroke_max,
                         roof_clearance=clearance, bounds=bounds, filters=filters,
                         sort_by=sort_by, ascending=ascending, limit=int(top_n))
-    n = res["peak_force"].size
+    n = res["peak_force"].size                 # rows returned (capped at "Show top")
+    total = int(res.get("n_matches", n))       # true matches before that cap
     if n == 0:
         st.warning("No configurations match these settings. Loosen a mounting "
                    "limit, raise the stroke ratio, or reduce the clearance.")
         return
 
     show = cols or DEFAULT_COLUMNS
-    data = {COLUMNS[k]: np.round(res[k], 3) for k in show}
-    st.markdown(f"**{n} matching configurations** (best `{COLUMNS[sort_by]}` first)")
-    st.dataframe(data, height=300, width="stretch")
+    # Rank the list from 1 (not 0); the "rank" index matches the inspector below.
+    df = pd.DataFrame({COLUMNS[k]: np.round(res[k], 3) for k in show},
+                      index=np.arange(1, n + 1))
+    df.index.name = "rank"
+    capped = f" — showing the top {n}" if total > n else ""
+    st.markdown(f"**{total:,} matching configurations**{capped} (best "
+                f"`{COLUMNS[sort_by]}` first). Every Problem, Mounting-limit and "
+                f"filter setting changes this count.")
+    st.dataframe(df, height=300, width="stretch")
 
     # --- Inspect one configuration (exact physics) ---
     st.subheader("Inspect a configuration")

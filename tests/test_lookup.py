@@ -71,6 +71,22 @@ def test_roof_clearance_shrinks_the_feasible_set(table):
     tight = lookup.search(table, STANDARD_H, 1.2, 0.55, roof_clearance=0.4,
                           limit=100000)
     assert tight["peak_force"].size <= loose["peak_force"].size
+    # The true match count (reported even when rows are capped) must shrink.
+    assert tight["n_matches"] <= loose["n_matches"]
+
+
+def test_n_matches_reports_true_count_before_limit(table):
+    """n_matches counts every row passing the filters even when the returned rows
+    are capped by `limit`, so the UI can give real filter feedback (moving a
+    constraint changes the count even if the top-N rows don't)."""
+    full = lookup.search(table, STANDARD_H, 1.2, 0.55, limit=100000)
+    capped = lookup.search(table, STANDARD_H, 1.2, 0.55, limit=5)
+    assert capped["peak_force"].size <= 5
+    assert capped["n_matches"] == full["n_matches"] == full["peak_force"].size
+    assert capped["n_matches"] >= capped["peak_force"].size
+    # Tightening the stroke ratio must reduce the true count.
+    tight = lookup.search(table, STANDARD_H, 1.2, 0.55, stroke_max=1.2, limit=5)
+    assert tight["n_matches"] <= full["n_matches"]
 
 
 def test_sort_by_attribute(table):
@@ -88,6 +104,7 @@ def test_empty_result_is_handled_cleanly(table):
     # A mounting window outside every geometry yields no rows, no error.
     res = lookup.search(table, STANDARD_H, 1.2, 0.55, bounds={"f": (2.95, 2.96)})
     assert res["peak_force"].size == 0
+    assert res["n_matches"] == 0
     assert lookup.best(table, STANDARD_H, 1.2, 0.55, bounds={"f": (2.95, 2.96)}) is None
 
 

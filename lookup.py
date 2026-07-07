@@ -99,9 +99,10 @@ def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0
 
     idx = np.nonzero(keep)[0]
     if idx.size == 0:
-        return {"peak_force": np.array([]), **{k: np.array([]) for k in
-                ("a", "b", "d", "f", "stroke", "stroke_ratio", "L_min",
-                 "L_max", "moment_arm")}}
+        return {"n_matches": 0, "peak_force": np.array([]),
+                **{k: np.array([]) for k in
+                   ("a", "b", "d", "f", "stroke", "stroke_ratio", "L_min",
+                    "L_max", "moment_arm")}}
 
     a, b = table["a"][idx], table["b"][idx]
     d, f = table["d"][idx], table["f"][idx]
@@ -124,11 +125,16 @@ def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0
                 mask &= col <= hi
         result = {k: v[mask] for k, v in result.items()}
 
+    # True match count BEFORE the top-N cap, so the UI can report how many
+    # geometries pass the current filters (the returned rows are capped at limit).
+    n_matches = int(result["peak_force"].size)
     order = np.argsort(result[sort_by], kind="stable")
     if not ascending:
         order = order[::-1]
     order = order[:limit]
-    return {k: v[order] for k, v in result.items()}
+    out = {k: v[order] for k, v in result.items()}
+    out["n_matches"] = n_matches
+    return out
 
 
 def best(table, container_height, x_cg, z_cg, **kw):
@@ -136,4 +142,6 @@ def best(table, container_height, x_cg, z_cg, **kw):
     res = search(table, container_height, x_cg, z_cg, limit=1, **kw)
     if res["peak_force"].size == 0:
         return None
-    return {k: float(v[0]) for k, v in res.items()}
+    keys = ("peak_force", "a", "b", "d", "f", "stroke", "stroke_ratio",
+            "L_min", "L_max", "moment_arm")
+    return {k: float(res[k][0]) for k in keys}

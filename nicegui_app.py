@@ -684,11 +684,15 @@ def browse_page():
                             sort_by=b["sort"], ascending=b["asc"], limit=int(b["topn"]))
         b["results"] = res
         n = res["peak_force"].size
+        total = int(res.get("n_matches", n))    # true matches before the top-N cap
         rows = [{"rank": i + 1, **{c: round(float(res[c][i]), 3) for c in BROWSE_COLS}}
                 for i in range(n)]
         table_el.rows = rows
         table_el.update()
-        count_lbl.text = f"{n} matching configurations" if n else "No matches — loosen the settings."
+        count_lbl.text = (
+            (f"{total:,} matching configurations"
+             + (f" — showing the top {n}" if total > n else ""))
+            if n else "No matches — loosen the settings.")
         rank_in.max = max(n, 1)
         inspect()
         search_btn.enable()
