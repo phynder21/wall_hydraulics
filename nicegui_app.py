@@ -16,6 +16,7 @@ import os
 import numpy as np
 import plotly.graph_objects as go
 from nicegui import ui, run, app
+from starlette.requests import Request
 
 from wall import (STROKE_RATIO_MAX, compute_F_piston, compute_geometry,
                   compute_cylinder_length)
@@ -250,9 +251,39 @@ def diagram_figure(a, b, d, f, x_cg, z_cg, theta_deg, width, height, roof_cleara
     return fig
 
 
+# Designer fields captured in the shareable URL (mirrors app.py's URL params).
+_URL_FLOATS = ("a", "b", "d", "f", "x_cg", "z_cg", "theta_deg", "stroke_ratio",
+               "roof_clearance")
+
+
+def _url_query(s):
+    """Query string capturing the shareable Designer state."""
+    from urllib.parse import urlencode
+    q = {"c": list(CONTAINERS).index(s["container"])}
+    for k in _URL_FLOATS:
+        q[k] = round(float(s[k]), 4)
+    return urlencode(q)
+
+
+def _hydrate_url(s, qp):
+    """Override state from URL query params (takes precedence over storage)."""
+    keys = list(CONTAINERS)
+    if "c" in qp:
+        try:
+            s["container"] = keys[int(qp["c"])]
+        except (ValueError, IndexError):
+            pass
+    for k in _URL_FLOATS:
+        if k in qp:
+            try:
+                s[k] = float(qp[k])
+            except (TypeError, ValueError):
+                pass
+
+
 # --- The page (per-client state so many public visitors stay independent) ----
 @ui.page("/")
-def index():
+def index(request: Request):
     ui.colors(primary=PRIMARY)
     ui.add_head_html(RESPONSIVE_CSS)
     s = dict(DEFAULT_STATE)
@@ -262,6 +293,7 @@ def index():
         for k, v in saved.items():
             if k in DEFAULT_STATE or k.startswith(("rng_", "lock_")):
                 s[k] = v
+    _hydrate_url(s, dict(request.query_params))   # a shared link wins over storage
     guard = {"building": True}   # bound inputs fire on_change while being built;
                                  # ignore refresh until the plots exist.
 
@@ -269,6 +301,10 @@ def index():
         app.storage.user["wall_state"] = {
             k: v for k, v in s.items()
             if k in DEFAULT_STATE or k.startswith(("rng_", "lock_"))}
+        try:                       # reflect state in the URL so the link is shareable
+            ui.run_javascript(f"history.replaceState(null,'','/?{_url_query(s)}')")
+        except Exception:
+            pass
 
     reseeding = {"v": False}     # suppress input on_change while we set values
     inputs = []                  # every linked control (for reseed / units re-scale)

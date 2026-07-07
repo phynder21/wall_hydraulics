@@ -121,3 +121,25 @@ def test_default_state_is_within_slider_ranges():
     assert 0.0 <= s["d"] <= 1.0
     assert 0.0 <= s["f"] <= na.HEIGHT_MAX
     assert 0.0 <= s["theta_deg"] <= 90.0
+
+
+def test_url_query_roundtrip():
+    """Designer state survives a URL query-string roundtrip (shareable links)."""
+    from urllib.parse import parse_qs
+    s = dict(na.DEFAULT_STATE)
+    s["a"], s["f"], s["x_cg"] = 0.73, 1.25, 1.5
+    s["container"] = list(na.CONTAINERS)[1]
+    qp = {k: v[0] for k, v in parse_qs(na._url_query(s)).items()}
+    s2 = dict(na.DEFAULT_STATE)
+    na._hydrate_url(s2, qp)
+    for k in ("a", "f", "x_cg"):
+        assert s2[k] == s[k]
+    assert s2["container"] == list(na.CONTAINERS)[1]
+
+
+def test_url_hydrate_ignores_bad_params():
+    """Malformed URL params fall back to defaults, never raise."""
+    s = dict(na.DEFAULT_STATE)
+    na._hydrate_url(s, {"a": "xyz", "c": "99", "f": "", "z_cg": None})
+    assert s["a"] == na.DEFAULT_STATE["a"]
+    assert s["container"] == na.DEFAULT_STATE["container"]
