@@ -37,6 +37,18 @@ PLOT_TEMPLATE = "plotly_white"
 PLOT_FONT = dict(family="sans-serif", size=13, color="#0F172A")
 F_CAP = 50.0   # N/kg; forces beyond this are "off the chart" near a singularity
 
+# On narrow screens (phones), containers tagged `.stack` switch to a vertical
+# layout and their children go full-width, so nothing overflows off-screen.
+RESPONSIVE_CSS = """
+<style>
+@media (max-width: 820px) {
+  .stack { flex-direction: column !important; }
+  .stack > * { width: 100% !important; max-width: 100% !important; flex: 0 0 auto !important; }
+  .q-page, body { overflow-x: hidden; }
+}
+</style>
+"""
+
 CONTAINERS = {
     "Standard (2.44 × 2.59 m)": CONTAINER_PRESETS["standard"],
     "High-Cube (2.44 × 2.90 m)": CONTAINER_PRESETS["highcube"],
@@ -222,6 +234,7 @@ def diagram_figure(a, b, d, f, x_cg, z_cg, theta_deg, width, height, roof_cleara
 @ui.page("/")
 def index():
     ui.colors(primary=PRIMARY)
+    ui.add_head_html(RESPONSIVE_CSS)
     s = dict(DEFAULT_STATE)
     # Restore this browser's last session (persists across reloads).
     saved = app.storage.user.get("wall_state")
@@ -481,7 +494,7 @@ def index():
         ui.button("🔎 Browse configurations", on_click=lambda: ui.navigate.to("/browse")) \
             .props("flat color=white no-caps")
 
-    with ui.row().classes("w-full no-wrap gap-4 p-2"):
+    with ui.row().classes("w-full no-wrap gap-4 p-2 stack"):
         # ---- Left: control panel with tabs --------------------------------
         with ui.card().classes("w-96 shrink-0"):
             with ui.tabs().classes("w-full") as tabs:
@@ -556,12 +569,12 @@ def index():
         # ---- Right: visualization -----------------------------------------
         with ui.column().classes("flex-1 gap-3"):
             with ui.card().classes("w-full"):
-                with ui.row().classes("w-full justify-around"):
+                with ui.row().classes("w-full justify-around flex-wrap gap-2"):
                     peak_m = metric("Peak force (worst case)")
                     here_m = metric("Force at θ")
                     stroke_m = metric("Stroke")
                     ratio_m = metric("Stroke ratio")
-            with ui.row().classes("w-full no-wrap gap-3"):
+            with ui.row().classes("w-full no-wrap gap-3 stack"):
                 diag_plot = ui.plotly(diagram_figure(
                     s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"],
                     s["theta_deg"], *CONTAINERS[s["container"]], s["roof_clearance"])
@@ -588,6 +601,7 @@ BROWSE_LABELS = {"peak_force": "peak (N/kg)", "a": "a", "b": "b", "d": "d",
 @ui.page("/browse")
 def browse_page():
     ui.colors(primary=PRIMARY)
+    ui.add_head_html(RESPONSIVE_CSS)
     b = {"container": next(iter(CONTAINERS)), "x_cg": 1.20, "z_cg": 0.55,
          "stroke": float(STROKE_RATIO_MAX), "clear": 0.0, "sort": "peak_force",
          "asc": True, "topn": 100, "max_f": 0.0, "max_d": 0.0, "results": None}
@@ -644,7 +658,7 @@ def browse_page():
         ui.notify(f"Exact optimum: {opt['peak_force']:.2f} N/kg at a={opt['a']:.3f} "
                   f"b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f}", type="positive")
 
-    with ui.row().classes("w-full no-wrap gap-4 p-2"):
+    with ui.row().classes("w-full no-wrap gap-4 p-2 stack"):
         with ui.card().classes("w-96 shrink-0"):
             ui.label("Problem").classes("font-medium")
             ui.select(list(CONTAINERS), label="Container").bind_value(b, "container")
@@ -671,7 +685,7 @@ def browse_page():
                                     on_change=lambda: inspect()).classes("w-24")
                 ui.button("Refine — exact optimizer", on_click=refine).props("outline no-caps")
             pick_lbl = ui.label("").classes("text-sm")
-            with ui.row().classes("w-full no-wrap gap-2"):
+            with ui.row().classes("w-full no-wrap gap-2 stack"):
                 force_el = ui.plotly(force_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0)).classes("w-1/2")
                 length_el = ui.plotly(length_figure(0.6, 1.8, 0.1, 0.4, 45.0, 1.8)).classes("w-1/2")
 
