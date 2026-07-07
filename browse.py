@@ -168,10 +168,13 @@ def render_browse():
     p2.plotly_chart(fl, width="stretch")
 
     # --- Refine to the exact continuous optimum for this query ---
-    st.caption("The list ranks precomputed grid points; the plots above are the "
-               "exact physics for the selected one. To get the exact best-possible "
-               "design for these settings, run the optimizer once:")
-    if st.button("Refine — run optimizer for the exact optimum"):
+    st.subheader("Get the exact optimum")
+    st.caption("The list is a precomputed GRID, so even its top row is only "
+               "near-optimal — it can sit a hair off the true best. This runs the "
+               "optimizer once for your current Problem + Mounting-limits settings "
+               "to compute the exact best geometry, and shows how far the grid was "
+               "off. (Same math as the Designer's Optimize, scoped to this query.)")
+    if st.button("Get the exact optimum — run optimizer"):
         with st.spinner("Optimizing…"):
             opt = optimize_actuator(width, height, x_cg, z_cg,
                                     stroke_ratio_max=stroke_max,

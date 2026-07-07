@@ -642,6 +642,12 @@ BROWSE_COLS = ["peak_force", "a", "b", "d", "f", "stroke", "stroke_ratio"]
 BROWSE_LABELS = {"peak_force": "peak (N/kg)", "a": "a", "b": "b", "d": "d",
                  "f": "f", "stroke": "stroke", "stroke_ratio": "ratio",
                  "L_min": "retracted", "L_max": "extended", "moment_arm": "OC margin"}
+# Mounting-limit ranges (full High-Cube extents, fixed; the container height is
+# applied as a search filter). One min-max range per geometry value.
+BROWSE_RANGES = {"a": (0.05, WIDTH / 2, "a — base along floor (m)"),
+                 "b": (0.05, HEIGHT_MAX, "b — attachment along wall (m)"),
+                 "d": (0.0, 1.0, "d — bracket length (m)"),
+                 "f": (0.0, HEIGHT_MAX, "f — base height (m)")}
 
 
 @ui.page("/browse")
@@ -650,7 +656,11 @@ def browse_page():
     ui.add_head_html(RESPONSIVE_CSS)
     b = {"container": next(iter(CONTAINERS)), "x_cg": 1.20, "z_cg": 0.55,
          "stroke": float(STROKE_RATIO_MAX), "clear": 0.0, "sort": "peak_force",
-         "asc": True, "topn": 100, "max_f": 0.0, "max_d": 0.0, "results": None}
+         "asc": True, "topn": 100, "max_force": 0.0, "results": None,
+         "rng_a": {"min": 0.05, "max": WIDTH / 2},
+         "rng_b": {"min": 0.05, "max": HEIGHT_MAX},
+         "rng_d": {"min": 0.0, "max": 1.0},
+         "rng_f": {"min": 0.0, "max": HEIGHT_MAX}}
 
     with ui.header(elevated=False).classes("items-center justify-between"):
         ui.label("Browse configurations").classes("text-lg font-medium")
@@ -664,13 +674,13 @@ def browse_page():
             await run.io_bound(get_table)
         table = get_table()
         w, h = CONTAINERS[b["container"]]
+        bounds = {v: (b[f"rng_{v}"]["min"], b[f"rng_{v}"]["max"])
+                  for v in ("a", "b", "d", "f")}
         filters = {}
-        if b["max_f"] > 0:
-            filters["f"] = (None, b["max_f"])
-        if b["max_d"] > 0:
-            filters["d"] = (None, b["max_d"])
+        if b["max_force"] > 0:
+            filters["peak_force"] = (None, b["max_force"])
         res = lookup.search(table, h, b["x_cg"], b["z_cg"], stroke_max=b["stroke"],
-                            roof_clearance=b["clear"], filters=filters,
+                            roof_clearance=b["clear"], bounds=bounds, filters=filters,
                             sort_by=b["sort"], ascending=b["asc"], limit=int(b["topn"]))
         b["results"] = res
         n = res["peak_force"].size
@@ -697,12 +707,21 @@ def browse_page():
         length_el.update_figure(length_figure(a, bb, d, f, 45.0, b["stroke"]))
 
     async def refine():
+        res = b["results"]
+        if not res or res["peak_force"].size == 0:
+            ui.notify("Run a search first, then get the exact optimum."); return
         w, h = CONTAINERS[b["container"]]
-        ui.notify("Optimizing for the exact optimum…")
+        bounds = {v: (b[f"rng_{v}"]["min"], b[f"rng_{v}"]["max"])
+                  for v in ("a", "b", "d", "f")}
+        refine_lbl.text = "Optimizing for the exact optimum…"
         opt = await run.io_bound(optimize_actuator, w, h, b["x_cg"], b["z_cg"],
-                                 stroke_ratio_max=b["stroke"], roof_clearance=b["clear"], fast=True)
-        ui.notify(f"Exact optimum: {opt['peak_force']:.2f} N/kg at a={opt['a']:.3f} "
-                  f"b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f}", type="positive")
+                                 stroke_ratio_max=b["stroke"], roof_clearance=b["clear"],
+                                 var_bounds=bounds, fast=True)
+        grid_best = float(res["peak_force"].min())
+        refine_lbl.text = (
+            f"Exact optimum: {opt['peak_force']:.2f} N/kg  —  a={opt['a']:.3f} "
+            f"b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f} m.  "
+            f"(Best grid row in the list above: {grid_best:.2f} N/kg.)")
 
     with ui.row().classes("w-full no-wrap gap-4 p-2 stack"):
         with ui.card().classes("w-96 shrink-0"):
@@ -712,11 +731,18 @@ def browse_page():
             ui.number("z_cg (m)", min=0, max=1.5, step=0.01).bind_value(b, "z_cg").classes("w-full")
             ui.number("Max stroke ratio", min=1.0, max=3.0, step=0.05).bind_value(b, "stroke").classes("w-full")
             ui.number("Roof clearance (m)", min=0.0, max=0.5, step=0.01).bind_value(b, "clear").classes("w-full")
+            ui.label("Mounting limits — min–max for every value").classes("font-medium mt-2")
+            ui.label("Where each dimension may sit; the search keeps only "
+                     "geometries inside all four ranges.").classes("text-xs text-grey")
+            for _v, (_lo, _hi, _lab) in BROWSE_RANGES.items():
+                ui.label(_lab).classes("text-xs mt-1 mb-0")
+                ui.range(min=_lo, max=_hi, step=0.01, value={"min": _lo, "max": _hi}) \
+                    .props("label-always").bind_value(b, f"rng_{_v}").classes("w-full")
             ui.label("Filter / sort").classes("font-medium mt-2")
             ui.select({c: BROWSE_LABELS[c] for c in BROWSE_LABELS}, label="Sort by").bind_value(b, "sort")
             ui.switch("Ascending", value=True).bind_value(b, "asc")
-            ui.number("Max base height f (0 = any)", min=0.0, max=3.0, step=0.05).bind_value(b, "max_f").classes("w-full")
-            ui.number("Max bracket d (0 = any)", min=0.0, max=1.0, step=0.05).bind_value(b, "max_d").classes("w-full")
+            ui.number("Max peak force (N/kg, 0 = no cap)", min=0.0, max=500.0, step=1.0) \
+                .bind_value(b, "max_force").classes("w-full")
             ui.number("Show top N", min=10, max=1000, step=10).bind_value(b, "topn").classes("w-full")
             search_btn = ui.button("Search", on_click=run_search).props("color=primary").classes("w-full")
 
@@ -729,8 +755,14 @@ def browse_page():
                 ui.label("Inspect rank")
                 rank_in = ui.number(value=1, min=1, max=1, step=1,
                                     on_change=lambda: inspect()).classes("w-24")
-                ui.button("Refine — exact optimizer", on_click=refine).props("outline no-caps")
             pick_lbl = ui.label("").classes("text-sm")
+            ui.separator()
+            ui.label("The list is a precomputed GRID, so even its top row is only "
+                     "near-optimal. “Get the exact optimum” runs the optimizer once "
+                     "for your current settings to compute the true best geometry — "
+                     "and shows how far the grid was off.").classes("text-xs text-grey")
+            ui.button("Get the exact optimum ▶", on_click=refine).props("no-caps color=primary")
+            refine_lbl = ui.label("").classes("text-sm")
             with ui.row().classes("w-full no-wrap gap-2 stack"):
                 force_el = ui.plotly(force_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0)).classes("w-1/2")
                 length_el = ui.plotly(length_figure(0.6, 1.8, 0.1, 0.4, 45.0, 1.8)).classes("w-1/2")
