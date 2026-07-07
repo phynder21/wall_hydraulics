@@ -280,6 +280,20 @@ def index():
         if s["overlay"] and s["design_A"] and s["design_B"]:
             overlays = [("design A", s["design_A"], "green"),
                         ("design B", s["design_B"], "darkorange")]
+        overlay_sw.set_enabled(bool(s["design_A"] and s["design_B"]))
+        if overlays:
+            _pa = summary_metrics(s["design_A"]["a"], s["design_A"]["b"],
+                                  s["design_A"]["d"], s["design_A"]["f"],
+                                  s["design_A"]["x_cg"], s["design_A"]["z_cg"],
+                                  s["theta_deg"], s["stroke_ratio"])["peak"]
+            _pb = summary_metrics(s["design_B"]["a"], s["design_B"]["b"],
+                                  s["design_B"]["d"], s["design_B"]["f"],
+                                  s["design_B"]["x_cg"], s["design_B"]["z_cg"],
+                                  s["theta_deg"], s["stroke_ratio"])["peak"]
+            overlay_cap.text = (f"Overlay — A (green) peak {_pa:.2f} N/kg, "
+                                f"B (orange) peak {_pb:.2f} N/kg.")
+        else:
+            overlay_cap.text = ""
         diag_plot.update_figure(diagram_figure(
             s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"], s["theta_deg"],
             w, h, s["roof_clearance"], U, ulabel))
@@ -616,8 +630,10 @@ def index():
                                   ).props("flat no-caps").classes("grow")
                     cmp_a = ui.label("A (green): empty").classes("text-sm")
                     cmp_b = ui.label("B (orange): empty").classes("text-sm")
-                    ui.switch("Overlay A & B on plots",
-                              on_change=lambda: refresh()).bind_value(s, "overlay")
+                    overlay_sw = ui.switch("Overlay A & B on plots",
+                                           on_change=lambda: refresh()).bind_value(s, "overlay")
+                    overlay_sw.tooltip("Needs both A and B saved. Draws A (green) and "
+                                       "B (orange) as dashed curves on the plots.")
 
         # ---- Right: visualization -----------------------------------------
         with ui.column().classes("flex-1 gap-3"):
@@ -640,6 +656,7 @@ def index():
                 ).classes("w-full")
             sing_cap = ui.label("").classes("text-sm text-amber-600")
             summary_cap = ui.label("").classes("text-sm text-gray-600")
+            overlay_cap = ui.label("").classes("text-sm text-gray-600")
 
     guard["building"] = False   # layout complete; refresh may touch the plots now
     refresh()   # first paint of the metrics
