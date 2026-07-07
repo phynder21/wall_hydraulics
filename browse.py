@@ -114,6 +114,62 @@ def _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, theta_deg=45.0):
     return fig
 
 
+def _sb_linked(label, key, lo, hi, default, step, fmt="%.2f", help=None):
+    """Sidebar slider + typeable number box bound to one canonical value in
+    st.session_state[key]. Either widget edits the same value."""
+    if key not in st.session_state:
+        st.session_state[key] = float(default)
+    skey, nkey = f"{key}__s", f"{key}__n"
+    st.session_state[skey] = st.session_state[key]
+    st.session_state[nkey] = st.session_state[key]
+
+    def _from_s():
+        st.session_state[key] = st.session_state[skey]
+
+    def _from_n():
+        st.session_state[key] = float(min(max(st.session_state[nkey], lo), hi))
+
+    st.sidebar.markdown(f"**{label}**")
+    c1, c2 = st.sidebar.columns([2, 1])
+    c1.slider(label, lo, hi, step=step, key=skey, on_change=_from_s,
+              help=help, label_visibility="collapsed")
+    c2.number_input(label, min_value=lo, max_value=hi, step=step, key=nkey,
+                    on_change=_from_n, format=fmt, label_visibility="collapsed")
+    return st.session_state[key]
+
+
+def _sb_range(label, key, full_lo, full_hi, step=0.01, fmt="%.2f"):
+    """Sidebar range slider + typeable min/max number boxes, bound to a canonical
+    (lo, hi) tuple in st.session_state[key]."""
+    st.session_state.setdefault(key, (full_lo, full_hi))
+    lo, hi = st.session_state[key]
+    lo = min(max(lo, full_lo), full_hi)
+    hi = min(max(hi, lo), full_hi)
+    st.session_state[key] = (lo, hi)
+    rk, lok, hik = f"{key}__r", f"{key}__lo", f"{key}__hi"
+    st.session_state[rk] = (lo, hi)
+    st.session_state[lok] = lo
+    st.session_state[hik] = hi
+
+    def _from_r():
+        a, b = st.session_state[rk]
+        st.session_state[key] = (a, b)
+
+    def _from_box():
+        a, b = st.session_state[lok], st.session_state[hik]
+        st.session_state[key] = (min(a, b), max(a, b))
+
+    st.sidebar.markdown(f"**{label}**")
+    st.sidebar.slider(label, full_lo, full_hi, step=step, key=rk, on_change=_from_r,
+                      label_visibility="collapsed")
+    cc1, cc2 = st.sidebar.columns(2)
+    cc1.number_input("min", min_value=full_lo, max_value=full_hi, step=step,
+                     key=lok, on_change=_from_box, format=fmt)
+    cc2.number_input("max", min_value=full_lo, max_value=full_hi, step=step,
+                     key=hik, on_change=_from_box, format=fmt)
+    return st.session_state[key]
+
+
 def render_browse():
     st.header("Browse configurations")
     st.caption("Search a precomputed database of geometries — instant, no "
@@ -133,19 +189,22 @@ def render_browse():
     st.sidebar.header("Problem")
     size = st.sidebar.selectbox("Container", list(CONTAINERS), key="lk_size")
     width, height = CONTAINERS[size]
-    x_cg = st.sidebar.slider("x_cg — along wall from hinge (m)", 0.0, HEIGHT_MAX,
-                             1.20, 0.01, key="lk_xcg")
-    z_cg = st.sidebar.slider("z_cg — off the wall (m)", 0.0, 1.5, 0.55, 0.01,
-                             key="lk_zcg")
-    stroke_max = st.sidebar.slider("Max stroke ratio", 1.0, 3.0,
-                                   float(STROKE_RATIO_MAX), 0.05, key="lk_stroke")
-    clearance = st.sidebar.slider("Roof clearance (m)", 0.0, 0.5, 0.0, 0.01,
-                                  key="lk_clear")
+    x_cg = _sb_linked("x_cg — along wall from hinge (m)", "lk_xcg",
+                      0.0, HEIGHT_MAX, 1.20, 0.01)
+    z_cg = _sb_linked("z_cg — off the wall (m)", "lk_zcg", 0.0, 1.5, 0.55, 0.01)
+    stroke_max = _sb_linked(
+        "Max stroke ratio", "lk_stroke", 1.0, 3.0, float(STROKE_RATIO_MAX), 0.05,
+        help="Hard cap: only designs with L_max/L_min at or below this appear. "
+             "Real hydraulic cylinders are typically ~1.8–2×.")
+    clearance = _sb_linked(
+        "Roof clearance (m)", "lk_clear", 0.0, 0.5, 0.0, 0.01,
+        help="Keep the piston attachment this far below the roof.")
 
     st.sidebar.header("Mounting limits")
-    st.sidebar.caption("Each slider is a min–max range for that dimension — this "
-                       "is where you set the max (or min) for every value. The "
-                       "search keeps only geometries inside all four ranges.")
+    st.sidebar.caption("Each control is a min–max range for that dimension (drag "
+                       "the slider OR type the min/max) — where you set the max or "
+                       "min for every value. The search keeps only geometries "
+                       "inside all four ranges.")
     ranges = {
         "a": (0.05, WIDTH / 2, "a — base along floor (m)"),
         "b": (0.05, HEIGHT_MAX, "b — attachment along wall (m)"),
@@ -154,7 +213,7 @@ def render_browse():
     }
     bounds = {}
     for v, (lo, hi, label) in ranges.items():
-        bounds[v] = st.sidebar.slider(label, lo, hi, (lo, hi), key=f"lk_rng_{v}")
+        bounds[v] = _sb_range(label, f"lk_rng_{v}", lo, hi)
 
     # --- Filter / sort controls (main area) ---
     with st.expander("Columns, extra filters & sorting", expanded=True):
