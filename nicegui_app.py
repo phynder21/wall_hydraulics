@@ -442,7 +442,8 @@ def index():
             res = await run.io_bound(
                 optimize_actuator, w, h, s["x_cg"], s["z_cg"],
                 stroke_ratio_max=s["stroke_ratio"], roof_clearance=s["roof_clearance"],
-                locked=locked, var_bounds=var_bounds, alt_rel_tol=s["alt_pct"] / 100.0)
+                locked=locked, var_bounds=var_bounds, alt_rel_tol=s["alt_pct"] / 100.0,
+                fast=True)
             for k in ("a", "b", "d", "f"):
                 s[k] = round(float(res[k]), round_dp)
             apply_units()   # reseed the a/b/d/f controls from the new meters + refresh
@@ -654,7 +655,7 @@ def browse_page():
         w, h = CONTAINERS[b["container"]]
         ui.notify("Optimizing for the exact optimum…")
         opt = await run.io_bound(optimize_actuator, w, h, b["x_cg"], b["z_cg"],
-                                 stroke_ratio_max=b["stroke"], roof_clearance=b["clear"])
+                                 stroke_ratio_max=b["stroke"], roof_clearance=b["clear"], fast=True)
         ui.notify(f"Exact optimum: {opt['peak_force']:.2f} N/kg at a={opt['a']:.3f} "
                   f"b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f}", type="positive")
 

@@ -193,6 +193,30 @@ def test_finds_known_standard_optimum():
     assert res["peak_force"] < 13.5, f"peak {res['peak_force']:.2f} — multi-start regressed?"
 
 
+def test_fast_mode_reaches_the_optimum():
+    """fast=True (grid-seed + polish) still lands on the known global optimum,
+    quickly, with valid result invariants."""
+    res = optimize_actuator(*STANDARD, x_cg=1.20, z_cg=0.55, fast=True)
+    assert_result_invariants(res, "fast")
+    assert res["feasible"]
+    assert res["peak_force"] < 13.3          # essentially the 12.94 global
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("kw", [
+    {"x_cg": 1.2, "z_cg": 0.55},
+    {"x_cg": 1.2, "z_cg": 1.0},
+    {"x_cg": 1.2, "z_cg": 0.55, "stroke_ratio_max": 2.0},
+    {"x_cg": 1.2, "z_cg": 0.55, "var_bounds": {"f": (0.0, 0.5)}},
+])
+def test_fast_matches_default_within_tolerance(kw):
+    """The fast optimizer agrees with the full 20-start search to a fraction of a
+    N/kg across varied problems (so the speedup didn't cost accuracy)."""
+    slow = optimize_actuator(*STANDARD, **kw)
+    fast = optimize_actuator(*STANDARD, **kw, fast=True)
+    assert abs(fast["peak_force"] - slow["peak_force"]) < 0.2
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("container", list(CONTAINER_PRESETS))
 def test_exhaustive_input_sweep(container):

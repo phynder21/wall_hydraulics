@@ -30,7 +30,7 @@ import argparse
 import numpy as np
 from scipy.optimize import differential_evolution
 
-from wall import STROKE_RATIO_MAX, compute_F_piston, compute_cylinder_length
+from wall import STROKE_RATIO_MAX, compute_F_piston, compute_cylinder_length, g
 
 # External ISO container dimensions (width, height) in meters, matching app.py.
 CONTAINER_PRESETS = {
@@ -144,11 +144,94 @@ def _metrics(p, theta, x_cg, z_cg, m_cg, container_width, container_height,
     return peak, ratio, L_min, L_max, ceiling_violation, moment_arm
 
 
+# Grid density per number of free variables, keeping the seed grid ~<=10k cells.
+_GRID_NPTS = {1: 400, 2: 60, 3: 18, 4: 11}
+# Grid points near the true optimum sit a step over the stroke limit, so the
+# feasibility screen for the SEED allows this much slack (the polish enforces the
+# real limit). Same idea as the lookup table's tolerance.
+_SEED_STROKE_TOL = 0.20
+
+
+def _batch_metrics(P, theta, x_cg, z_cg, m_cg, W, H, roof_clearance):
+    """peak |force|, stroke ratio, signed moment arm, ceiling breach for a BATCH
+    of geometries P (shape (N, 4) = a,b,d,f), vectorized over the theta sweep."""
+    a, b, d, f = P[:, 0:1], P[:, 1:2], P[:, 2:3], P[:, 3:4]
+    ct, st = np.cos(theta)[None, :], np.sin(theta)[None, :]
+    x_att, z_att = b * ct - d * st, b * st + d * ct
+    r_att = np.sqrt(b**2 + d**2)
+    beta = np.arctan2(z_att, x_att)
+    phi = np.arctan2(z_att - f, x_att + a)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        F = -(m_cg * g * (x_cg * ct - z_cg * st)) / (r_att * np.sin(beta - phi))
+    Fabs = np.where(np.isfinite(F), np.abs(F), np.nan)
+    with np.errstate(invalid="ignore"):
+        peak = np.nanmax(Fabs, axis=1)
+    peak = np.where(np.isnan(peak), np.inf, peak)
+    L = np.sqrt((x_att + a) ** 2 + (z_att - f) ** 2)
+    Lmin, Lmax = L.min(axis=1), L.max(axis=1)
+    ratio = np.where(Lmin > 0, Lmax / Lmin, np.inf)
+    m_arm = np.sin(beta - phi)
+    crosses = (m_arm.min(axis=1) < 0) & (m_arm.max(axis=1) > 0)
+    moment = np.where(crosses, -np.abs(m_arm).min(axis=1), np.abs(m_arm).min(axis=1))
+    inside = (x_att >= -W) & (x_att <= 0.0)
+    top = np.where(inside, z_att, -np.inf).max(axis=1)
+    ceiling = np.maximum(top - (H - roof_clearance), 0.0)
+    ceiling = np.where(np.isfinite(ceiling), ceiling, 0.0)
+    return peak, ratio, moment, ceiling
+
+
+def _fast_runs(free, locked, full_bounds, assemble, objective, evaluate, theta,
+               x_cg, z_cg, m_cg, W, H, roof_clearance, stroke_ratio_max, seed):
+    """Replace the 20 blind DE restarts with a vectorized coarse grid sweep (finds
+    the good basin) plus a few tight local polishes (sharpen to the exact optimum).
+    Much faster while still landing on the constraint-boundary global optimum."""
+    npg = _GRID_NPTS.get(len(free), 9)
+    axes = [np.linspace(*full_bounds[v], npg) for v in free]
+    mesh = [m.ravel() for m in np.meshgrid(*axes, indexing="ij")]
+    col = {v: i for i, v in enumerate(free)}
+    N = mesh[0].size
+    P = np.empty((N, 4))
+    for j, v in enumerate(VAR_NAMES):
+        P[:, j] = mesh[col[v]] if v in col else locked[v]
+
+    theta_c = np.linspace(0.0, np.pi / 2, 61)     # coarse sweep is enough to rank
+    peak, ratio, moment, ceiling = _batch_metrics(
+        P, theta_c, x_cg, z_cg, m_cg, W, H, roof_clearance)
+    # SOFT ranking: mostly by peak, with a gentle push toward feasibility and a
+    # hard reject for over-center. Soft (not hard) so a grid cell near the
+    # boundary optimum — a step over the stroke limit — still ranks well and gets
+    # polished; the polish then enforces the real limit.
+    score = np.where(np.isfinite(peak), peak, 1e18) \
+        + 10.0 * np.maximum(ratio - stroke_ratio_max, 0.0) ** 2 \
+        + 10.0 * ceiling ** 2 + np.where(moment < 0.0, 1e18, 0.0)
+    order = np.argsort(score)
+
+    spacing = [(full_bounds[v][1] - full_bounds[v][0]) / (npg - 1) for v in free]
+    seeds, runs = [], []
+    de = {"maxiter": 45, "popsize": 12, "tol": 1e-8, "polish": True}
+    for oi in order:
+        if len(runs) >= 5:
+            break
+        cell = np.array([mesh[col[v]][oi] for v in free])
+        if any(np.max(np.abs(cell - c) / (np.array(spacing) + 1e-12)) < 1.0 for c in seeds):
+            continue                               # too close to an already-polished cell
+        seeds.append(cell)
+        tb = [(max(full_bounds[v][0], cell[i] - 2 * spacing[i]),
+               min(full_bounds[v][1], cell[i] + 2 * spacing[i])) for i, v in enumerate(free)]
+        tb = [(lo, hi if hi > lo else lo + 1e-6) for lo, hi in tb]
+        res = differential_evolution(objective, tb, seed=seed + len(runs), **de)
+        r = evaluate(assemble(res.x))
+        r["fun"], r["success"] = float(res.fun), bool(res.success)
+        runs.append(r)
+    return runs
+
+
 def optimize_actuator(container_width, container_height, x_cg, z_cg,
                       stroke_ratio_max=STROKE_RATIO_MAX,
                       roof_clearance=ROOF_CLEARANCE, locked=None, var_bounds=None,
                       n_theta=200, m_cg=1.0, seed=0, maxiter=300,
-                      n_starts=N_STARTS, popsize=None, alt_rel_tol=ALT_REL_TOL):
+                      n_starts=N_STARTS, popsize=None, alt_rel_tol=ALT_REL_TOL,
+                      fast=False):
     """Search for the (a, b, d, f) minimizing peak piston force over 0-90 deg.
 
     Runs `n_starts` independent differential-evolution starts (fixed seeds, so the
@@ -232,7 +315,15 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     if popsize is not None:
         de_kwargs["popsize"] = popsize
 
-    if free:
+    if free and fast:
+        # Fast: coarse grid seed + a few tight polishes instead of 20 blind DE
+        # restarts. ~10x faster; suitable for interactive/low-power (e.g. Render).
+        runs = _fast_runs(free, locked, full_bounds, assemble, objective, evaluate,
+                          theta, x_cg, z_cg, m_cg, container_width, container_height,
+                          roof_clearance, stroke_ratio_max, seed)
+        best = min(runs, key=lambda r: r["fun"])
+        success = best["success"]
+    elif free:
         # Multi-start: run n_starts independent DE searches from fixed seeds and
         # keep the best. The objective already folds feasibility in as penalties,
         # so the lowest objective is the best *feasible* design when one exists.
@@ -292,9 +383,10 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
 
     # Then top up by re-optimizing with a repulsion penalty away from the chosen
     # designs. Stop as soon as the best distinct design exceeds tolerance.
+    n_alt = 4 if fast else N_ALTERNATIVES        # fewer, cheaper alternatives in fast mode
     if free and best["feasible"]:
-        alt_de_kwargs = {"maxiter": 80, "tol": 1e-7, "polish": True}
-        while len(selected) < N_ALTERNATIVES:
+        alt_de_kwargs = {"maxiter": 40 if fast else 80, "tol": 1e-7, "polish": True}
+        while len(selected) < n_alt:
             chosen = [g for g, _ in selected]
 
             def repelled(free_vals):
@@ -381,6 +473,8 @@ def _build_parser():
     p.add_argument("--alt-tol", type=float, default=ALT_REL_TOL,
                    help="Alternatives tolerance: list diverse designs whose peak "
                         "force is within this fraction of the optimum (e.g. 0.15).")
+    p.add_argument("--fast", action="store_true",
+                   help="Grid-seed + polish instead of 20 restarts (~10x faster).")
     return p
 
 
@@ -411,7 +505,7 @@ def main(argv=None):
         x_cg=args.x_cg, z_cg=args.z_cg,
         stroke_ratio_max=args.stroke_ratio, roof_clearance=args.clearance,
         locked=locked, n_theta=args.grid, m_cg=args.mass, seed=args.seed,
-        n_starts=args.starts, alt_rel_tol=args.alt_tol,
+        n_starts=args.starts, alt_rel_tol=args.alt_tol, fast=args.fast,
     )
 
     print("\n=== Optimized actuator geometry ===")

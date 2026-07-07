@@ -335,6 +335,7 @@ with tab_optimize:
                     roof_clearance=st.session_state["roof_clearance"],
                     locked=locked, var_bounds=USER_BOUNDS,
                     alt_rel_tol=st.session_state["alt_pct"] / 100.0,
+                    fast=True,
                 )
             # Snap to the active slider precision AND clamp into the (possibly
             # narrowed) mounting-limit range, so the value can't exceed the
