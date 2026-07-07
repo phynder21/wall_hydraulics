@@ -711,6 +711,7 @@ def browse_page():
     b = {"container": next(iter(CONTAINERS)), "x_cg": 1.20, "z_cg": 0.55,
          "stroke": float(STROKE_RATIO_MAX), "clear": 0.0, "sort": "peak_force",
          "asc": True, "topn": 100, "max_force": 0.0, "results": None,
+         "cols": list(BROWSE_COLS),
          "rng_a": {"min": 0.05, "max": WIDTH / 2},
          "rng_b": {"min": 0.05, "max": HEIGHT_MAX},
          "rng_d": {"min": 0.0, "max": 1.0},
@@ -739,7 +740,11 @@ def browse_page():
         b["results"] = res
         n = res["peak_force"].size
         total = int(res.get("n_matches", n))    # true matches before the top-N cap
-        rows = [{"rank": i + 1, **{c: round(float(res[c][i]), 3) for c in BROWSE_COLS}}
+        chosen = [c for c in BROWSE_LABELS if c in b["cols"]] or BROWSE_COLS
+        table_el.columns = (
+            [{"name": "rank", "label": "#", "field": "rank", "align": "left"}]
+            + [{"name": c, "label": BROWSE_LABELS[c], "field": c} for c in chosen])
+        rows = [{"rank": i + 1, **{c: round(float(res[c][i]), 3) for c in chosen}}
                 for i in range(n)]
         table_el.rows = rows
         table_el.update()
@@ -810,6 +815,9 @@ def browse_page():
                 ui.range(min=_lo, max=_hi, step=0.01, value={"min": _lo, "max": _hi}) \
                     .props("label-always").bind_value(b, f"rng_{_v}").classes("w-full")
             ui.label("Filter / sort").classes("font-medium mt-2")
+            ui.select({c: BROWSE_LABELS[c] for c in BROWSE_LABELS}, multiple=True,
+                      label="Columns to show").bind_value(b, "cols") \
+                .props("use-chips").classes("w-full")
             ui.select({c: BROWSE_LABELS[c] for c in BROWSE_LABELS}, label="Sort by").bind_value(b, "sort")
             ui.switch("Ascending", value=True).bind_value(b, "asc")
             ui.number("Max peak force (N/kg, 0 = no cap)", min=0.0, max=500.0, step=1.0) \
