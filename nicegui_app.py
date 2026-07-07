@@ -784,14 +784,24 @@ def browse_page():
             f"b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f} m.  "
             f"(Best grid row in the list above: {grid_best:.2f} N/kg.)")
 
+    def _bc(label, key, lo, hi, step):
+        """Browse scalar: label + slider + number box, all bound to b[key] so you
+        can drag OR type."""
+        ui.label(label).classes("text-xs mt-1 mb-0")
+        with ui.row().classes("w-full items-center no-wrap gap-2"):
+            ui.slider(min=lo, max=hi, step=step).props("label-always") \
+                .bind_value(b, key).classes("grow")
+            ui.number(min=lo, max=hi, step=step).props("dense") \
+                .bind_value(b, key).classes("w-24")
+
     with ui.row().classes("w-full no-wrap gap-4 p-2 stack"):
         with ui.card().classes("w-96 shrink-0"):
             ui.label("Problem").classes("font-medium")
             ui.select(list(CONTAINERS), label="Container").bind_value(b, "container")
-            ui.number("x_cg (m)", min=0, max=HEIGHT_MAX, step=0.01).bind_value(b, "x_cg").classes("w-full")
-            ui.number("z_cg (m)", min=0, max=1.5, step=0.01).bind_value(b, "z_cg").classes("w-full")
-            ui.number("Max stroke ratio", min=1.0, max=3.0, step=0.05).bind_value(b, "stroke").classes("w-full")
-            ui.number("Roof clearance (m)", min=0.0, max=0.5, step=0.01).bind_value(b, "clear").classes("w-full")
+            _bc("x_cg — along wall (m)", "x_cg", 0.0, HEIGHT_MAX, 0.01)
+            _bc("z_cg — off the wall (m)", "z_cg", 0.0, 1.5, 0.01)
+            _bc("Max stroke ratio", "stroke", 1.0, 3.0, 0.05)
+            _bc("Roof clearance (m)", "clear", 0.0, 0.5, 0.01)
             ui.label("Mounting limits — min–max for every value").classes("font-medium mt-2")
             ui.label("Where each dimension may sit; the search keeps only "
                      "geometries inside all four ranges.").classes("text-xs text-grey")
