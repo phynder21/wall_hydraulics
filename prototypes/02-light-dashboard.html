@@ -1,0 +1,61 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prototype 2 — Light Dashboard</title>
+<style>
+  :root{--acc:#6366f1;--acc2:#8b5cf6;--bg:#f5f6fb;--ink:#1e1b3a}
+  *{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+  .top{padding:18px 28px} .top h1{margin:0;font-size:20px} .top p{margin:2px 0 0;color:#6b7280;font-size:13px}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:0 28px 6px}
+  .m{border-radius:18px;padding:18px 20px;color:#fff;box-shadow:0 10px 24px -12px rgba(99,102,241,.5)}
+  .m:nth-child(1){background:linear-gradient(135deg,#6366f1,#818cf8)}
+  .m:nth-child(2){background:linear-gradient(135deg,#8b5cf6,#a78bfa)}
+  .m:nth-child(3){background:linear-gradient(135deg,#0ea5e9,#38bdf8)}
+  .m:nth-child(4){background:linear-gradient(135deg,#10b981,#34d399)}
+  .m small{opacity:.85;font-size:12px} .m b{font-size:26px;display:block;font-variant-numeric:tabular-nums}
+  .m .tag{font-size:11px;opacity:.95}
+  .grid{display:grid;grid-template-columns:300px 1fr;gap:16px;padding:16px 28px 28px;align-items:start}
+  .card{background:#fff;border-radius:18px;padding:18px;box-shadow:0 6px 20px -14px rgba(30,27,58,.4)}
+  h3{margin:6px 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#9098b5}
+  select{width:100%;border:1px solid #e5e7f0;border-radius:10px;padding:9px;background:#fbfbfe}
+  .ctl{display:flex;justify-content:space-between;font-size:13px;color:#4b5170;margin:12px 0 2px}
+  .val{font-weight:700;color:var(--acc)}
+  input[type=range]{width:100%;accent-color:var(--acc)}
+  button{width:100%;margin-top:16px;background:var(--acc);color:#fff;border:0;border-radius:12px;padding:12px;font-weight:700;cursor:pointer}
+  #optmsg{display:block;text-align:center;color:var(--acc);font-size:12px;margin-top:8px;min-height:16px}
+  .viz{display:grid;gap:16px}
+  h4{margin:0 0 8px;color:#4b5170;font-size:14px}
+  svg{width:100%;height:auto;display:block}
+  .ground{stroke:#e5e7f0;stroke-dasharray:5 5}.cont{fill:none;stroke:#c7cbe0;stroke-width:3}
+  .door{stroke:#3730a3;stroke-width:6;stroke-linecap:round}.brkt{stroke:#3730a3;stroke-width:4}
+  .post{stroke:#3730a3;stroke-width:4}.cyl{stroke:#f97316;stroke-width:5;stroke-linecap:round}
+  .hinge{fill:#3730a3}.cbase{fill:#f97316}.att{fill:#ef4444}.cg{fill:var(--acc2)}
+  .grav{stroke:var(--acc2);stroke-width:2}.grav-h{fill:var(--acc2)}
+  .fline{fill:none;stroke:var(--acc);stroke-width:3}.mk{fill:#ef4444}
+</style></head><body>
+<div class="top"><h1>Container wall actuator</h1><p>Light Dashboard · prototype 2</p></div>
+<div class="metrics">
+  <div class="m"><small>Peak force</small><b id="mPeak"></b><small>N/kg · worst case</small></div>
+  <div class="m"><small>Force at θ</small><b id="mHere"></b><small>N/kg</small></div>
+  <div class="m"><small>Stroke</small><b id="mStroke"></b><small>m</small></div>
+  <div class="m"><small>Stroke ratio</small><b id="mRatio"></b><span class="tag" id="mRatioTag"></span></div>
+</div>
+<div class="grid">
+  <div class="card">
+    <h3>Setup</h3>
+    <select id="container"><option>Standard</option><option>High-Cube</option></select>
+    <div class="ctl"><span>x_cg</span><span class="val" id="vxcg"></span></div><input type="range" id="xcg" min="0" max="2.896" step="0.01">
+    <div class="ctl"><span>z_cg</span><span class="val" id="vzcg"></span></div><input type="range" id="zcg" min="0" max="1.5" step="0.01">
+    <h3>Geometry</h3>
+    <div class="ctl"><span>a</span><span class="val" id="va"></span></div><input type="range" id="a" min="0.05" max="1.219" step="0.01">
+    <div class="ctl"><span>b</span><span class="val" id="vb"></span></div><input type="range" id="b" min="0.05" max="2.896" step="0.01">
+    <div class="ctl"><span>d</span><span class="val" id="vd"></span></div><input type="range" id="d" min="0" max="1" step="0.01">
+    <div class="ctl"><span>f</span><span class="val" id="vf"></span></div><input type="range" id="f" min="0" max="2.896" step="0.01">
+    <div class="ctl"><span>θ</span><span class="val" id="vtheta"></span></div><input type="range" id="theta" min="0" max="90" step="1">
+    <button id="optimize">Optimize geometry</button><span id="optmsg"></span>
+  </div>
+  <div class="viz">
+    <div class="card"><h4>Side view</h4><svg id="diagram"></svg></div>
+    <div class="card"><h4>Piston force vs. wall angle</h4><svg id="spark"></svg></div>
+  </div>
+</div>
+<script src="engine.js"></script></body></html>

@@ -1,0 +1,71 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prototype 7 — Terminal Green</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#001004;color:#33ff66;font-family:"Courier New",ui-monospace,monospace}
+.app{max-width:900px;margin:0 auto;padding:34px 22px 70px}
+h1{margin:0;font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.15em}
+h1::before{content:"> "}
+.sub{margin:4px 0 22px;color:#1f9c43;font-size:12px}
+.metrics{display:flex;gap:0;flex-wrap:wrap;border:1px solid #0f5c28}
+.m{flex:1;min-width:130px;padding:12px 14px;border-right:1px dashed #0f5c28}
+.mlabel{font-size:11px;color:#1f9c43;text-transform:uppercase}
+.m b{display:block;margin-top:5px;font-size:22px;color:#7dffa0}
+#mRatioTag{font-size:11px}#mRatioTag[data-ok=true]{color:#7dffa0}#mRatioTag[data-ok=false]{color:#ff5f5f}
+svg{width:100%;height:auto;display:block}
+.viz{border:1px solid #0f5c28;padding:14px;margin-top:16px}
+.cap{font-size:11px;color:#1f9c43;text-transform:uppercase;letter-spacing:.1em;margin:20px 0 6px}
+.panel{margin-top:16px}
+.chead{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px}
+.clab{font-size:12px}
+select{display:block;margin-top:6px;background:#001a08;color:#33ff66;border:1px solid #0f5c28;padding:6px 8px;font:inherit;border-radius:0}
+button{background:#001a08;color:#33ff66;border:1px solid #33ff66;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;text-transform:uppercase}
+button:hover{background:#33ff66;color:#001004}
+#optmsg{font-size:11px;color:#1f9c43;margin-left:10px}
+.ctls{display:grid;grid-template-columns:1fr 1fr;gap:2px 30px;margin-top:12px}
+label{display:block;font-size:12px;margin-top:12px;color:#2fcf57}
+label .v{float:right;color:#7dffa0}
+input[type=range]{width:100%;margin-top:6px;accent-color:#33ff66}
+.ground{stroke:#0a3d1c;stroke-dasharray:3 4}.cont{fill:none;stroke:#1f9c43;stroke-width:1.4}
+.door{stroke:#7dffa0;stroke-width:3}.brkt{stroke:#33ff66;stroke-width:2}
+.post{stroke:#1f9c43;stroke-width:2}.cyl{stroke:#eaff00;stroke-width:3}
+.hinge{fill:#7dffa0}.cbase{fill:#eaff00}.att{fill:#ff5f5f}.cg{fill:#33ff66}
+.grav{stroke:#33ff66;stroke-width:1.4}.grav-h{fill:#33ff66}
+.fline{fill:none;stroke:#eaff00;stroke-width:1.8}.mk{fill:#ff5f5f}
+</style></head><body>
+
+<div class="app">
+  <header class="hd">
+    <h1>Container Wall Actuator</h1>
+    <p class="sub">terminal green · prototype 7</p>
+  </header>
+  <section class="metrics">
+    <div class="m"><span class="mlabel">Peak force</span><b><span id="mPeak"></span> N/kg</b></div>
+    <div class="m"><span class="mlabel">Force @ &theta;</span><b><span id="mHere"></span> N/kg</b></div>
+    <div class="m"><span class="mlabel">Stroke</span><b><span id="mStroke"></span> m</b></div>
+    <div class="m"><span class="mlabel">Stroke ratio</span><b><span id="mRatio"></span></b> <span id="mRatioTag"></span></div>
+  </section>
+  <section class="viz">
+    <svg id="diagram"></svg>
+    <div class="cap">Piston force vs. wall angle</div>
+    <svg id="spark"></svg>
+  </section>
+  <section class="panel">
+    <div class="chead">
+      <label class="clab">Container
+        <select id="container"><option>Standard</option><option>High-Cube</option></select></label>
+      <div class="optwrap"><button id="optimize">Optimize &rarr;</button><span id="optmsg"></span></div>
+    </div>
+    <div class="ctls">
+      <label>a &mdash; floor position <span class="v" id="va"></span><input type="range" id="a" min="0.05" max="1.219" step="0.01"></label>
+      <label>x_cg &mdash; cg along wall <span class="v" id="vxcg"></span><input type="range" id="xcg" min="0" max="2.896" step="0.01"></label>
+      <label>b &mdash; attachment along wall <span class="v" id="vb"></span><input type="range" id="b" min="0.05" max="2.896" step="0.01"></label>
+      <label>z_cg &mdash; cg off wall <span class="v" id="vzcg"></span><input type="range" id="zcg" min="0" max="1.5" step="0.01"></label>
+      <label>d &mdash; bracket offset <span class="v" id="vd"></span><input type="range" id="d" min="0" max="1" step="0.01"></label>
+      <label>&theta; &mdash; wall angle <span class="v" id="vtheta"></span><input type="range" id="theta" min="0" max="90" step="1"></label>
+      <label>f &mdash; base height <span class="v" id="vf"></span><input type="range" id="f" min="0" max="2.896" step="0.01"></label>
+    </div>
+  </section>
+</div>
+<script src="engine.js"></script></body></html>

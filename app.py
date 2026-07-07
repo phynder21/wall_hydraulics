@@ -325,8 +325,7 @@ with tab_optimize:
             locked = {k: round(st.session_state[k], ROUND_DP)
                       for k in ("a", "b", "d", "f")
                       if st.session_state.get(f"lock_{k}", False)}
-            with st.spinner("Running multiple searches for the global optimum "
-                            "(~20 s)…"):
+            with st.spinner("Searching for the global optimum (~5 s)…"):
                 res = optimize_actuator(
                     container_width=container_width,
                     container_height=container_height,

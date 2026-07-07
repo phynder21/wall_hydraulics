@@ -1,0 +1,58 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prototype 4 — Blueprint CAD</title>
+<style>
+  :root{--bg:#0b1728;--cy:#22d3ee;--ink:#cfe8f0;--dim:#5b7a8a;--panel:#0f2033}
+  *{box-sizing:border-box}
+  body{margin:0;color:var(--ink);font-family:ui-monospace,Menlo,Consolas,monospace;
+       background:#0b1728;
+       background-image:linear-gradient(rgba(34,211,238,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(34,211,238,.06) 1px,transparent 1px);
+       background-size:26px 26px}
+  header{padding:12px 20px;border-bottom:1px solid #1c3550;display:flex;justify-content:space-between;align-items:center}
+  header b{color:var(--cy);letter-spacing:.06em} header span{color:var(--dim);font-size:12px}
+  .wrap{display:grid;grid-template-columns:300px 1fr;gap:16px;padding:16px}
+  .panel{background:var(--panel);border:1px solid #1c3550;border-radius:4px;padding:16px}
+  .panel::before{content:attr(data-t);display:block;color:var(--cy);font-size:11px;letter-spacing:.14em;margin-bottom:10px;border-bottom:1px dashed #24466a;padding-bottom:6px}
+  select{width:100%;background:#0b1728;color:var(--ink);border:1px solid #24466a;border-radius:3px;padding:8px;font-family:inherit}
+  .ctl{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin:12px 0 3px}
+  .val{color:var(--cy)} input[type=range]{width:100%;accent-color:var(--cy)}
+  button{width:100%;margin-top:16px;background:transparent;color:var(--cy);border:1px solid var(--cy);border-radius:3px;padding:11px;font-family:inherit;letter-spacing:.08em;cursor:pointer}
+  button:hover{background:rgba(34,211,238,.1)} #optmsg{display:block;color:var(--dim);font-size:11px;margin-top:8px;min-height:15px}
+  .met{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+  .met .b{border:1px solid #1c3550;border-radius:4px;padding:12px;background:var(--panel)}
+  .met small{color:var(--dim);font-size:11px;letter-spacing:.06em} .met b{display:block;color:#fff;font-size:22px;margin-top:4px}
+  #mRatioTag{font-size:11px}#mRatioTag[data-ok=true]{color:#34d399}#mRatioTag[data-ok=false]{color:#f87171}
+  h4{color:var(--cy);font-size:11px;letter-spacing:.14em;margin:0 0 8px}
+  svg{width:100%;height:auto;display:block}
+  .ground{stroke:#1c3550;stroke-dasharray:4 4}.cont{fill:none;stroke:#4b7fa6;stroke-width:1.6}
+  .door{stroke:var(--cy);stroke-width:3;stroke-linecap:round}.brkt{stroke:#8fd6e6;stroke-width:2}
+  .post{stroke:#8fd6e6;stroke-width:2}.cyl{stroke:#f59e0b;stroke-width:3;stroke-linecap:round}
+  .hinge{fill:#fff}.cbase{fill:#f59e0b}.att{fill:#f87171}.cg{fill:var(--cy)}
+  .grav{stroke:var(--cy);stroke-width:1.6}.grav-h{fill:var(--cy)}
+  .fline{fill:none;stroke:var(--cy);stroke-width:1.8}.mk{fill:#f59e0b}
+</style></head><body>
+<header><b>▚ CONTAINER WALL ACTUATOR</b><span>blueprint cad · prototype 4</span></header>
+<div class="wrap">
+  <aside class="panel" data-t="PARAMETERS">
+    <select id="container"><option>Standard</option><option>High-Cube</option></select>
+    <div class="ctl"><span>x_cg</span><span class="val" id="vxcg"></span></div><input type="range" id="xcg" min="0" max="2.896" step="0.01">
+    <div class="ctl"><span>z_cg</span><span class="val" id="vzcg"></span></div><input type="range" id="zcg" min="0" max="1.5" step="0.01">
+    <div class="ctl"><span>a</span><span class="val" id="va"></span></div><input type="range" id="a" min="0.05" max="1.219" step="0.01">
+    <div class="ctl"><span>b</span><span class="val" id="vb"></span></div><input type="range" id="b" min="0.05" max="2.896" step="0.01">
+    <div class="ctl"><span>d</span><span class="val" id="vd"></span></div><input type="range" id="d" min="0" max="1" step="0.01">
+    <div class="ctl"><span>f</span><span class="val" id="vf"></span></div><input type="range" id="f" min="0" max="2.896" step="0.01">
+    <div class="ctl"><span>θ</span><span class="val" id="vtheta"></span></div><input type="range" id="theta" min="0" max="90" step="1">
+    <button id="optimize">◆ OPTIMIZE</button><span id="optmsg"></span>
+  </aside>
+  <main>
+    <div class="met">
+      <div class="b"><small>PEAK N/kg</small><b id="mPeak"></b></div>
+      <div class="b"><small>FORCE @ θ</small><b id="mHere"></b></div>
+      <div class="b"><small>STROKE m</small><b id="mStroke"></b></div>
+      <div class="b"><small>RATIO</small><b id="mRatio"></b><span id="mRatioTag"></span></div>
+    </div>
+    <div class="panel" data-t="SIDE VIEW — SECTION A-A"><svg id="diagram"></svg></div>
+    <div class="panel" data-t="FORCE PROFILE" style="margin-top:14px"><svg id="spark"></svg></div>
+  </main>
+</div>
+<script src="engine.js"></script></body></html>

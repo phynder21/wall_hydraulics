@@ -1,0 +1,59 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prototype 1 — Slate Inspector</title>
+<style>
+  :root{--acc:#2563eb;--bg:#f1f5f9;--panel:#1e293b;--panel2:#334155;--ink:#0f172a}
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:var(--panel);color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center}
+  header b{font-weight:600} header span{opacity:.7;font-size:13px}
+  .wrap{display:flex;gap:16px;padding:16px;align-items:flex-start}
+  .rail{width:320px;flex:none;background:var(--panel);color:#e2e8f0;border-radius:12px;padding:16px}
+  .rail h3{margin:14px 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#94a3b8}
+  select{width:100%;background:var(--panel2);color:#fff;border:1px solid #475569;border-radius:8px;padding:8px}
+  .ctl{display:grid;grid-template-columns:1fr auto;align-items:center;margin:10px 0 2px;font-size:13px;color:#cbd5e1}
+  .val{font-variant-numeric:tabular-nums;color:#fff;font-weight:600}
+  input[type=range]{grid-column:1/3;width:100%;accent-color:var(--acc);margin-top:4px}
+  button{width:100%;margin-top:14px;background:var(--acc);color:#fff;border:0;border-radius:8px;padding:11px;font-weight:600;cursor:pointer}
+  #optmsg{display:block;font-size:12px;color:#93c5fd;margin-top:8px;min-height:16px}
+  .main{flex:1;display:flex;flex-direction:column;gap:14px}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px}
+  .card small{color:#64748b;font-size:11px;display:block} .card b{font-size:22px;font-variant-numeric:tabular-nums}
+  .tag{font-size:11px} .tag[data-ok=true]{color:#16a34a} .tag[data-ok=false]{color:#dc2626}
+  .panelC{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px}
+  .panelC h4{margin:2px 4px 8px;font-size:13px;color:#475569;font-weight:600}
+  svg{width:100%;height:auto;display:block}
+  .ground{stroke:#cbd5e1;stroke-dasharray:5 5}.cont{fill:none;stroke:#94a3b8;stroke-width:3}
+  .door{stroke:#0f172a;stroke-width:6;stroke-linecap:round}.brkt{stroke:#0f172a;stroke-width:4}
+  .post{stroke:#0f172a;stroke-width:4}.cyl{stroke:#f59e0b;stroke-width:5;stroke-linecap:round}
+  .hinge{fill:#0f172a}.cbase{fill:#f59e0b}.att{fill:#ef4444}.cg{fill:var(--acc)}
+  .grav{stroke:var(--acc);stroke-width:2}.grav-h{fill:var(--acc)}
+  .fline{fill:none;stroke:var(--acc);stroke-width:2.5}.mk{fill:#ef4444}
+</style></head><body>
+<header><b>Container wall actuator</b><span>Slate Inspector · prototype 1</span></header>
+<div class="wrap">
+  <aside class="rail">
+    <h3>Setup</h3>
+    <select id="container"><option>Standard</option><option>High-Cube</option></select>
+    <div class="ctl"><span>x_cg</span><span class="val" id="vxcg"></span></div><input type="range" id="xcg" min="0" max="2.896" step="0.01">
+    <div class="ctl"><span>z_cg</span><span class="val" id="vzcg"></span></div><input type="range" id="zcg" min="0" max="1.5" step="0.01">
+    <h3>Geometry</h3>
+    <div class="ctl"><span>a — floor position</span><span class="val" id="va"></span></div><input type="range" id="a" min="0.05" max="1.219" step="0.01">
+    <div class="ctl"><span>b — along wall</span><span class="val" id="vb"></span></div><input type="range" id="b" min="0.05" max="2.896" step="0.01">
+    <div class="ctl"><span>d — bracket</span><span class="val" id="vd"></span></div><input type="range" id="d" min="0" max="1" step="0.01">
+    <div class="ctl"><span>f — base height</span><span class="val" id="vf"></span></div><input type="range" id="f" min="0" max="2.896" step="0.01">
+    <div class="ctl"><span>θ wall angle</span><span class="val" id="vtheta"></span></div><input type="range" id="theta" min="0" max="90" step="1">
+    <button id="optimize">Optimize geometry</button><span id="optmsg"></span>
+  </aside>
+  <main class="main">
+    <div class="cards">
+      <div class="card"><small>Peak force</small><b id="mPeak"></b> N/kg</div>
+      <div class="card"><small>Force at θ</small><b id="mHere"></b> N/kg</div>
+      <div class="card"><small>Stroke</small><b id="mStroke"></b> m</div>
+      <div class="card"><small>Stroke ratio</small><b id="mRatio"></b><br><span class="tag" id="mRatioTag"></span></div>
+    </div>
+    <div class="panelC"><h4>Side view</h4><svg id="diagram"></svg></div>
+    <div class="panelC"><h4>Piston force vs. wall angle</h4><svg id="spark"></svg></div>
+  </main>
+</div>
+<script src="engine.js"></script></body></html>

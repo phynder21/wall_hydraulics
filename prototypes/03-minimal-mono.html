@@ -1,0 +1,59 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prototype 3 — Minimal Mono</title>
+<style>
+  :root{--ink:#111;--acc:#e11d48;--line:#e5e5e5}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .col{max-width:900px;margin:0 auto;padding:40px 24px 80px}
+  h1{font-size:15px;font-weight:600;letter-spacing:.02em;margin:0 0 2px}
+  .sub{color:#999;font-size:12px;margin:0 0 28px}
+  .metrics{display:flex;gap:34px;flex-wrap:wrap;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px 0;margin-bottom:28px}
+  .metrics div{font-size:12px;color:#888} .metrics b{display:block;font-size:22px;color:var(--ink);font-weight:600;margin-top:3px}
+  #mRatioTag{font-size:11px}#mRatioTag[data-ok=true]{color:#16a34a}#mRatioTag[data-ok=false]{color:var(--acc)}
+  svg{width:100%;height:auto;display:block}
+  .cap{font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.1em;margin:26px 0 8px}
+  .ctls{display:grid;grid-template-columns:1fr 1fr;gap:6px 40px;margin-top:14px}
+  label{display:block;font-size:12px;color:#444;margin-top:14px}
+  label .v{float:right;color:var(--ink);font-weight:600}
+  input[type=range]{width:100%;accent-color:var(--ink);margin-top:6px}
+  select{font-family:inherit;font-size:12px;border:1px solid var(--line);padding:6px 8px;border-radius:0;background:#fff}
+  .row{display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
+  button{font-family:inherit;margin-top:26px;background:var(--ink);color:#fff;border:0;padding:11px 20px;font-size:12px;letter-spacing:.04em;cursor:pointer}
+  #optmsg{color:#888;font-size:11px;margin-left:12px}
+  .ground{stroke:#eee;stroke-dasharray:3 4}.cont{fill:none;stroke:#111;stroke-width:1.4}
+  .door{stroke:#111;stroke-width:3;stroke-linecap:round}.brkt{stroke:#111;stroke-width:2}
+  .post{stroke:#111;stroke-width:2}.cyl{stroke:var(--acc);stroke-width:3;stroke-linecap:round}
+  .hinge{fill:#111}.cbase{fill:var(--acc)}.att{fill:#111}.cg{fill:#111}
+  .grav{stroke:#111;stroke-width:1.4}.grav-h{fill:#111}
+  .fline{fill:none;stroke:#111;stroke-width:1.6}.mk{fill:var(--acc)}
+</style></head><body>
+<div class="col">
+  <h1>CONTAINER WALL ACTUATOR</h1>
+  <p class="sub">minimal mono · prototype 3</p>
+  <div class="metrics">
+    <div>PEAK FORCE<b><span id="mPeak"></span> N/kg</b></div>
+    <div>FORCE @ θ<b><span id="mHere"></span> N/kg</b></div>
+    <div>STROKE<b><span id="mStroke"></span> m</b></div>
+    <div>STROKE RATIO<b><span id="mRatio"></span></b><span id="mRatioTag"></span></div>
+  </div>
+  <svg id="diagram"></svg>
+  <div class="cap">Piston force vs. wall angle</div>
+  <svg id="spark"></svg>
+  <div class="cap">Controls</div>
+  <div class="row">
+    <label style="min-width:180px">Container
+      <select id="container" style="display:block;margin-top:6px"><option>Standard</option><option>High-Cube</option></select></label>
+    <div><button id="optimize">OPTIMIZE →</button><span id="optmsg"></span></div>
+  </div>
+  <div class="ctls">
+    <label>a — floor position <span class="v" id="va"></span><input type="range" id="a" min="0.05" max="1.219" step="0.01"></label>
+    <label>x_cg <span class="v" id="vxcg"></span><input type="range" id="xcg" min="0" max="2.896" step="0.01"></label>
+    <label>b — along wall <span class="v" id="vb"></span><input type="range" id="b" min="0.05" max="2.896" step="0.01"></label>
+    <label>z_cg <span class="v" id="vzcg"></span><input type="range" id="zcg" min="0" max="1.5" step="0.01"></label>
+    <label>d — bracket <span class="v" id="vd"></span><input type="range" id="d" min="0" max="1" step="0.01"></label>
+    <label>θ wall angle <span class="v" id="vtheta"></span><input type="range" id="theta" min="0" max="90" step="1"></label>
+    <label>f — base height <span class="v" id="vf"></span><input type="range" id="f" min="0" max="2.896" step="0.01"></label>
+  </div>
+</div>
+<script src="engine.js"></script></body></html>
