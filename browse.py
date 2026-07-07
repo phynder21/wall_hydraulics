@@ -10,7 +10,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from wall import compute_F_piston, compute_cylinder_length, STROKE_RATIO_MAX
+from wall import (compute_F_piston, compute_cylinder_length,
+                  compute_geometry, STROKE_RATIO_MAX)
 from optimize import CONTAINER_PRESETS, optimize_actuator
 import lookup
 import lookup_build
@@ -72,13 +73,55 @@ def _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max):
     return ff, fl
 
 
+def _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, theta_deg=45.0):
+    """Side-view of the geometry at one wall angle: container, wall/door, bracket,
+    cylinder, and the key points (hinge, base, attachment, cg)."""
+    th = np.radians(theta_deg)
+    geo = compute_geometry(th, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
+    x_att, z_att = float(geo["attachment"][0]), float(geo["attachment"][1])
+    x_cgw, z_cgw = float(geo["cg"][0]), float(geo["cg"][1])
+    x_wb, z_wb = float(geo["wall_axis_at_b"][0]), float(geo["wall_axis_at_b"][1])
+    xb, zb = -a, f                                   # cylinder base
+    door = (height * np.cos(th), height * np.sin(th))
+    fig = go.Figure()
+    fig.add_hline(y=0, line=dict(color="lightgray", dash="dash"))
+    fig.add_trace(go.Scatter(x=[0, -width, -width, 0], y=[0, 0, height, height],
+                             mode="lines", line=dict(color="darkgray", width=2),
+                             name="container", hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=[0, door[0]], y=[0, door[1]], mode="lines",
+                             line=dict(color="black", width=5), name="wall"))
+    fig.add_trace(go.Scatter(x=[x_wb, x_att], y=[z_wb, z_att], mode="lines",
+                             line=dict(color="gray", width=3), name="bracket"))
+    fig.add_trace(go.Scatter(x=[xb, xb], y=[0, zb], mode="lines",
+                             line=dict(color="black", width=3), name="post",
+                             hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=[xb, x_att], y=[zb, z_att], mode="lines",
+                             line=dict(color="#d62728", width=4), name="cylinder"))
+    fig.add_trace(go.Scatter(x=[0], y=[0], mode="markers",
+                             marker=dict(size=10, color="black"), name="hinge"))
+    fig.add_trace(go.Scatter(x=[xb], y=[zb], mode="markers",
+                             marker=dict(size=11, color="#d62728", symbol="square"),
+                             name="cylinder base"))
+    fig.add_trace(go.Scatter(x=[x_att], y=[z_att], mode="markers",
+                             marker=dict(size=9, color="#1f77b4"), name="attachment"))
+    fig.add_trace(go.Scatter(x=[x_cgw], y=[z_cgw], mode="markers",
+                             marker=dict(size=12, color="green", symbol="cross"),
+                             name="cg"))
+    fig.update_layout(title=f"Geometry at theta = {theta_deg:.0f} deg",
+                      xaxis_title="x (m)", yaxis_title="z (m)", height=360,
+                      margin=dict(l=10, r=10, t=40, b=10), showlegend=False)
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)   # equal aspect ratio
+    return fig
+
+
 def render_browse():
     st.header("Browse configurations")
     st.caption("Search a precomputed database of geometries — instant, no "
                "optimizer. Set your problem and mounting limits, then filter and "
-               "sort. Lengths are in meters. Because the database is a grid, the "
-               "best rows may sit a hair over your stroke limit (see the *stroke "
-               "ratio* column); **Refine** below gives the exact-limit optimum.")
+               "sort. Lengths are in meters. Every result respects your limits "
+               "exactly; because the database is a grid, its best row is only "
+               "near-optimal — **Get the exact optimum** below runs the optimizer "
+               "for the true best.")
 
     with st.spinner("Building the configuration database (first time only, ~15 s)…"):
         table = _get_table(TABLE_RES)
@@ -161,19 +204,23 @@ def render_browse():
 
     # --- Inspect one configuration (exact physics) ---
     st.subheader("Inspect a configuration")
-    rank = st.number_input("Rank to inspect (1 = top of the list)", 1, n, 1, 1,
-                           key="lk_rank") - 1
+    ic1, ic2 = st.columns([1, 1])
+    rank = ic1.number_input("Rank to inspect (1 = top of the list)", 1, n, 1, 1,
+                            key="lk_rank") - 1
     rank = int(np.clip(rank, 0, n - 1))   # guard if a filter shrank the list
+    view_angle = ic2.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="lk_view")
     a, b, d, f = (float(res["a"][rank]), float(res["b"][rank]),
                   float(res["d"][rank]), float(res["f"][rank]))
     st.markdown(
         f"**a={a:.3f}  b={b:.3f}  d={d:.3f}  f={f:.3f} m** — "
         f"peak **{res['peak_force'][rank]:.2f} N/kg**, stroke "
         f"{res['stroke'][rank]:.2f} m (ratio {res['stroke_ratio'][rank]:.2f})")
+    diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle)
     ff, fl = _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max)
-    p1, p2 = st.columns(2)
-    p1.plotly_chart(ff, width="stretch")
-    p2.plotly_chart(fl, width="stretch")
+    p1, p2, p3 = st.columns(3)
+    p1.plotly_chart(diag, width="stretch")
+    p2.plotly_chart(ff, width="stretch")
+    p3.plotly_chart(fl, width="stretch")
 
     # --- Refine to the exact continuous optimum for this query ---
     st.subheader("Get the exact optimum")

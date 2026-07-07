@@ -15,3 +15,6 @@ venv/
 
 # Precomputed lookup table (generated on first run, not committed)
 lookup_table.npz
+
+# NiceGUI runtime cache (regenerated on every run)
+.nicegui/
