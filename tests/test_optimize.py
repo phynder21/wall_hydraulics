@@ -210,11 +210,13 @@ def test_fast_mode_reaches_the_optimum():
     {"x_cg": 1.2, "z_cg": 0.55, "var_bounds": {"f": (0.0, 0.5)}},
 ])
 def test_fast_matches_default_within_tolerance(kw):
-    """The fast optimizer agrees with the full 20-start search to a fraction of a
-    N/kg across varied problems (so the speedup didn't cost accuracy)."""
+    """The fast optimizer never lands meaningfully ABOVE the full 20-start search.
+    It may occasionally beat it (the vectorized grid sweep can find a basin the
+    random starts miss), so the bound is one-sided: fast must not be worse by more
+    than a fraction of a N/kg -- the speedup doesn't cost accuracy."""
     slow = optimize_actuator(*STANDARD, **kw)
     fast = optimize_actuator(*STANDARD, **kw, fast=True)
-    assert abs(fast["peak_force"] - slow["peak_force"]) < 0.2
+    assert fast["peak_force"] <= slow["peak_force"] + 0.2
 
 
 @pytest.mark.slow

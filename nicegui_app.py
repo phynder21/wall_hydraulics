@@ -453,7 +453,7 @@ def index():
 
     async def do_optimize():
         opt_btn.disable()
-        opt_status.text = "Optimizing… (~10 s)"
+        opt_status.text = "Optimizing… (~7 s)"
         try:
             w, h = CONTAINERS[s["container"]]
             U, _, _, ulabel, round_dp = disp(s["units"], s["fine"])
