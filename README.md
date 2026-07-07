@@ -509,24 +509,46 @@ paste-into-a-spreadsheet [`docs/test_cases.csv`](docs/test_cases.csv).
 
 ## 8. Modify the code
 
+**Two front-ends, one core.** The physics (`wall.py`), optimizer
+(`optimize.py`), and lookup table (`lookup.py` / `lookup_build.py`) are plain
+Python with **no UI**. Two interfaces import that same core:
+
+- **`app.py` — Streamlit** (the original; deploys to Streamlit Cloud).
+- **`nicegui_app.py` — NiceGUI** (a parallel, snappier UI with the same
+  features; deploys to Render — see [`NICEGUI.md`](NICEGUI.md)).
+
+Because the numerics live in the shared core, a change there (e.g. a faster
+optimizer) benefits **both** front-ends automatically; only UI-specific tweaks
+are done in both `app.py` and `nicegui_app.py`.
+
 ```
 .
-├── wall.py            # Physics + shared constants (e.g. STROKE_RATIO_MAX). No UI.
-├── app.py             # Streamlit UI. Sliders, plots, layout; Designer/Browse view switch.
+│  # --- shared core (no UI; imported by everything, and by the tests) ---
+├── wall.py            # Physics + shared constants (e.g. STROKE_RATIO_MAX).
 ├── optimize.py        # Geometry optimizer (CLI + importable function). Needs SciPy.
+├── lookup.py          # Fast filter + rank query over the precomputed table.
 ├── lookup_build.py    # Builds the precomputed geometry table (Browse mode).
-├── lookup.py          # Fast filter + rank query layer over that table.
-├── browse.py          # The "Browse configurations" view.
-├── tests/             # pytest suite (physics, optimizer, lookup, UI). See section 7.
+│  # --- front-end 1: Streamlit ---
+├── app.py             # Streamlit UI (Designer + Browse view switch).
+├── browse.py          # Streamlit "Browse configurations" view.
+├── .streamlit/config.toml   # Streamlit theme.
+├── requirements.txt   # Streamlit deps (streamlit, numpy, plotly, scipy, pytest).
+│  # --- front-end 2: NiceGUI ---
+├── nicegui_app.py     # NiceGUI UI (same features; /browse route). See NICEGUI.md.
+├── requirements-nicegui.txt # NiceGUI deps (separate, so the two deploys never mix).
+├── render.yaml        # Render.com blueprint for the NiceGUI deploy.
+├── NICEGUI.md         # How to run + deploy the NiceGUI front-end.
+│  # --- tests & docs ---
+├── tests/             # pytest suite (physics, optimizer, lookup, both UIs). Section 7.
 ├── docs/              # Reproducible test plan (experiment_plan.md + test_cases.csv).
-├── pytest.ini         # Test config (adds repo root to the import path; markers).
-├── requirements.txt   # Dependencies (streamlit, numpy, plotly, scipy, pytest).
+├── prototypes/        # Static HTML UI mockups — open in a browser; not part of either app.
+├── pytest.ini
 └── README.md
 ```
 
-The split is intentional: `wall.py` knows nothing about Streamlit and
+The split is intentional: `wall.py` knows nothing about any UI and
 can be imported into a Jupyter notebook, a test, or a CSV-generating
-script without dragging in the UI.
+script without dragging in Streamlit or NiceGUI.
 
 **Hot reload.** Streamlit watches `app.py` and the modules it imports at
 the top (`wall.py`, `optimize.py`) and re-runs on save. If a change ever
@@ -551,15 +573,26 @@ You also need a restart when you edit `requirements.txt` or
 
 ## 9. Deploy your own copy
 
-Free public hosting via [Streamlit Community
-Cloud](https://share.streamlit.io):
+There are **two independent deployments** from the same GitHub repo (`main`
+branch) — each builds a different front-end, so they don't interfere (separate
+requirements files, separate entry points). Both auto-redeploy on push to
+`main`, so one `git push` can update both.
 
-1. Fork or push this repo to your GitHub.
-2. Sign in at share.streamlit.io with GitHub.
-3. Click **New app**, point it at your repo, set the main file to
-   `app.py`, deploy.
-4. You get a public URL. Email it to anyone — no install required on
-   their end.
+**Streamlit app (`app.py`) → [Streamlit Community Cloud](https://share.streamlit.io)** (free)
+1. Push this repo to your GitHub.
+2. Sign in at share.streamlit.io, **New app**, set the main file to `app.py`
+   (it installs `requirements.txt`), deploy.
+3. You get a public `…streamlit.app` URL.
+
+**NiceGUI app (`nicegui_app.py`) → [Render](https://render.com)** (free tier)
+1. Sign in at render.com, **New + → Blueprint**, pick this repo. Render reads
+   `render.yaml` (installs `requirements-nicegui.txt`, runs `python nicegui_app.py`).
+2. You get a public `https://<name>.onrender.com` URL. If a push doesn't
+   redeploy automatically, use **Manual Deploy → Deploy latest commit**.
+
+Streamlit Cloud can only host the Streamlit app (it's Streamlit-specific), which
+is why NiceGUI goes on Render. Full NiceGUI run/deploy notes — including the
+free-tier "sleeps when idle" caveat — are in [`NICEGUI.md`](NICEGUI.md).
 
 ---
 
@@ -567,7 +600,9 @@ Cloud](https://share.streamlit.io):
 
 [Python](https://www.python.org/) ·
 [NumPy](https://numpy.org/) ·
+[SciPy](https://scipy.org/) ·
 [Streamlit](https://streamlit.io/) ·
+[NiceGUI](https://nicegui.io/) ·
 [Plotly](https://plotly.com/python/)
 
 The browser doesn't execute Python directly. Streamlit runs your script
