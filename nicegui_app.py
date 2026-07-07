@@ -32,10 +32,10 @@ def get_table():
         _TABLE["data"] = lookup_build.build_table(res=TABLE_RES)[0]
     return _TABLE["data"]
 
-PRIMARY = "#000000"          # ink black: primary UI + plot lines (brutalist)
-ACCENT = "#d40000"           # red accent (cylinder, current marker)
+PRIMARY = "#111827"          # near-black: primary UI + plot curves (minimal-mono)
+ACCENT = "#e11d48"           # rose: the single accent (cylinder, current marker)
 PLOT_TEMPLATE = "plotly_white"
-PLOT_FONT = dict(family="Helvetica, Arial, sans-serif", size=12, color="#000000")
+PLOT_FONT = dict(family="ui-monospace, Menlo, Consolas, monospace", size=12, color="#111827")
 
 # Coalesce the (heavy) 3-figure replot to this interval while a slider is dragged.
 # NiceGUI is server-side: every slider tick round-trips to rebuild + resend all
@@ -53,18 +53,16 @@ RESPONSIVE_CSS = """
   .stack > * { width: 100% !important; max-width: 100% !important; flex: 0 0 auto !important; }
   .q-page, body { overflow-x: hidden; }
 }
-/* --- brutalist theme (prototype 8) --- */
-body, input, textarea, .q-field__native, .q-tab__label, .q-item__label {
-  font-family: Helvetica, "Helvetica Neue", Arial, sans-serif;
+/* --- minimal-mono theme (prototype 3) --- */
+body, input, textarea, .q-field__native, .q-btn__content, .q-tab__label, .q-item__label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
-body, .q-page, .nicegui-content { background: #f4f4f0; color: #000000; }
-.q-card { box-shadow: 6px 6px 0 #000 !important; border: 3px solid #000 !important; border-radius: 0 !important; }
-.q-header { background: #f4f4f0 !important; color: #000 !important; border-bottom: 3px solid #000; }
-.q-header .text-lg { font-family: "Arial Black", Helvetica, sans-serif; text-transform: uppercase; letter-spacing: -.5px; font-size: 22px; font-weight: 900; }
-.q-tab { text-transform: uppercase; letter-spacing: .04em; font-size: 12px; font-weight: 800; }
-.q-separator { background: #000 !important; }
-.q-btn { border-radius: 0 !important; font-weight: 900; text-transform: uppercase; }
-.q-btn.bg-primary { background: #ffde00 !important; color: #000 !important; border: 3px solid #000 !important; box-shadow: 5px 5px 0 #000 !important; }
+body, .q-page, .nicegui-content { background: #ffffff; color: #111827; }
+.q-card { box-shadow: none !important; border: 1px solid #e5e5e5; border-radius: 4px; }
+.q-header { background: #ffffff !important; color: #111827 !important; border-bottom: 1px solid #e5e5e5; }
+.q-header .text-lg { text-transform: uppercase; letter-spacing: .1em; font-size: 14px; font-weight: 600; }
+.q-tab { text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
+.q-separator { background: #e5e5e5 !important; }
 </style>
 """
 
@@ -142,7 +140,7 @@ def force_figure(a, b, d, f, x_cg, z_cg, theta_deg, overlays=()):
     deg = np.degrees(theta)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=deg, y=F_plot, mode="lines", name="F(θ)",
-                             line=dict(color=PRIMARY, width=2.4)))
+                             line=dict(color=PRIMARY, width=2)))
     fig.add_trace(go.Scatter(x=[theta_deg], y=[F_here], mode="markers",
                              marker=dict(size=12, color=ACCENT), name="current"))
     for lab, dd, col in overlays:
@@ -172,7 +170,7 @@ def length_figure(a, b, d, f, theta_deg, stroke_ratio, u=1.0, ulabel="m", overla
     L_min = float(L.min())
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=deg, y=L, mode="lines", name="L(θ)",
-                             line=dict(color=PRIMARY, width=2.4)))
+                             line=dict(color=PRIMARY, width=2)))
     fig.add_trace(go.Scatter(x=[theta_deg], y=[L_here], mode="markers",
                              marker=dict(size=12, color=ACCENT), name="current"))
     for lab, dd, col in overlays:
@@ -208,7 +206,7 @@ def diagram_figure(a, b, d, f, x_cg, z_cg, theta_deg, width, height, roof_cleara
                              line=dict(color="lightgray", dash="dash"),
                              hoverinfo="skip", showlegend=False))
     fig.add_trace(go.Scatter(x=[0, -width, -width, 0], y=[0, 0, height, height],
-                             mode="lines", line=dict(color=PRIMARY, width=2),
+                             mode="lines", line=dict(color=PRIMARY, width=1.5),
                              hoverinfo="skip", name="container"))
     if roof_clearance > 0:
         z_eff = height - roof_clearance
@@ -216,23 +214,23 @@ def diagram_figure(a, b, d, f, x_cg, z_cg, theta_deg, width, height, roof_cleara
                                  line=dict(color=ACCENT, width=1, dash="dash"),
                                  hoverinfo="skip", name="effective ceiling"))
     fig.add_trace(go.Scatter(x=[0, x_door], y=[0, z_door], mode="lines",
-                             line=dict(color=PRIMARY, width=4), name="door"))
+                             line=dict(color=PRIMARY, width=3), name="door"))
     fig.add_trace(go.Scatter(x=[x_tip, x_att], y=[z_tip, z_att], mode="lines",
-                             line=dict(color=PRIMARY, width=3), name="bracket"))
+                             line=dict(color=PRIMARY, width=2), name="bracket"))
     fig.add_trace(go.Scatter(x=[x_cgf, x_cgw], y=[z_cgf, z_cgw], mode="lines",
                              line=dict(color="gray", width=1, dash="dot"),
                              hoverinfo="skip", showlegend=False))
     fig.add_trace(go.Scatter(x=[xb, xb], y=[0, zb], mode="lines",
-                             line=dict(color=PRIMARY, width=3), name="mounting post"))
+                             line=dict(color=PRIMARY, width=2), name="mounting post"))
     fig.add_trace(go.Scatter(x=[xb, x_att], y=[zb, z_att], mode="lines",
-                             line=dict(color=ACCENT, width=4), name="cylinder"))
+                             line=dict(color=ACCENT, width=3), name="cylinder"))
     fig.add_trace(go.Scatter(x=[0], y=[0], mode="markers",
                              marker=dict(size=11, color="black"), name="hinge"))
     fig.add_trace(go.Scatter(x=[xb], y=[zb], mode="markers",
-                             marker=dict(size=12, color="#ffde00", symbol="square", line=dict(color="#000000", width=2)),
+                             marker=dict(size=10, color=ACCENT, symbol="square"),
                              name="cylinder base"))
     fig.add_trace(go.Scatter(x=[x_att], y=[z_att], mode="markers",
-                             marker=dict(size=9, color=ACCENT), name="attachment"))
+                             marker=dict(size=8, color=PRIMARY), name="attachment"))
     fig.add_trace(go.Scatter(x=[x_cgw], y=[z_cgw], mode="markers",
                              marker=dict(size=12, color=PRIMARY, symbol="cross"), name="cg"))
     fig.add_annotation(x=x_cgw, y=z_cgw - 0.35 * u, ax=x_cgw, ay=z_cgw,
@@ -462,8 +460,8 @@ def index():
 
     def metric(title):
         with ui.column().classes("items-center gap-0"):
-            ui.label(title).classes("text-xs uppercase font-bold")
-            return ui.label("—").classes("text-2xl font-black")
+            ui.label(title).classes("text-xs text-gray-500 uppercase tracking-wide")
+            return ui.label("—").classes("text-xl font-semibold")
 
     async def do_optimize():
         opt_btn.disable()
