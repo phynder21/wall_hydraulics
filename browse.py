@@ -99,8 +99,9 @@ def render_browse():
                                   key="lk_clear")
 
     st.sidebar.header("Mounting limits")
-    st.sidebar.caption("Narrow where each dimension may sit; the search only "
-                       "keeps geometries inside these ranges.")
+    st.sidebar.caption("Each slider is a min–max range for that dimension — this "
+                       "is where you set the max (or min) for every value. The "
+                       "search keeps only geometries inside all four ranges.")
     ranges = {
         "a": (0.05, WIDTH / 2, "a — base along floor (m)"),
         "b": (0.05, HEIGHT_MAX, "b — attachment along wall (m)"),
@@ -122,19 +123,19 @@ def render_browse():
         ascending = c2.radio("Order", ["ascending", "descending"],
                              key="lk_order") == "ascending"
         top_n = c3.number_input("Show top", 10, 1000, 100, 10, key="lk_top")
-        st.caption("Optional caps (leave 0 = no cap):")
-        f1, f2, f3 = st.columns(3)
-        max_force = f1.number_input("max peak force (N/kg)", 0.0, 500.0, 0.0, 1.0, key="lk_fmax")
-        max_f = f2.number_input("max base height f (m)", 0.0, 3.0, 0.0, 0.05, key="lk_ffmax")
-        max_d = f3.number_input("max bracket d (m)", 0.0, 1.0, 0.0, 0.05, key="lk_dmax")
+        # A RESULT cap only. Every GEOMETRY value (a, b, d, f) has its own min AND
+        # max in the sidebar's "Mounting limits" — that's the single place to bound
+        # the geometry, so we don't duplicate f/d caps here.
+        max_force = st.number_input(
+            "Max peak force (N/kg) — 0 = no cap", 0.0, 500.0, 0.0, 1.0,
+            key="lk_fmax",
+            help="Hide any configuration whose peak force exceeds this. To cap the "
+                 "geometry itself (a, b, d, f), use the Mounting-limits sliders in "
+                 "the sidebar — each sets that dimension's min and max.")
 
     filters = {}
     if max_force > 0:
         filters["peak_force"] = (None, max_force)
-    if max_f > 0:
-        filters["f"] = (None, max_f)
-    if max_d > 0:
-        filters["d"] = (None, max_d)
 
     res = lookup.search(table, height, x_cg, z_cg, stroke_max=stroke_max,
                         roof_clearance=clearance, bounds=bounds, filters=filters,
