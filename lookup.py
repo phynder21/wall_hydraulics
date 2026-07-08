@@ -71,6 +71,24 @@ ATTRIBUTES = {
 }
 
 
+# Excel-style 3-colour scale for the peak-force column: green = low force (good),
+# yellow = middling, red = high (needs a bigger cylinder). Continuous linear
+# interpolation, so two nearly-equal forces get nearly-identical colours.
+_FORCE_SCALE = ((0x63, 0xbe, 0x7b), (0xff, 0xeb, 0x84), (0xf8, 0x69, 0x6b))
+
+
+def force_color(value, lo, hi):
+    """Hex colour ('#rrggbb') for `value` on a green(lo) -> red(hi) scale, scaled
+    to the [lo, hi] range of the shown results. Returns '' if not colourable."""
+    if not np.isfinite(value) or hi <= lo:
+        return ""
+    t = min(max((value - lo) / (hi - lo), 0.0), 1.0)
+    green, yellow, red = _FORCE_SCALE
+    (c0, c1), f = ((green, yellow), t / 0.5) if t < 0.5 else ((yellow, red), (t - 0.5) / 0.5)
+    r, g, b = (int(round(a + (bb - a) * f)) for a, bb in zip(c0, c1))
+    return "#%02x%02x%02x" % (r, g, b)
+
+
 def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0.0,
            bounds=None, filters=None, sort_by="peak_force", ascending=True,
            limit=200):

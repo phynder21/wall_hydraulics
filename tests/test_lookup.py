@@ -127,3 +127,16 @@ def test_grid_best_close_to_exact_optimum():
     grid = lookup.best(tbl, STANDARD_H, 1.2, 0.55, stroke_max=1.8)
     exact = optimize_actuator(STANDARD_W, STANDARD_H, 1.2, 0.55)
     assert abs(grid["peak_force"] - exact["peak_force"]) / exact["peak_force"] < 0.06
+
+
+def test_force_color_scale():
+    """Green at the low end, red at the high, continuous in between; near-equal
+    values get near-identical colours; non-colourable inputs return ''."""
+    assert lookup.force_color(10.0, 10.0, 20.0) == "#63be7b"   # green (good)
+    assert lookup.force_color(20.0, 10.0, 20.0) == "#f8696b"   # red (bad)
+    c1 = lookup.force_color(12.00, 10.0, 20.0)
+    c2 = lookup.force_color(12.05, 10.0, 20.0)
+    rgb = lambda h: tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+    assert max(abs(a - b) for a, b in zip(rgb(c1), rgb(c2))) <= 2   # nearly same
+    assert lookup.force_color(float("nan"), 10.0, 20.0) == ""
+    assert lookup.force_color(5.0, 5.0, 5.0) == ""                  # degenerate

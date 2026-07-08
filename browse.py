@@ -258,8 +258,23 @@ def render_browse():
     capped = f" — showing the top {n}" if total > n else ""
     st.markdown(f"**{total:,} matching configurations**{capped} (best "
                 f"`{COLUMNS[sort_by]}` first). Every Problem, Mounting-limit and "
-                f"filter setting changes this count.")
-    st.dataframe(df, height=300, width="stretch")
+                f"filter setting changes this count. Peak force is shaded "
+                f"green (low / good) → red (high).")
+    styler = df.style.format(precision=3)
+    peak_label = COLUMNS["peak_force"]
+    if peak_label in df.columns:                   # green->red shade on peak force
+        pv = df[peak_label].to_numpy(dtype=float)
+        fin = pv[np.isfinite(pv)]
+        plo, phi = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+
+        def _shade(col):
+            styles = []
+            for v in col:
+                c = lookup.force_color(float(v), plo, phi)
+                styles.append(f"background-color: {c}; color: #111" if c else "")
+            return styles
+        styler = styler.apply(_shade, subset=[peak_label])
+    st.dataframe(styler, height=300, width="stretch")
 
     # --- Inspect one configuration (exact physics) ---
     st.subheader("Inspect a configuration")

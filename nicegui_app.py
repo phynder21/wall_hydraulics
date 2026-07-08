@@ -791,8 +791,14 @@ def browse_page():
               "sortable": True}]
             + [{"name": c, "label": BROWSE_LABELS[c], "field": c, "sortable": True}
                for c in chosen])
-        rows = [{"rank": i + 1, **{c: round(float(res[c][i]), 3) for c in chosen}}
-                for i in range(n)]
+        pf = res["peak_force"]                      # green->red shade on peak force
+        fin = pf[np.isfinite(pf)]
+        plo, phi = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+        rows = []
+        for i in range(n):
+            row = {"rank": i + 1, **{c: round(float(res[c][i]), 3) for c in chosen}}
+            row["peak_bg"] = lookup.force_color(float(pf[i]), plo, phi)
+            rows.append(row)
         table_el.rows = rows
         table_el.update()
         count_lbl.text = (
@@ -879,6 +885,11 @@ def browse_page():
             cols += [{"name": c, "label": BROWSE_LABELS[c], "field": c,
                       "sortable": True} for c in BROWSE_COLS]
             table_el = ui.table(columns=cols, rows=[], row_key="rank").classes("w-full").props("dense")
+            table_el.add_slot("body-cell-peak_force", r"""
+                <q-td :props="props" :style="props.row.peak_bg ? 'background-color:' + props.row.peak_bg + ';color:#111' : ''">
+                  {{ props.value }}
+                </q-td>
+            """)
             with ui.row().classes("items-center gap-2"):
                 ui.label("Inspect rank")
                 rank_in = ui.number(value=1, min=1, max=1, step=1,
