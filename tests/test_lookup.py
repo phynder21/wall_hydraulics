@@ -158,3 +158,15 @@ def test_order_columns_puts_sort_next_to_peak():
     assert lookup.order_columns(cols, "f")[:2] == ["peak_force", "f"]
     assert lookup.order_columns(cols, "peak_force")[0] == "peak_force"
     assert lookup.order_columns(["a", "b", "f"], "f")[0] == "f"   # peak not shown
+
+
+def test_group_cap_limits_rows_per_sort_value(table):
+    """group_cap keeps at most K rows per distinct sort value (the lowest-force
+    ones in each), so one value can't flood the list."""
+    import collections
+    capped = lookup.search(table, STANDARD_H, 1.2, 0.55, sort_by="f",
+                           ascending=True, limit=100000, group_cap=5)
+    counts = collections.Counter(np.round(capped["f"], 6))
+    assert max(counts.values()) <= 5
+    f0 = capped["f"] == np.unique(capped["f"])[0]     # lowest-force kept per group
+    assert np.all(np.diff(capped["peak_force"][f0]) >= -1e-6)

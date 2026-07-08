@@ -61,7 +61,9 @@ instant results, no waiting.
    - **Sort by any column** and, within each group of equal values (e.g. all the
      rows with a = 0.05), the lowest-force design is listed first — and the column
      you sorted by jumps to just right of Peak force so you can read the pair
-     together.
+     together. **Max rows per sorted value** caps how many of each value appear
+     (default 20), so one value (like f = 0) can't flood the list — you see the
+     best few at each value and a wide spread of values instead.
 3. Click a row's **rank** to inspect it: its exact diagram (scrub the view angle),
    force curve, and length curve.
 4. The database is a grid, so its best row is only *near*-optimal. Press

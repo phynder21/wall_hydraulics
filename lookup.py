@@ -104,7 +104,7 @@ def order_columns(columns, sort_by):
 
 def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0.0,
            bounds=None, filters=None, sort_by="peak_force", ascending=True,
-           limit=200):
+           limit=200, group_cap=None):
     """Filter and rank the table for one query. Returns a dict of column arrays.
 
     - container_height: 2.591 (Standard) or 2.896 (High-Cube); caps b, f and the roof.
@@ -114,6 +114,7 @@ def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0
     - filters: optional {attribute: (lo, hi)} extra numeric filters (e.g. f max).
     - sort_by: an ATTRIBUTES key; ascending controls direction.
     - limit: max rows returned.
+    - group_cap: max rows per distinct sort_by value (None = no cap).
     """
     n = table["a"].size
     keep = np.ones(n, dtype=bool)
@@ -166,7 +167,17 @@ def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0
     # primary direction. lexsort's last key is primary; earlier keys break ties.
     primary = result[sort_by]
     key = primary if ascending else -primary
-    order = np.lexsort((result["peak_force"], key))[:limit]
+    order = np.lexsort((result["peak_force"], key))
+    if group_cap and order.size:
+        # Cap how many rows share each distinct sort value (keeping the best,
+        # lowest-force ones since each group is already peak-ascending), so e.g.
+        # sorting by f isn't 1000 rows all at f=0.
+        sp = primary[order]
+        change = np.concatenate(([True], sp[1:] != sp[:-1]))
+        starts = np.flatnonzero(change)
+        within = np.arange(order.size) - starts[np.cumsum(change) - 1]
+        order = order[within < group_cap]
+    order = order[:limit]
     out = {k: v[order] for k, v in result.items()}
     out["n_matches"] = n_matches
     return out

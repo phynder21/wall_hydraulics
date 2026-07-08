@@ -753,7 +753,7 @@ def browse_page():
     ui.add_head_html(RESPONSIVE_CSS)
     b = {"container": next(iter(CONTAINERS)), "x_cg": 1.20, "z_cg": 0.55,
          "stroke": float(STROKE_RATIO_MAX), "clear": 0.0, "sort": "peak_force",
-         "asc": True, "topn": 100, "max_force": 0.0, "results": None,
+         "asc": True, "topn": 100, "group_cap": 20, "max_force": 0.0, "results": None,
          "cols": list(BROWSE_COLS), "view_angle": 45.0,
          "rng_a": {"min": 0.05, "max": WIDTH / 2},
          "rng_b": {"min": 0.05, "max": HEIGHT_MAX},
@@ -781,7 +781,8 @@ def browse_page():
             filters["peak_force"] = (None, b["max_force"])
         res = lookup.search(table, h, b["x_cg"], b["z_cg"], stroke_max=b["stroke"],
                             roof_clearance=b["clear"], bounds=bounds, filters=filters,
-                            sort_by=b["sort"], ascending=b["asc"], limit=int(b["topn"]))
+                            sort_by=b["sort"], ascending=b["asc"], limit=int(b["topn"]),
+                            group_cap=int(b["group_cap"]) or None)
         b["results"] = res
         n = res["peak_force"].size
         total = int(res.get("n_matches", n))    # true matches before the top-N cap
@@ -876,6 +877,8 @@ def browse_page():
             ui.switch("Ascending", value=True).bind_value(b, "asc")
             ui.number("Max peak force (N/kg, 0 = no cap)", min=0.0, max=500.0, step=1.0) \
                 .bind_value(b, "max_force").classes("w-full")
+            ui.number("Max rows per sorted value (0 = all)", min=0, max=1000, step=5) \
+                .bind_value(b, "group_cap").classes("w-full")
             ui.number("Show top N", min=10, max=1000, step=10).bind_value(b, "topn").classes("w-full")
             search_btn = ui.button("Search", on_click=run_search).props("color=primary").classes("w-full")
 

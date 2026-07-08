@@ -235,6 +235,11 @@ def render_browse():
             help="Hide any configuration whose peak force exceeds this. To cap the "
                  "geometry itself (a, b, d, f), use the Mounting-limits sliders in "
                  "the sidebar — each sets that dimension's min and max.")
+        group_cap = st.number_input(
+            "Max rows per sorted value (0 = no cap)", 0, 1000, 20, 5, key="lk_gcap",
+            help="When you sort by a column with repeats (like f), show at most "
+                 "this many of the best (lowest-force) rows per distinct value, so "
+                 "one value can't flood the list.")
 
     filters = {}
     if max_force > 0:
@@ -242,7 +247,8 @@ def render_browse():
 
     res = lookup.search(table, height, x_cg, z_cg, stroke_max=stroke_max,
                         roof_clearance=clearance, bounds=bounds, filters=filters,
-                        sort_by=sort_by, ascending=ascending, limit=int(top_n))
+                        sort_by=sort_by, ascending=ascending, limit=int(top_n),
+                        group_cap=int(group_cap) or None)
     n = res["peak_force"].size                 # rows returned (capped at "Show top")
     total = int(res.get("n_matches", n))       # true matches before that cap
     if n == 0:
