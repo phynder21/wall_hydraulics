@@ -140,3 +140,21 @@ def test_force_color_scale():
     assert max(abs(a - b) for a, b in zip(rgb(c1), rgb(c2))) <= 2   # nearly same
     assert lookup.force_color(float("nan"), 10.0, 20.0) == ""
     assert lookup.force_color(5.0, 5.0, 5.0) == ""                  # degenerate
+
+
+def test_secondary_sort_by_peak_within_groups(table):
+    """Sorting by a grid variable (many ties) breaks ties by ascending peak force,
+    so within each group of equal sort-values the smallest force is first."""
+    res = lookup.search(table, STANDARD_H, 1.2, 0.55, sort_by="a", ascending=True,
+                        limit=100000)
+    a, pf = res["a"], res["peak_force"]
+    assert np.all(np.diff(a) >= -1e-9)                 # primary ascending
+    for av in np.unique(a):
+        assert np.all(np.diff(pf[a == av]) >= -1e-6)   # peak ascending in group
+
+
+def test_order_columns_puts_sort_next_to_peak():
+    cols = ["peak_force", "a", "b", "d", "f"]
+    assert lookup.order_columns(cols, "f")[:2] == ["peak_force", "f"]
+    assert lookup.order_columns(cols, "peak_force")[0] == "peak_force"
+    assert lookup.order_columns(["a", "b", "f"], "f")[0] == "f"   # peak not shown

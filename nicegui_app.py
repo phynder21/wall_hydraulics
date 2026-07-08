@@ -785,7 +785,8 @@ def browse_page():
         b["results"] = res
         n = res["peak_force"].size
         total = int(res.get("n_matches", n))    # true matches before the top-N cap
-        chosen = [c for c in BROWSE_LABELS if c in b["cols"]] or BROWSE_COLS
+        chosen = lookup.order_columns(
+            [c for c in BROWSE_LABELS if c in b["cols"]] or BROWSE_COLS, b["sort"])
         table_el.columns = (
             [{"name": "rank", "label": "#", "field": "rank", "align": "left",
               "sortable": True}]

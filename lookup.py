@@ -89,6 +89,19 @@ def force_color(value, lo, hi):
     return "#%02x%02x%02x" % (r, g, b)
 
 
+def order_columns(columns, sort_by):
+    """Display order for the results table: peak force first, then the column
+    being sorted by (so it sits just right of peak force), then the rest in their
+    original order."""
+    ordered = []
+    if "peak_force" in columns:
+        ordered.append("peak_force")
+    if sort_by != "peak_force" and sort_by in columns:
+        ordered.append(sort_by)
+    ordered += [c for c in columns if c not in ordered]
+    return ordered
+
+
 def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0.0,
            bounds=None, filters=None, sort_by="peak_force", ascending=True,
            limit=200):
@@ -147,10 +160,13 @@ def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0
     # True match count BEFORE the top-N cap, so the UI can report how many
     # geometries pass the current filters (the returned rows are capped at limit).
     n_matches = int(result["peak_force"].size)
-    order = np.argsort(result[sort_by], kind="stable")
-    if not ascending:
-        order = order[::-1]
-    order = order[:limit]
+    # Primary sort by the requested attribute; WITHIN groups of equal primary
+    # value (many grid rows share e.g. a=0.05) break ties by ASCENDING peak force,
+    # so the lowest-force design in each group is on top -- regardless of the
+    # primary direction. lexsort's last key is primary; earlier keys break ties.
+    primary = result[sort_by]
+    key = primary if ascending else -primary
+    order = np.lexsort((result["peak_force"], key))[:limit]
     out = {k: v[order] for k, v in result.items()}
     out["n_matches"] = n_matches
     return out

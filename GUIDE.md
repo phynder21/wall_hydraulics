@@ -58,6 +58,10 @@ instant results, no waiting.
    The **Peak force** column is shaded **green (low / good) → red (high / bad)**
    so you can eyeball quality at a glance. The count above the table shows how
    many configurations match — it responds to every filter you change.
+   - **Sort by any column** and, within each group of equal values (e.g. all the
+     rows with a = 0.05), the lowest-force design is listed first — and the column
+     you sorted by jumps to just right of Peak force so you can read the pair
+     together.
 3. Click a row's **rank** to inspect it: its exact diagram (scrub the view angle),
    force curve, and length curve.
 4. The database is a grid, so its best row is only *near*-optimal. Press

@@ -250,7 +250,8 @@ def render_browse():
                    "limit, raise the stroke ratio, or reduce the clearance.")
         return
 
-    show = cols or DEFAULT_COLUMNS
+    # Peak force first, then whatever we're sorting by, then the rest.
+    show = lookup.order_columns(cols or DEFAULT_COLUMNS, sort_by)
     # Rank the list from 1 (not 0); the "rank" index matches the inspector below.
     df = pd.DataFrame({COLUMNS[k]: np.round(res[k], 3) for k in show},
                       index=np.arange(1, n + 1))
