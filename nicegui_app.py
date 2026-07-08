@@ -33,10 +33,10 @@ def get_table():
         _TABLE["data"] = lookup_build.build_table(res=TABLE_RES)[0]
     return _TABLE["data"]
 
-PRIMARY = "#111827"          # near-black: primary UI + plot curves (minimal-mono)
-ACCENT = "#e11d48"           # rose: the single accent (cylinder, current marker)
+PRIMARY = "#1a1a1a"          # ink: primary UI + plot lines (newspaper)
+ACCENT = "#b91c1c"           # red: the single accent (cylinder, current marker)
 PLOT_TEMPLATE = "plotly_white"
-PLOT_FONT = dict(family="ui-monospace, Menlo, Consolas, monospace", size=12, color="#111827")
+PLOT_FONT = dict(family="Georgia, 'Times New Roman', serif", size=12, color="#1a1a1a")
 
 # Coalesce the (heavy) 3-figure replot to this interval while a slider is dragged.
 # NiceGUI is server-side: every slider tick round-trips to rebuild + resend all
@@ -57,16 +57,18 @@ RESPONSIVE_CSS = """
   .stack > * { width: 100% !important; max-width: 100% !important; flex: 0 0 auto !important; }
   .q-page, body { overflow-x: hidden; }
 }
-/* --- minimal-mono theme (prototype 3) --- */
+/* --- newspaper theme (prototype 10) --- */
 body, input, textarea, .q-field__native, .q-btn__content, .q-tab__label, .q-item__label {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: Georgia, "Times New Roman", serif;
 }
-body, .q-page, .nicegui-content { background: #ffffff; color: #111827; }
-.q-card { box-shadow: none !important; border: 1px solid #e5e5e5; border-radius: 4px; }
-.q-header { background: #ffffff !important; color: #111827 !important; border-bottom: 1px solid #e5e5e5; }
-.q-header .text-lg { text-transform: uppercase; letter-spacing: .1em; font-size: 14px; font-weight: 600; }
-.q-tab { text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
-.q-separator { background: #e5e5e5 !important; }
+body, .q-page, .nicegui-content { background: #f6f1e7; color: #1a1a1a; }
+.q-card { box-shadow: none !important; border: 1px solid #d8cdb5; border-radius: 0; background: #fdfaf3; }
+.q-header { background: #f6f1e7 !important; color: #1a1a1a !important; border-bottom: 3px double #1a1a1a; }
+.q-header .text-lg { text-transform: uppercase; letter-spacing: .15em; font-size: 16px; font-weight: 700; }
+.q-tab { text-transform: uppercase; letter-spacing: .12em; font-size: 12px; }
+.q-separator { background: #d8cdb5 !important; }
+.q-btn { border-radius: 0 !important; }
+.q-btn.bg-primary { background: #1a1a1a !important; color: #f6f1e7 !important; }
 </style>
 """
 
