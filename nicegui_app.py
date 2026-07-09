@@ -20,7 +20,7 @@ from starlette.requests import Request
 
 from wall import (STROKE_RATIO_MAX, compute_F_piston, compute_geometry,
                   compute_cylinder_length)
-from optimize import optimize_actuator, CONTAINER_PRESETS
+from optimize import optimize_actuator, CONTAINER_PRESETS, STROKE_TOL
 import lookup
 import lookup_build
 
@@ -136,7 +136,7 @@ def summary_metrics(a, b, d, f, x_cg, z_cg, theta_deg, stroke_ratio):
     L_here = float(compute_cylinder_length(np.radians(theta_deg), a=a, b=b, d=d, f=f))
     ratio = L_max / L_min if L_min > 0 else float("inf")
     return {"peak": peak, "here": F_here, "stroke": L_max - L_min,
-            "ratio": ratio, "ok": ratio <= stroke_ratio,
+            "ratio": ratio, "ok": ratio <= stroke_ratio + STROKE_TOL,
             "L_min": L_min, "L_max": L_max, "L_here": L_here,
             "singular": valid.size < theta.size}
 
@@ -353,7 +353,7 @@ def index(request: Request):
         _tot, _fill, _bcol = lookup.force_bar(m["peak"], s["mass"])
         force_bar_cap.text = (f"Total peak cylinder force at {int(s['mass']):,} kg: "
                               f"{_tot:.1f} kN")
-        force_bar_el.content = lookup.force_bar_html(_fill, _bcol, f"{_tot:.1f} kN")
+        force_bar_el.content = lookup.force_bar_html(_fill, lookup.BAR_NEUTRAL, f"{_tot:.1f} kN")
         here_m.text = f"{m['here']:.2f} N/kg"
         stroke_m.text = f"{m['stroke'] * U:.2f} {ulabel}"
         ratio_m.text = f"{m['ratio']:.2f}" + ("  ✓" if m["ok"] else "  ⚠ over")

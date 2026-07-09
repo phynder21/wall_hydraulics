@@ -12,9 +12,9 @@ from wall import (
 )
 # Imported at top level (not lazily inside the button) so Streamlit's file
 # watcher tracks optimize.py and reloads it on edit, like wall.py.
-from optimize import optimize_actuator
+from optimize import optimize_actuator, STROKE_TOL
 from browse import render_browse
-from lookup import force_bar, force_bar_html
+from lookup import force_bar, force_bar_html, BAR_NEUTRAL
 
 # Human-readable build marker. Bump on notable changes so you can tell at a
 # glance whether a running/deployed page has the latest code (a stale process
@@ -532,7 +532,7 @@ pad = 0.5 * U                                        # display-unit plot margin
 
 # --- Key results at a glance (a bordered results card) ---
 peak_mag = max(abs(F_min), abs(F_max)) if F_valid.size else float("nan")
-stroke_ok = L_ratio <= stroke_ratio
+stroke_ok = L_ratio <= stroke_ratio + STROKE_TOL
 with st.container(border=True):
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Peak force (worst case)", f"{peak_mag:.2f} N/kg",
@@ -548,9 +548,8 @@ with st.container(border=True):
               delta_color=("off" if stroke_ok else "inverse"),
               help=f"Extended/retracted length ratio vs. your {stroke_ratio:g}× limit.")
     total_kn, bar_fill, bar_color = force_bar(peak_mag, mass)
-    st.caption(f"**Total peak cylinder force at {mass:,.0f} kg:** "
-               f"{total_kn:.1f} kN — green = low demand, red = high.")
-    st.markdown(force_bar_html(bar_fill, bar_color, f"{total_kn:.1f} kN"),
+    st.caption(f"**Total peak cylinder force at {mass:,.0f} kg:** {total_kn:.1f} kN")
+    st.markdown(force_bar_html(bar_fill, BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
 
 # --- Top row: diagram + force ---

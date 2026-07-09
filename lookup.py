@@ -89,7 +89,10 @@ def force_color(value, lo, hi):
     return "#%02x%02x%02x" % (r, g, b)
 
 
-FORCE_REF = 25.0   # N/kg treated as "high demand" (a full / red total-force bar)
+FORCE_REF = 25.0   # N/kg treated as "high demand" (a full total-force bar)
+# The total-force bar shows ONE design, so a green->red scale is misleading
+# (even the optimum would look "bad"); the fill uses a neutral colour instead.
+BAR_NEUTRAL = "#9fb3c8"
 
 
 def force_bar(peak_per_kg, mass_kg):
