@@ -33,13 +33,13 @@ st.set_page_config(page_title="Container Wall Actuator", layout="wide")
 # Left rail: view switch + a build marker, above the tabbed control panel.
 st.sidebar.markdown("### Wall actuator")
 _view = st.sidebar.radio(
-    "View", ["🛠 Designer", "🔎 Browse configurations", "🔩 Size from a cylinder"],
+    "View", ["Designer", "Browse configurations", "Size from a cylinder"],
     key="view", label_visibility="collapsed")
 st.sidebar.caption(f"build: {BUILD}")
-if _view == "🔎 Browse configurations":
+if _view == "Browse configurations":
     render_browse()
     st.stop()
-if _view == "🔩 Size from a cylinder":
+if _view == "Size from a cylinder":
     render_reverse()
     st.stop()
 
@@ -104,7 +104,7 @@ def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
     each run, so they stay in sync and respect the current clamps. Either one
     edited writes back to the canonical value via its on_change callback.
 
-    When `lockable`, a 🔒 checkbox (transient state under `lock_<key>`) lets the
+    When `lockable`, a lock checkbox (transient state under `lock_<key>`) lets the
     user pin this value so the optimizer holds it fixed.
 
     `disp_factor` scales the canonical (stored) value for display: the widgets
@@ -134,12 +134,12 @@ def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
                     key=nkey, on_change=_from_num, format=fmt,
                     label_visibility="collapsed")
     if lockable:
-        c3.checkbox("🔒", key=f"lock_{key}",
+        c3.checkbox("Lock", key=f"lock_{key}",
                     help="Hold this value fixed when you press Optimize.")
     return st.session_state[key]
 
 
-MIN_SPAN = 0.01   # smallest allowed mounting range (m); tighter than this, use 🔒
+MIN_SPAN = 0.01   # smallest allowed mounting range (m); tighter than this, lock the value
 
 
 def range_input(label, key, full_lo, full_hi, disp_factor=1.0, disp_step=0.01,
@@ -308,7 +308,7 @@ with tab_geometry:
     with st.expander("Restrict where each dimension may sit (optimizer + slider)"):
         st.caption("Narrow a dimension to your real mounting window; the "
                    "optimizer searches only within it and the value slider "
-                   "follows. Leave at full range for no restriction; use 🔒 to "
+                   "follows. Leave at full range for no restriction; use Lock to "
                    "pin an exact value.")
         USER_BOUNDS = {
             v: range_input(f"{lbl} [{ULABEL}]", f"rng_{v}", *GEOM_BOUNDS[v],
@@ -419,7 +419,7 @@ with tab_optimize:
 
 with tab_geometry:
     st.subheader(f"Values ({UWORD})")
-    st.caption("🔒 a value to hold it fixed while the others are optimized.")
+    st.caption("Lock a value to hold it fixed while the others are optimized.")
     _geom = dict(disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT, lockable=True)
     a = linked_input(f"a — hinge to cylinder base (along floor) [{ULABEL}]", "a",
                      *USER_BOUNDS["a"], **_geom,
@@ -434,7 +434,7 @@ with tab_geometry:
 
     st.subheader("Wall angle")
     animating = st.toggle(
-        "▶ Sweep θ (0 → 90 → 0)", key="animating",
+        "Sweep θ (0 → 90 → 0)", key="animating",
         help="Continuously animate the wall opening and closing. "
              "Toggle off to scrub the angle manually.")
     st.session_state.setdefault("anim_theta", float(st.session_state["theta_deg"]))
@@ -463,9 +463,9 @@ with tab_compare:
                "force and length curves to compare them.")
     _current = dict(a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
     _save_a, _save_b = st.columns(2)
-    if _save_a.button("📌 Save as A", use_container_width=True):
+    if _save_a.button("Save as A", use_container_width=True):
         st.session_state["design_A"] = _current
-    if _save_b.button("📌 Save as B", use_container_width=True):
+    if _save_b.button("Save as B", use_container_width=True):
         st.session_state["design_B"] = _current
     _clear_a, _clear_b = st.columns(2)
     if _clear_a.button("Clear A", use_container_width=True):
@@ -685,7 +685,7 @@ with col_force:
     st.plotly_chart(fig, width="stretch")
     if has_singularity:
         st.caption(
-            f"⚠️ Part of the swing needs more than {F_CAP:.0f} N/kg "
+            f"Warning — part of the swing needs more than {F_CAP:.0f} N/kg "
             "(near-singular geometry) and is hidden — extremes shown are over "
             "the usable range only."
         )
@@ -745,8 +745,8 @@ if overlay:
         fd = fd[np.isfinite(fd) & (np.abs(fd) <= F_CAP)]
         return float(np.max(np.abs(fd))) if fd.size else float("nan")
     st.caption(
-        f"**Overlay** — 🟩 A ({_fmt_design(design_A)}): peak "
-        f"**{_peak_force(design_A):.2f} N/kg**   ·   🟧 B ({_fmt_design(design_B)}): "
+        f"**Overlay** — A ({_fmt_design(design_A)}): peak "
+        f"**{_peak_force(design_A):.2f} N/kg**   ·   B ({_fmt_design(design_B)}): "
         f"peak **{_peak_force(design_B):.2f} N/kg**.")
 
 # --- Animation driver -------------------------------------------------------

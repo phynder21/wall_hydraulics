@@ -88,7 +88,7 @@ def render_reverse():
         # Diagnose: what cylinder lengths ARE achievable here?
         allrows = lookup.search(table, height, x_cg, z_cg, stroke_max=1e9,
                                 roof_clearance=clearance, bounds=bounds, limit=1000000)
-        st.error("### 🚫 No geometry fits this cylinder")
+        st.error("### No geometry fits this cylinder")
         if allrows["peak_force"].size:
             lo = float(allrows["L_min"].min())
             hi = float(allrows["L_max"].max())

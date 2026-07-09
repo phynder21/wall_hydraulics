@@ -369,8 +369,8 @@ def index(request: Request):
         force_bar_el.content = lookup.force_bar_html(_fill, lookup.BAR_NEUTRAL, f"{_tot:.1f} kN")
         here_m.text = f"{m['here']:.2f} N/kg"
         stroke_m.text = f"{m['stroke'] * U:.2f} {ulabel}"
-        ratio_m.text = f"{m['ratio']:.2f}" + ("  ✓" if m["ok"] else "  ⚠ over")
-        sing_cap.text = ("⚠️ Part of the swing needs more than "
+        ratio_m.text = f"{m['ratio']:.2f}" + ("  (within limit)" if m["ok"] else "  (over limit)")
+        sing_cap.text = ("Warning — part of the swing needs more than "
                          f"{F_CAP:.0f} N/kg (near-singular geometry) and is hidden "
                          "— the extremes shown are over the usable range only."
                          if m["singular"] else "")
@@ -390,7 +390,7 @@ def index(request: Request):
     def linked(base, key, lo_m, hi_m, is_length=True, lockable=False, hcap=False,
                help=None):
         """Slider + number box for one value, stored in METERS at s[key]. hcap caps
-        the upper bound at the current container height. lockable adds a 🔒."""
+        the upper bound at the current container height. lockable adds a lock checkbox."""
         U, step, fmt, ulabel, _ = disp(s["units"], s["fine"])
         du, st_, ft = (U, step, fmt) if is_length else (1.0, 1.0, "%.0f")
         hc = hcap and is_length
@@ -406,7 +406,7 @@ def index(request: Request):
                             format=ft).classes("w-24")
             if lockable:
                 s.setdefault(f"lock_{key}", False)
-                ui.checkbox("🔒").bind_value(s, f"lock_{key}").props("dense") \
+                ui.checkbox("Lock").bind_value(s, f"lock_{key}").props("dense") \
                     .tooltip("Hold this value fixed when you press Optimize")
 
         def commit(value):
@@ -701,7 +701,7 @@ def index(request: Request):
                     ui.separator()
                     linked("Wall angle θ (deg)", "theta_deg", 0.0, 90.0, is_length=False)
                     _sweep = ui.timer(0.05, sweep_tick, active=False)
-                    ui.switch("▶ Sweep θ (0 → 90 → 0)",
+                    ui.switch("Sweep θ (0 → 90 → 0)",
                               on_change=lambda e: (setattr(_sweep, "active", bool(e.value)),
                                                    s.__setitem__("_anim", bool(e.value))))
                 with ui.tab_panel("Optimize"):
@@ -718,9 +718,9 @@ def index(request: Request):
                     ui.label("Snapshot the current geometry as A or B, then "
                              "overlay both on the plots.").classes("text-sm")
                     with ui.row().classes("gap-2 w-full"):
-                        ui.button("📌 Save as A", on_click=lambda: save_design("A")
+                        ui.button("Save as A", on_click=lambda: save_design("A")
                                   ).props("outline no-caps").classes("grow")
-                        ui.button("📌 Save as B", on_click=lambda: save_design("B")
+                        ui.button("Save as B", on_click=lambda: save_design("B")
                                   ).props("outline no-caps").classes("grow")
                     with ui.row().classes("gap-2 w-full"):
                         ui.button("Clear A", on_click=lambda: clear_design("A")
@@ -948,7 +948,7 @@ def browse_page():
                      "near-optimal. “Get the exact optimum” runs the optimizer once "
                      "for your current settings to compute the true best geometry — "
                      "and shows how far the grid was off.").classes("text-xs text-grey")
-            ui.button("Get the exact optimum ▶", on_click=refine).props("no-caps color=primary")
+            ui.button("Get the exact optimum", on_click=refine).props("no-caps color=primary")
             refine_lbl = ui.label("").classes("text-sm")
             with ui.row().classes("w-full no-wrap gap-2 stack"):
                 force_el = ui.plotly(force_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0)).classes("w-1/2")
@@ -1004,12 +1004,12 @@ def reverse_page():
             mass_lbl.text = "no fit"
             if allrows["peak_force"].size:
                 lo, hi = float(allrows["L_min"].min()), float(allrows["L_max"].max())
-                detail_lbl.text = (f"🚫 No layout keeps the cylinder inside your "
+                detail_lbl.text = (f"No layout keeps the cylinder inside your "
                                    f"{L_ret*1000:.0f}–{L_ext*1000:.0f} mm window. Feasible layouts "
                                    f"here need ~{lo*1000:.0f}–{hi*1000:.0f} mm. Try a longer stroke, "
                                    f"a different retracted length, or looser geometry limits.")
             else:
-                detail_lbl.text = "🚫 No layout fits the container + geometry limits. Loosen them."
+                detail_lbl.text = "No layout fits the container + geometry limits. Loosen them."
             return
         a, b, d, f = (float(res["a"][0]), float(res["b"][0]), float(res["d"][0]), float(res["f"][0]))
         peak = float(res["peak_force"][0])

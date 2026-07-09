@@ -128,13 +128,13 @@ def test_overlay_two_designs_renders():
     """Save A, change geometry, save B, then overlay — the plots must render both
     designs without error."""
     at = fresh_app()
-    save_a = next(b for b in at.button if b.label == "📌 Save as A")
+    save_a = next(b for b in at.button if b.label == "Save as A")
     save_a.click()
     run_ok(at, "save A")
     at.session_state["a"] = 0.40
     at.session_state["b"] = 2.50
     run_ok(at, "change geometry")
-    save_b = next(b for b in at.button if b.label == "📌 Save as B")
+    save_b = next(b for b in at.button if b.label == "Save as B")
     save_b.click()
     run_ok(at, "save B")
     at.session_state["overlay"] = True
@@ -210,7 +210,7 @@ def test_browse_view_renders():
     at = AppTest.from_file(APP_PATH, default_timeout=120)
     at.run()
     assert not at.exception, at.exception
-    at.session_state["view"] = "🔎 Browse configurations"
+    at.session_state["view"] = "Browse configurations"
     at.run()
     assert not at.exception, at.exception
     assert len(at.dataframe) >= 1
@@ -277,7 +277,7 @@ def test_reverse_view_renders():
     browse.TABLE_RES = 12   # tiny grid so the build is fast in tests
     at = AppTest.from_file(APP_PATH, default_timeout=120)
     at.run()
-    at.session_state["view"] = "🔩 Size from a cylinder"
+    at.session_state["view"] = "Size from a cylinder"
     at.run()
     assert not at.exception, at.exception
     # an impossible cylinder window must not error (shows the no-fit path)
