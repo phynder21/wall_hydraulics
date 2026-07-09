@@ -44,6 +44,7 @@ VAR_NAMES = ("a", "b", "d", "f")
 # Large multipliers turning the inequality constraints into costs the optimizer
 # feels. Big enough that the optimum sits essentially on the limit, not over it.
 STROKE_PENALTY = 1.0e6
+LENGTH_PENALTY = 1.0e6       # for a cylinder length outside [retracted, extended]
 CEILING_PENALTY = 1.0e6
 OVERCENTER_PENALTY = 1.0e6
 # A crossing (moment arm goes negative) is physically impossible, not merely
@@ -70,6 +71,7 @@ ROOF_CLEARANCE = 0.0
 # a tiny residual violation at the optimum. These are SOLVER slack, not design
 # margins (for a ceiling design margin, use ROOF_CLEARANCE above).
 STROKE_TOL = 1.0e-3          # stroke ratio (dimensionless)
+LENGTH_TOL = 1.0e-3          # cylinder length window (meters)
 CEILING_TOL = 1.0e-3         # meters
 MOMENT_ARM_TOL = 1.0e-3      # moment-arm clearance (dimensionless)
 
@@ -272,7 +274,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
                       roof_clearance=ROOF_CLEARANCE, locked=None, var_bounds=None,
                       n_theta=200, m_cg=1.0, seed=0, maxiter=300,
                       n_starts=N_STARTS, popsize=None, alt_rel_tol=ALT_REL_TOL,
-                      fast=False):
+                      fast=False, length_window=None):
     """Search for the (a, b, d, f) minimizing peak piston force over 0-90 deg.
 
     Runs `n_starts` independent differential-evolution starts (fixed seeds, so the
@@ -298,6 +300,8 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     is always `alternatives[0]`.
     """
     locked = dict(locked or {})
+    if length_window is not None:
+        fast = False   # the fast zoom doesn't model the absolute length window
     n_starts = max(1, int(n_starts))   # at least one start
     theta = np.linspace(0.0, np.pi / 2, n_theta)
 
@@ -326,7 +330,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
         return tuple(float(vals[v]) for v in VAR_NAMES)
 
     def objective(free_vals):
-        peak, ratio, _, _, ceiling, moment_arm = _metrics(
+        peak, ratio, L_min, L_max, ceiling, moment_arm = _metrics(
             assemble(free_vals), theta, x_cg, z_cg, m_cg, container_width,
             container_height, roof_clearance)
         penalty = 0.0
@@ -338,6 +342,10 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
             penalty += OVERCENTER_HARD   # crossing the hinge: impossible, reject hard
         if moment_arm < MIN_MOMENT_ARM:
             penalty += OVERCENTER_PENALTY * (MIN_MOMENT_ARM - moment_arm) ** 2
+        if length_window is not None:   # cylinder length must fit [retracted, extended]
+            L_ret, L_ext = length_window
+            penalty += LENGTH_PENALTY * max(L_ret - L_min, 0.0) ** 2
+            penalty += LENGTH_PENALTY * max(L_max - L_ext, 0.0) ** 2
         return peak + penalty
 
     def evaluate(geom):
@@ -348,6 +356,10 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
         feasible = (ratio <= stroke_ratio_max + STROKE_TOL
                     and ceiling <= CEILING_TOL
                     and moment_arm >= MIN_MOMENT_ARM - MOMENT_ARM_TOL)
+        if length_window is not None:
+            L_ret, L_ext = length_window
+            feasible = (feasible and L_min >= L_ret - LENGTH_TOL
+                        and L_max <= L_ext + LENGTH_TOL)
         return {"geom": geom, "peak": peak, "ratio": ratio, "L_min": L_min,
                 "L_max": L_max, "ceiling": ceiling, "moment_arm": moment_arm,
                 "feasible": feasible}

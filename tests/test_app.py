@@ -268,3 +268,20 @@ def test_advance_angle_stays_in_range(start, direction):
     for _ in range(400):
         angle, dir_ = advance(angle, dir_)
         assert 0.0 <= angle <= 90.0
+
+
+def test_reverse_view_renders():
+    """The 'Size from a cylinder' view builds the table and renders — for a
+    feasible cylinder AND an impossible one (which shows the no-fit message)."""
+    import browse
+    browse.TABLE_RES = 12   # tiny grid so the build is fast in tests
+    at = AppTest.from_file(APP_PATH, default_timeout=120)
+    at.run()
+    at.session_state["view"] = "🔩 Size from a cylinder"
+    at.run()
+    assert not at.exception, at.exception
+    # an impossible cylinder window must not error (shows the no-fit path)
+    at.session_state["rv_ret"] = 100.0
+    at.session_state["rv_stroke"] = 50.0
+    at.run()
+    assert not at.exception, at.exception

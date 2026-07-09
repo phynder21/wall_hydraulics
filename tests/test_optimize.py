@@ -237,3 +237,14 @@ def test_exhaustive_input_sweep(container):
                         res, f"{container} cg=({x_cg},{z_cg}) sr={stroke} clr={clearance}")
                     checked += 1
     assert checked == 5 * 5 * 3 * 3
+
+
+def test_length_window_is_respected():
+    """With a cylinder length window, the optimum's cylinder length stays inside
+    it (the reverse optimizer's core constraint)."""
+    from optimize import LENGTH_TOL
+    res = optimize_actuator(*STANDARD, x_cg=1.2, z_cg=0.55, length_window=(0.9, 1.7),
+                            stroke_ratio_max=3.0, n_starts=4, maxiter=80)
+    assert res["feasible"]
+    assert res["L_min"] >= 0.9 - LENGTH_TOL - 1e-6
+    assert res["L_max"] <= 1.7 + LENGTH_TOL + 1e-6

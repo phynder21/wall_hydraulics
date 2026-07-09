@@ -14,6 +14,7 @@ from wall import (
 # watcher tracks optimize.py and reloads it on edit, like wall.py.
 from optimize import optimize_actuator, STROKE_TOL
 from browse import render_browse
+from reverse import render_reverse
 from lookup import force_bar, force_bar_html, BAR_NEUTRAL
 
 # Human-readable build marker. Bump on notable changes so you can tell at a
@@ -31,11 +32,15 @@ st.set_page_config(page_title="Container Wall Actuator", layout="wide")
 
 # Left rail: view switch + a build marker, above the tabbed control panel.
 st.sidebar.markdown("### Wall actuator")
-_view = st.sidebar.radio("View", ["🛠 Designer", "🔎 Browse configurations"],
-                         key="view", label_visibility="collapsed")
+_view = st.sidebar.radio(
+    "View", ["🛠 Designer", "🔎 Browse configurations", "🔩 Size from a cylinder"],
+    key="view", label_visibility="collapsed")
 st.sidebar.caption(f"build: {BUILD}")
 if _view == "🔎 Browse configurations":
     render_browse()
+    st.stop()
+if _view == "🔩 Size from a cylinder":
+    render_reverse()
     st.stop()
 
 # ISO container dimensions (external)

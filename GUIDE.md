@@ -6,7 +6,7 @@ mount; the tool finds the geometry that needs the **least piston force** — so 
 can spec a smaller, cheaper cylinder.
 
 There are two apps with the same engine: a Streamlit version and a NiceGUI
-version (deployed on Render). Both have the same two views.
+version (deployed on Render). Both have the same three views.
 
 ---
 
@@ -72,6 +72,28 @@ instant results, no waiting.
 4. The database is a grid, so its best row is only *near*-optimal. Press
    **Get the exact optimum** to run the optimizer once for your settings and get
    the true best geometry (and see how far the grid was off).
+
+---
+
+## 🔩 Size from a cylinder — the reverse
+
+Have a specific hydraulic cylinder in mind? This works backwards: you enter the
+cylinder, and it finds the best geometry and the **biggest wall it can raise**.
+
+1. Enter the cylinder's **force** — either bore Ø + rod Ø + max pressure (it
+   computes push/pull), or a rated force in kN — plus a **safety factor**.
+2. Enter the cylinder's **length**: retracted (closed) length + stroke (it shows
+   the extended length). This is a **hard constraint** — the geometry's cylinder
+   length must stay inside [retracted, extended] the whole way up.
+3. Set the **wall** (container, cg) and, optionally, **restrict the output
+   geometry** (a, b, d, f ranges) — e.g. keep the base height f low.
+4. It reports the **max wall mass** the cylinder can raise, the best-fitting
+   geometry, and the setup diagram + plots.
+
+Because the length window and geometry limits are hard constraints, **some
+cylinders simply won't fit any wall** — when that happens it says so and tells
+you the length range that *would* work (so you know whether to pick a longer
+stroke, a different retracted length, or a bigger container).
 
 ---
 

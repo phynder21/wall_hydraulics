@@ -212,6 +212,28 @@ def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0
     return out
 
 
+def cylinder_matches(table, container_height, x_cg, z_cg, retracted, extended,
+                     bounds=None, roof_clearance=0.0, limit=200):
+    """Geometries whose cylinder length stays ENTIRELY within a real cylinder's
+    [retracted, extended] window (metres), ranked by peak force (lowest first).
+    Max wall mass a row supports = cylinder force / peak_force. The stroke-ratio
+    limit is left open here -- the absolute length window is the real constraint."""
+    filters = {"L_min": (retracted, None), "L_max": (None, extended)}
+    return search(table, container_height, x_cg, z_cg, stroke_max=1e9,
+                  roof_clearance=roof_clearance, bounds=bounds, filters=filters,
+                  sort_by="peak_force", ascending=True, limit=limit)
+
+
+def cylinder_force(bore_mm, rod_mm, pressure_bar):
+    """(push, pull) force in newtons: pressure x area. Push uses the full bore;
+    pull uses the bore area minus the rod area (the annulus)."""
+    import math
+    pa = pressure_bar * 1.0e5                          # bar -> Pa
+    a_bore = math.pi / 4.0 * (bore_mm / 1000.0) ** 2
+    a_rod = math.pi / 4.0 * (rod_mm / 1000.0) ** 2
+    return pa * a_bore, pa * max(a_bore - a_rod, 0.0)
+
+
 def best(table, container_height, x_cg, z_cg, **kw):
     """Convenience: the single lowest-peak-force feasible geometry, or None."""
     res = search(table, container_height, x_cg, z_cg, limit=1, **kw)

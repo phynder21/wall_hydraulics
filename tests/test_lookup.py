@@ -184,3 +184,20 @@ def test_force_bar():
     import math
     t, f, c = lookup.force_bar(float("nan"), 500.0)
     assert math.isnan(t) and f == 0.0 and c == ""
+
+
+def test_cylinder_force():
+    import math
+    push, pull = lookup.cylinder_force(100.0, 50.0, 100.0)  # 100mm bore, 50 rod, 100 bar
+    assert abs(push - 100e5 * math.pi / 4 * 0.1 ** 2) < 1.0   # P * bore area
+    assert 0 < pull < push                                    # annulus is smaller
+
+
+def test_cylinder_matches_fits_window(table):
+    res = lookup.cylinder_matches(table, STANDARD_H, 1.2, 0.55, 0.5, 2.5, limit=100000)
+    assert res["peak_force"].size > 0
+    assert np.all(res["L_min"] >= 0.5 - 1e-9)          # inside the window
+    assert np.all(res["L_max"] <= 2.5 + 1e-9)
+    assert np.all(np.diff(res["peak_force"]) >= -1e-6)  # ranked by peak, ascending
+    # a window longer than any geometry -> impossible (no matches)
+    assert lookup.cylinder_matches(table, STANDARD_H, 1.2, 0.55, 5.0, 6.0)["peak_force"].size == 0

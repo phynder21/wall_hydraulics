@@ -629,8 +629,9 @@ def index(request: Request):
         with ui.column().classes("gap-0"):
             ui.label("Container wall actuator").classes("text-lg font-medium")
             ui.label(f"build: {BUILD}").classes("text-xs text-gray-400")
-        ui.button("🔎 Browse configurations", on_click=lambda: ui.navigate.to("/browse")) \
-            .props("flat color=dark no-caps")
+        with ui.row().classes("gap-1"):
+            ui.button("🔎 Browse", on_click=lambda: ui.navigate.to("/browse")).props("flat color=dark no-caps")
+            ui.button("🔩 Cylinder", on_click=lambda: ui.navigate.to("/reverse")).props("flat color=dark no-caps")
 
     with ui.row().classes("w-full no-wrap gap-4 p-2 stack"):
         # ---- Left: control panel with tabs --------------------------------
@@ -781,8 +782,9 @@ def browse_page():
         with ui.column().classes("gap-0"):
             ui.label("Browse configurations").classes("text-lg font-medium")
             ui.label(f"build: {BUILD}").classes("text-xs text-gray-400")
-        ui.button("🛠 Designer", on_click=lambda: ui.navigate.to("/")) \
-            .props("flat color=dark no-caps")
+        with ui.row().classes("gap-1"):
+            ui.button("🛠 Designer", on_click=lambda: ui.navigate.to("/")).props("flat color=dark no-caps")
+            ui.button("🔩 Cylinder", on_click=lambda: ui.navigate.to("/reverse")).props("flat color=dark no-caps")
 
     async def run_search():
         search_btn.disable()
@@ -947,6 +949,136 @@ def browse_page():
             _d0 = diagram_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0, _w0, _h0, 0.0, 1.0, "m")
             _d0.update_layout(height=560)
             diag_el = ui.plotly(_d0).classes("w-full")
+
+
+
+@ui.page("/reverse")
+def reverse_page():
+    ui.colors(primary=PRIMARY)
+    ui.add_head_html(RESPONSIVE_CSS)
+    r = {"container": next(iter(CONTAINERS)), "mode": "Bore + pressure",
+         "bore": 63.0, "rod": 36.0, "press": 160.0, "frated": 50.0, "safety": 1.5,
+         "retracted": 700.0, "stroke": 500.0, "x_cg": 1.20, "z_cg": 0.55,
+         "clear": 0.0, "view": 45.0,
+         "rng_a": {"min": 0.05, "max": WIDTH / 2},
+         "rng_b": {"min": 0.05, "max": HEIGHT_MAX},
+         "rng_d": {"min": 0.0, "max": 1.0},
+         "rng_f": {"min": 0.0, "max": HEIGHT_MAX}}
+
+    with ui.header(elevated=False).classes("items-center justify-between"):
+        with ui.column().classes("gap-0"):
+            ui.label("Size from a cylinder").classes("text-lg font-medium")
+            ui.label(f"build: {BUILD}").classes("text-xs text-gray-400")
+        with ui.row().classes("gap-1"):
+            ui.button("Designer", on_click=lambda: ui.navigate.to("/")).props("flat color=dark no-caps")
+            ui.button("Browse", on_click=lambda: ui.navigate.to("/browse")).props("flat color=dark no-caps")
+
+    def _force_use():
+        if r["mode"] == "Bore + pressure":
+            push, _pull = lookup.cylinder_force(r["bore"], min(r["rod"], r["bore"] - 1), r["press"])
+            fn = push
+        else:
+            fn = r["frated"] * 1000.0
+        return fn / max(r["safety"], 1e-6)
+
+    def solve():
+        if _TABLE["data"] is None:
+            ui.notify("Building the database (first time, ~15 s)…")
+        table = get_table()
+        w, h = CONTAINERS[r["container"]]
+        force_use = _force_use()
+        L_ret, L_ext = r["retracted"] / 1000.0, (r["retracted"] + r["stroke"]) / 1000.0
+        bounds = {v: (r[f"rng_{v}"]["min"], r[f"rng_{v}"]["max"]) for v in ("a", "b", "d", "f")}
+        res = lookup.cylinder_matches(table, h, r["x_cg"], r["z_cg"], L_ret, L_ext,
+                                      bounds=bounds, roof_clearance=r["clear"], limit=5)
+        if res["peak_force"].size == 0:
+            allrows = lookup.search(table, h, r["x_cg"], r["z_cg"], stroke_max=1e9,
+                                    roof_clearance=r["clear"], bounds=bounds, limit=1000000)
+            mass_lbl.text = "no fit"
+            if allrows["peak_force"].size:
+                lo, hi = float(allrows["L_min"].min()), float(allrows["L_max"].max())
+                detail_lbl.text = (f"🚫 No layout keeps the cylinder inside your "
+                                   f"{L_ret*1000:.0f}–{L_ext*1000:.0f} mm window. Feasible layouts "
+                                   f"here need ~{lo*1000:.0f}–{hi*1000:.0f} mm. Try a longer stroke, "
+                                   f"a different retracted length, or looser geometry limits.")
+            else:
+                detail_lbl.text = "🚫 No layout fits the container + geometry limits. Loosen them."
+            return
+        a, b, d, f = (float(res["a"][0]), float(res["b"][0]), float(res["d"][0]), float(res["f"][0]))
+        peak = float(res["peak_force"][0])
+        mass_lbl.text = f"{force_use / peak:,.0f} kg"
+        detail_lbl.text = (f"Best geometry a={a:.3f} b={b:.3f} d={d:.3f} f={f:.3f} m · cylinder "
+                           f"{res['L_min'][0]*1000:.0f}–{res['L_max'][0]*1000:.0f} mm (inside window) · "
+                           f"peak {peak:.2f} N/kg · usable force {force_use/1000:.1f} kN")
+        force_el.update_figure(force_figure(a, b, d, f, r["x_cg"], r["z_cg"], 45.0))
+        length_el.update_figure(length_figure(a, b, d, f, 45.0, float(res["stroke_ratio"][0])))
+        _df = diagram_figure(a, b, d, f, r["x_cg"], r["z_cg"], r["view"], w, h, r["clear"], 1.0, "m")
+        _df.update_layout(height=560)
+        diag_el.update_figure(_df)
+
+    async def refine():
+        w, h = CONTAINERS[r["container"]]
+        L_ret, L_ext = r["retracted"] / 1000.0, (r["retracted"] + r["stroke"]) / 1000.0
+        bounds = {v: (r[f"rng_{v}"]["min"], r[f"rng_{v}"]["max"]) for v in ("a", "b", "d", "f")}
+        refine_lbl.text = "Optimizing…"
+        opt = await run.io_bound(optimize_actuator, w, h, r["x_cg"], r["z_cg"],
+                                 length_window=(L_ret, L_ext), stroke_ratio_max=3.0,
+                                 roof_clearance=r["clear"], var_bounds=bounds)
+        if opt["feasible"]:
+            refine_lbl.text = (f"Exact optimum: peak {opt['peak_force']:.2f} N/kg → raises "
+                               f"{_force_use()/opt['peak_force']:,.0f} kg at a={opt['a']:.3f} "
+                               f"b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f} m.")
+        else:
+            refine_lbl.text = "No geometry fits the exact cylinder window here."
+
+    def _rc(label, key, lo, hi, step, fmt=None):
+        ui.label(label).classes("text-xs mt-1 mb-0")
+        with ui.row().classes("w-full items-center no-wrap gap-2"):
+            ui.slider(min=lo, max=hi, step=step).props("label-always").bind_value(r, key).classes("grow")
+            ui.number(min=lo, max=hi, step=step).props("dense").bind_value(r, key).classes("w-24")
+
+    with ui.row().classes("w-full no-wrap gap-4 p-2 stack"):
+        with ui.card().classes("w-96 shrink-0"):
+            ui.label("Cylinder — force").classes("font-medium")
+            ui.toggle(["Bore + pressure", "Rated force"], value="Bore + pressure").bind_value(r, "mode").props("dense")
+            with ui.column().classes("w-full gap-0").bind_visibility_from(r, "mode", value="Bore + pressure"):
+                _rc("Bore Ø (mm)", "bore", 20, 200, 1)
+                _rc("Rod Ø (mm)", "rod", 10, 190, 1)
+                _rc("Max pressure (bar)", "press", 50, 350, 5)
+            with ui.column().classes("w-full gap-0").bind_visibility_from(r, "mode", value="Rated force"):
+                _rc("Rated force (kN)", "frated", 1, 300, 1)
+            _rc("Safety factor", "safety", 1.0, 3.0, 0.1)
+            ui.label("Cylinder — length").classes("font-medium mt-2")
+            _rc("Retracted length (mm)", "retracted", 100, 3500, 10)
+            _rc("Stroke (mm)", "stroke", 50, 3000, 10)
+            ui.label("Wall").classes("font-medium mt-2")
+            ui.select(list(CONTAINERS), label="Container").bind_value(r, "container")
+            _rc("x_cg — along wall (m)", "x_cg", 0.0, HEIGHT_MAX, 0.01)
+            _rc("z_cg — off the wall (m)", "z_cg", 0.0, 1.5, 0.01)
+            _rc("Roof clearance (m)", "clear", 0.0, 0.5, 0.01)
+            with ui.expansion("Restrict the output geometry (a, b, d, f)").classes("w-full"):
+                ui.label("Force the found geometry into these ranges.").classes("text-xs text-grey")
+                for _v, (_lo, _hi, _lab) in BROWSE_RANGES.items():
+                    ui.label(_lab).classes("text-xs mt-1 mb-0")
+                    ui.range(min=_lo, max=_hi, step=0.01, value={"min": _lo, "max": _hi}) \
+                        .props("label-always").bind_value(r, f"rng_{_v}").classes("w-full")
+            ui.button("Find geometry", on_click=solve).props("color=primary").classes("w-full")
+
+        with ui.column().classes("flex-1 gap-2"):
+            ui.label("Max wall mass this cylinder can raise").classes("text-xs text-gray-500 uppercase tracking-wide")
+            mass_lbl = ui.label("—").classes("text-3xl font-semibold")
+            detail_lbl = ui.label("Set a cylinder and press Find geometry.").classes("text-sm")
+            with ui.row().classes("w-full no-wrap gap-2 stack"):
+                force_el = ui.plotly(force_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0)).classes("w-1/2")
+                length_el = ui.plotly(length_figure(0.6, 1.8, 0.1, 0.4, 45.0, 1.8)).classes("w-1/2")
+            _w0, _h0 = CONTAINERS[next(iter(CONTAINERS))]
+            _rd0 = diagram_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0, _w0, _h0, 0.0, 1.0, "m")
+            _rd0.update_layout(height=560)
+            diag_el = ui.plotly(_rd0).classes("w-full")
+            ui.separator()
+            ui.label("The list is a grid; get the exact best design for your cylinder:").classes("text-xs text-grey")
+            ui.button("Get the exact optimum \u25b6", on_click=refine).props("no-caps color=primary")
+            refine_lbl = ui.label("").classes("text-sm")
 
 
 if __name__ in {"__main__", "__mp_main__"}:
