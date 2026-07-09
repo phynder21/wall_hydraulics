@@ -54,7 +54,7 @@ DEFAULTS = {
     "f": 0.40,
     "x_cg": 1.20,
     "z_cg": 0.55,
-    "mass": 500,
+    "mass": 500.0,
     "theta_deg": 45.0,
     "stroke_ratio": STROKE_RATIO_MAX,   # max L_max/L_min (also drives optimizer)
     "roof_clearance": 0.0,              # m the endpoint must stay below the roof
@@ -78,6 +78,9 @@ for key, default in DEFAULTS.items():
 # value from the URL would crash the selectbox below. Validate membership.
 if st.session_state["size_key"] not in CONTAINER_SIZES:
     st.session_state["size_key"] = DEFAULTS["size_key"]
+
+# Mass has no other clamp; keep a URL-supplied value inside its slider range.
+st.session_state["mass"] = float(min(max(st.session_state["mass"], 50.0), 20000.0))
 
 
 def _clamp(key, lo, hi):
@@ -275,9 +278,10 @@ with tab_setup:
                         fmt=LEN_FMT)
     z_cg = linked_input(f"z_cg — perpendicular off wall [{ULABEL}]", "z_cg",
                         0.0, 1.5, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
-    mass = st.slider("Wall + load mass (kg)", 50, 5000, step=10, key="mass",
-                     help="Total mass of the wall plus anything mounted on it. "
-                          "Peak force per kg × this = the real cylinder force.")
+    mass = linked_input("Wall + load mass (kg)", "mass", 50.0, 20000.0, step=10.0,
+                        fmt="%.0f",
+                        help="Total mass of the wall plus anything mounted on it. "
+                             "Peak force per kg × this = the real cylinder force.")
 
     # --- Constraints (shared with the optimizer) ---
     st.subheader("Constraints")
@@ -544,9 +548,8 @@ with st.container(border=True):
               delta_color=("off" if stroke_ok else "inverse"),
               help=f"Extended/retracted length ratio vs. your {stroke_ratio:g}× limit.")
     total_kn, bar_fill, bar_color = force_bar(peak_mag, mass)
-    st.caption(f"**Total peak cylinder force at {mass:,} kg:** "
-               f"{total_kn:.1f} kN  ({total_kn * 1000:,.0f} N) — "
-               "green = low demand, red = high.")
+    st.caption(f"**Total peak cylinder force at {mass:,.0f} kg:** "
+               f"{total_kn:.1f} kN — green = low demand, red = high.")
     st.markdown(force_bar_html(bar_fill, bar_color, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
 

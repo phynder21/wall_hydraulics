@@ -352,7 +352,7 @@ def index(request: Request):
         peak_m.text = f"{m['peak']:.2f} N/kg"
         _tot, _fill, _bcol = lookup.force_bar(m["peak"], s["mass"])
         force_bar_cap.text = (f"Total peak cylinder force at {int(s['mass']):,} kg: "
-                              f"{_tot:.1f} kN  ({_tot * 1000:,.0f} N)")
+                              f"{_tot:.1f} kN")
         force_bar_el.content = lookup.force_bar_html(_fill, _bcol, f"{_tot:.1f} kN")
         here_m.text = f"{m['here']:.2f} N/kg"
         stroke_m.text = f"{m['stroke'] * U:.2f} {ulabel}"
@@ -666,9 +666,9 @@ def index(request: Request):
                                 "ceiling through the swing.")
                     ui.label("Wall + load mass (kg)").classes("text-sm mt-2 mb-0")
                     with ui.row().classes("w-full items-center no-wrap gap-2"):
-                        _msl = ui.slider(min=50, max=5000, step=10).bind_value(s, "mass") \
+                        _msl = ui.slider(min=50, max=20000, step=10).bind_value(s, "mass") \
                             .props("label-always").classes("grow")
-                        _msn = ui.number(min=50, max=5000, step=10).bind_value(s, "mass") \
+                        _msn = ui.number(min=50, max=20000, step=10).bind_value(s, "mass") \
                             .classes("w-24")
                     for _me in (_msl, _msn):
                         _me.on("update:model-value", lambda: reseeding["v"] or refresh(),
@@ -845,7 +845,7 @@ def browse_page():
         length_el.update_figure(length_figure(a, bb, d, f, 45.0, b["stroke"]))
         _tot, _fill, _bcol = lookup.force_bar(float(res["peak_force"][i]), b["mass"])
         bmass_cap.text = (f"Total peak cylinder force at {int(b['mass']):,} kg: "
-                          f"{_tot:.1f} kN  ({_tot * 1000:,.0f} N)")
+                          f"{_tot:.1f} kN")
         bforce_bar.content = lookup.force_bar_html(_fill, _bcol, f"{_tot:.1f} kN")
 
     async def refine():
@@ -886,7 +886,7 @@ def browse_page():
             _bc("z_cg — off the wall (m)", "z_cg", 0.0, 1.5, 0.01)
             _bc("Max stroke ratio", "stroke", 1.0, 3.0, 0.05)
             _bc("Roof clearance (m)", "clear", 0.0, 0.5, 0.01)
-            _bc("Wall + load mass (kg)", "mass", 50, 5000, 10, on_change=lambda: inspect())
+            _bc("Wall + load mass (kg)", "mass", 50, 20000, 10, on_change=lambda: inspect())
             ui.label("Mounting limits — min–max for every value").classes("font-medium mt-2")
             ui.label("Where each dimension may sit; the search keeps only "
                      "geometries inside all four ranges.").classes("text-xs text-grey")

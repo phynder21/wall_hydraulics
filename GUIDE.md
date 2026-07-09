@@ -78,8 +78,8 @@ instant results, no waiting.
 ## Reading the results
 
 - **Peak force (N/kg)** — piston force per kg of wall+load. **Lower is better.**
-- **Wall + load mass (kg)** — set this and the **total-force bar** does the
-  multiplication for you: the real cylinder force in **kN** (and N), shaded
+- **Wall + load mass (kg)** — set this (drag or type) and the **total-force bar**
+  does the multiplication for you: the real cylinder force in **kN**, shaded
   green (low demand) → red (high). It's in both the Designer and Browse.
 - **Stroke / stroke ratio** — how much the cylinder extends; keep the ratio under
   your limit so a real cylinder can do it.
