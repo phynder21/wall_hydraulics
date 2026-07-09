@@ -283,6 +283,19 @@ def _hydrate_url(s, qp):
                 pass
 
 
+_NAV = {"Designer": "/", "Browse": "/browse", "Cylinder": "/reverse"}
+
+
+def _nav_tabs(current):
+    """Top-of-page navigation between the three views, styled as tabs."""
+    def _go(e):
+        if e.value != current:
+            ui.navigate.to(_NAV[e.value])
+    with ui.tabs(value=current, on_change=_go):
+        for _name in _NAV:
+            ui.tab(_name)
+
+
 # --- The page (per-client state so many public visitors stay independent) ----
 @ui.page("/")
 def index(request: Request):
@@ -629,9 +642,7 @@ def index(request: Request):
         with ui.column().classes("gap-0"):
             ui.label("Container wall actuator").classes("text-lg font-medium")
             ui.label(f"build: {BUILD}").classes("text-xs text-gray-400")
-        with ui.row().classes("gap-1"):
-            ui.button("🔎 Browse", on_click=lambda: ui.navigate.to("/browse")).props("flat color=dark no-caps")
-            ui.button("🔩 Cylinder", on_click=lambda: ui.navigate.to("/reverse")).props("flat color=dark no-caps")
+        _nav_tabs("Designer")
 
     with ui.row().classes("w-full no-wrap gap-4 p-2 stack"):
         # ---- Left: control panel with tabs --------------------------------
@@ -782,9 +793,7 @@ def browse_page():
         with ui.column().classes("gap-0"):
             ui.label("Browse configurations").classes("text-lg font-medium")
             ui.label(f"build: {BUILD}").classes("text-xs text-gray-400")
-        with ui.row().classes("gap-1"):
-            ui.button("🛠 Designer", on_click=lambda: ui.navigate.to("/")).props("flat color=dark no-caps")
-            ui.button("🔩 Cylinder", on_click=lambda: ui.navigate.to("/reverse")).props("flat color=dark no-caps")
+        _nav_tabs("Browse")
 
     async def run_search():
         search_btn.disable()
@@ -969,9 +978,7 @@ def reverse_page():
         with ui.column().classes("gap-0"):
             ui.label("Size from a cylinder").classes("text-lg font-medium")
             ui.label(f"build: {BUILD}").classes("text-xs text-gray-400")
-        with ui.row().classes("gap-1"):
-            ui.button("Designer", on_click=lambda: ui.navigate.to("/")).props("flat color=dark no-caps")
-            ui.button("Browse", on_click=lambda: ui.navigate.to("/browse")).props("flat color=dark no-caps")
+        _nav_tabs("Cylinder")
 
     def _force_use():
         if r["mode"] == "Bore + pressure":
