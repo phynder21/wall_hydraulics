@@ -73,7 +73,8 @@ def _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max):
     return ff, fl
 
 
-def _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, theta_deg=45.0):
+def _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, theta_deg=45.0,
+                    fig_height=360):
     """Side-view of the geometry at one wall angle: container, wall/door, bracket,
     cylinder, and the key points (hinge, base, attachment, cg)."""
     th = np.radians(theta_deg)
@@ -108,7 +109,7 @@ def _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, theta_deg=45.0):
                              marker=dict(size=12, color="green", symbol="cross"),
                              name="cg"))
     fig.update_layout(title=f"Geometry at theta = {theta_deg:.0f} deg",
-                      xaxis_title="x (m)", yaxis_title="z (m)", height=360,
+                      xaxis_title="x (m)", yaxis_title="z (m)", height=fig_height,
                       margin=dict(l=10, r=10, t=40, b=10), showlegend=False)
     fig.update_yaxes(scaleanchor="x", scaleratio=1)   # equal aspect ratio
     return fig
@@ -306,12 +307,14 @@ def render_browse():
                f"**{total_kn:.1f} kN**")
     st.markdown(lookup.force_bar_html(bar_fill, lookup.BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
-    diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle)
     ff, fl = _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max)
-    p1, p2, p3 = st.columns(3)
-    p1.plotly_chart(diag, width="stretch")
-    p2.plotly_chart(ff, width="stretch")
-    p3.plotly_chart(fl, width="stretch")
+    pf, pl = st.columns(2)
+    pf.plotly_chart(ff, width="stretch")
+    pl.plotly_chart(fl, width="stretch")
+    # The setup diagram is the main thing to read — show it large, below.
+    diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
+                           fig_height=560)
+    st.plotly_chart(diag, width="stretch")
 
     # --- Refine to the exact continuous optimum for this query ---
     st.subheader("Get the exact optimum")

@@ -839,8 +839,10 @@ def browse_page():
                          f"peak {float(res['peak_force'][i]):.2f} N/kg, "
                          f"ratio {float(res['stroke_ratio'][i]):.2f}")
         w, h = CONTAINERS[b["container"]]
-        diag_el.update_figure(diagram_figure(a, bb, d, f, b["x_cg"], b["z_cg"],
-                                             b["view_angle"], w, h, b["clear"], 1.0, "m"))
+        _dfig = diagram_figure(a, bb, d, f, b["x_cg"], b["z_cg"],
+                               b["view_angle"], w, h, b["clear"], 1.0, "m")
+        _dfig.update_layout(height=560)
+        diag_el.update_figure(_dfig)
         force_el.update_figure(force_figure(a, bb, d, f, b["x_cg"], b["z_cg"], 45.0))
         length_el.update_figure(length_figure(a, bb, d, f, 45.0, b["stroke"]))
         _tot, _fill, _bcol = lookup.force_bar(float(res["peak_force"][i]), b["mass"])
@@ -937,12 +939,14 @@ def browse_page():
                      "and shows how far the grid was off.").classes("text-xs text-grey")
             ui.button("Get the exact optimum ▶", on_click=refine).props("no-caps color=primary")
             refine_lbl = ui.label("").classes("text-sm")
-            _w0, _h0 = CONTAINERS[next(iter(CONTAINERS))]
-            diag_el = ui.plotly(diagram_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0,
-                                               _w0, _h0, 0.0, 1.0, "m")).classes("w-full")
             with ui.row().classes("w-full no-wrap gap-2 stack"):
                 force_el = ui.plotly(force_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0)).classes("w-1/2")
                 length_el = ui.plotly(length_figure(0.6, 1.8, 0.1, 0.4, 45.0, 1.8)).classes("w-1/2")
+            # The setup diagram is the main thing to read — show it large, below.
+            _w0, _h0 = CONTAINERS[next(iter(CONTAINERS))]
+            _d0 = diagram_figure(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, 45.0, _w0, _h0, 0.0, 1.0, "m")
+            _d0.update_layout(height=560)
+            diag_el = ui.plotly(_d0).classes("w-full")
 
 
 if __name__ in {"__main__", "__mp_main__"}:
