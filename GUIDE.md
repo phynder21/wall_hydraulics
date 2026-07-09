@@ -38,7 +38,7 @@ Two limits keep designs realistic:
 3. Watch the **metrics**: *Peak force* is the worst-case push the cylinder must
    provide (per kg) — the number you want to make small. Set the **Wall + load
    mass** slider and the **total-force bar** below the metrics shows the real
-   cylinder force in kN (green = low demand, red = high).
+   cylinder force in kN.
 4. Press **Optimize** and the tool finds the a, b, d, f that minimize peak force
    for your setup, and lists a few near-optimal alternatives you can click to load.
 
@@ -68,7 +68,7 @@ instant results, no waiting.
      best few at each value and a wide spread of values instead.
 3. Click a row's **rank** to inspect it: its exact diagram (scrub the view angle),
    force curve, length curve, and — from the **Wall + load mass** slider — its
-   **total cylinder force** in kN on a green→red bar.
+   **total cylinder force** in kN.
 4. The database is a grid, so its best row is only *near*-optimal. Press
    **Get the exact optimum** to run the optimizer once for your settings and get
    the true best geometry (and see how far the grid was off).
@@ -79,8 +79,8 @@ instant results, no waiting.
 
 - **Peak force (N/kg)** — piston force per kg of wall+load. **Lower is better.**
 - **Wall + load mass (kg)** — set this (drag or type) and the **total-force bar**
-  does the multiplication for you: the real cylinder force in **kN**, shaded
-  green (low demand) → red (high). It's in both the Designer and Browse.
+  does the multiplication for you: the real cylinder force in **kN**. It's in
+  both the Designer and Browse.
 - **Stroke / stroke ratio** — how much the cylinder extends; keep the ratio under
   your limit so a real cylinder can do it.
 - **Green→red shading** (Browse) — relative to the results shown: greenest is the

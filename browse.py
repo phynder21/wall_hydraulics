@@ -159,10 +159,10 @@ def _sb_range(label, key, full_lo, full_hi, step=0.01, fmt="%.2f"):
         a, b = st.session_state[lok], st.session_state[hik]
         st.session_state[key] = (min(a, b), max(a, b))
 
-    st.sidebar.markdown(f"**{label}**")
-    st.sidebar.slider(label, full_lo, full_hi, step=step, key=rk, on_change=_from_r,
-                      label_visibility="collapsed")
-    cc1, cc2 = st.sidebar.columns(2)
+    st.markdown(f"**{label}**")
+    st.slider(label, full_lo, full_hi, step=step, key=rk, on_change=_from_r,
+              label_visibility="collapsed")
+    cc1, cc2 = st.columns(2)
     cc1.number_input("min", min_value=full_lo, max_value=full_hi, step=step,
                      key=lok, on_change=_from_box, format=fmt)
     cc2.number_input("max", min_value=full_lo, max_value=full_hi, step=step,
@@ -204,11 +204,6 @@ def render_browse():
                       help="Converts the per-kg peak force into the real cylinder "
                            "force (shown for the inspected design).")
 
-    st.sidebar.header("Mounting limits")
-    st.sidebar.caption("Each control is a min–max range for that dimension (drag "
-                       "the slider OR type the min/max) — where you set the max or "
-                       "min for every value. The search keeps only geometries "
-                       "inside all four ranges.")
     ranges = {
         "a": (0.05, WIDTH / 2, "a — base along floor (m)"),
         "b": (0.05, HEIGHT_MAX, "b — attachment along wall (m)"),
@@ -216,8 +211,13 @@ def render_browse():
         "f": (0.0, HEIGHT_MAX, "f — base height (m)"),
     }
     bounds = {}
-    for v, (lo, hi, label) in ranges.items():
-        bounds[v] = _sb_range(label, f"lk_rng_{v}", lo, hi)
+    with st.sidebar.expander("Mounting limits", expanded=False):
+        st.caption("Each control is a min–max range for that dimension (drag the "
+                   "slider OR type the min/max) — where you set the max or min for "
+                   "every value. The search keeps only geometries inside all four "
+                   "ranges.")
+        for v, (lo, hi, label) in ranges.items():
+            bounds[v] = _sb_range(label, f"lk_rng_{v}", lo, hi)
 
     # --- Filter / sort controls (main area) ---
     with st.expander("Columns, extra filters & sorting", expanded=True):
@@ -304,7 +304,7 @@ def render_browse():
         float(res["peak_force"][rank]), mass)
     st.caption(f"Total peak cylinder force at {mass:,.0f} kg: "
                f"**{total_kn:.1f} kN**")
-    st.markdown(lookup.force_bar_html(bar_fill, bar_color, f"{total_kn:.1f} kN"),
+    st.markdown(lookup.force_bar_html(bar_fill, lookup.BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle)
     ff, fl = _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max)

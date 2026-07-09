@@ -636,11 +636,11 @@ def index(request: Request):
         # ---- Left: control panel with tabs --------------------------------
         with ui.card().classes("w-96 shrink-0"):
             with ui.tabs().classes("w-full") as tabs:
-                ui.tab("Setup")
                 ui.tab("Geometry")
+                ui.tab("Setup")
                 ui.tab("Optimize")
                 ui.tab("Compare")
-            with ui.tab_panels(tabs, value="Setup").classes("w-full"):
+            with ui.tab_panels(tabs, value="Geometry").classes("w-full"):
                 with ui.tab_panel("Setup"):
                     ui.select(list(CONTAINERS), value=s["container"], label="Container",
                               on_change=lambda e: (s.__setitem__("container", e.value), apply_units())
@@ -846,7 +846,7 @@ def browse_page():
         _tot, _fill, _bcol = lookup.force_bar(float(res["peak_force"][i]), b["mass"])
         bmass_cap.text = (f"Total peak cylinder force at {int(b['mass']):,} kg: "
                           f"{_tot:.1f} kN")
-        bforce_bar.content = lookup.force_bar_html(_fill, _bcol, f"{_tot:.1f} kN")
+        bforce_bar.content = lookup.force_bar_html(_fill, lookup.BAR_NEUTRAL, f"{_tot:.1f} kN")
 
     async def refine():
         res = b["results"]
@@ -887,13 +887,13 @@ def browse_page():
             _bc("Max stroke ratio", "stroke", 1.0, 3.0, 0.05)
             _bc("Roof clearance (m)", "clear", 0.0, 0.5, 0.01)
             _bc("Wall + load mass (kg)", "mass", 50, 20000, 10, on_change=lambda: inspect())
-            ui.label("Mounting limits — min–max for every value").classes("font-medium mt-2")
-            ui.label("Where each dimension may sit; the search keeps only "
-                     "geometries inside all four ranges.").classes("text-xs text-grey")
-            for _v, (_lo, _hi, _lab) in BROWSE_RANGES.items():
-                ui.label(_lab).classes("text-xs mt-1 mb-0")
-                ui.range(min=_lo, max=_hi, step=0.01, value={"min": _lo, "max": _hi}) \
-                    .props("label-always").bind_value(b, f"rng_{_v}").classes("w-full")
+            with ui.expansion("Mounting limits — min–max for every value").classes("w-full"):
+                ui.label("Where each dimension may sit; the search keeps only "
+                         "geometries inside all four ranges.").classes("text-xs text-grey")
+                for _v, (_lo, _hi, _lab) in BROWSE_RANGES.items():
+                    ui.label(_lab).classes("text-xs mt-1 mb-0")
+                    ui.range(min=_lo, max=_hi, step=0.01, value={"min": _lo, "max": _hi}) \
+                        .props("label-always").bind_value(b, f"rng_{_v}").classes("w-full")
             ui.label("Filter / sort").classes("font-medium mt-2")
             ui.select({c: BROWSE_LABELS[c] for c in BROWSE_LABELS}, multiple=True,
                       label="Columns to show").bind_value(b, "cols") \

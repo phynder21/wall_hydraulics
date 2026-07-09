@@ -222,8 +222,8 @@ def _advance_angle(angle, direction, step=ANIM_STEP_DEG):
 # them, keeping the same-run "click optimize -> sliders update" behavior even
 # though the tabs sit side by side.
 # =============================================================================
-tab_setup, tab_geometry, tab_optimize, tab_compare = st.sidebar.tabs(
-    ["Setup", "Geometry", "Optimize", "Compare"])
+tab_geometry, tab_setup, tab_optimize, tab_compare = st.sidebar.tabs(
+    ["Geometry", "Setup", "Optimize", "Compare"])
 
 with tab_setup:
     st.subheader("Container")
