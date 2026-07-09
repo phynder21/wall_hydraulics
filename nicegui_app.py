@@ -83,7 +83,7 @@ DEFAULT_STATE = {
     "container": next(iter(CONTAINERS)),
     "a": 0.60, "b": 1.80, "d": 0.10, "f": 0.40,
     "x_cg": 1.20, "z_cg": 0.55, "theta_deg": 45.0,
-    "stroke_ratio": STROKE_RATIO_MAX, "roof_clearance": 0.0,
+    "stroke_ratio": STROKE_RATIO_MAX, "roof_clearance": 0.0, "mass": 500,
     "units": "meters", "fine": False, "alt_pct": 15,
     "design_A": None, "design_B": None, "overlay": False,
 }
@@ -255,7 +255,7 @@ def diagram_figure(a, b, d, f, x_cg, z_cg, theta_deg, width, height, roof_cleara
 
 # Designer fields captured in the shareable URL (mirrors app.py's URL params).
 _URL_FLOATS = ("a", "b", "d", "f", "x_cg", "z_cg", "theta_deg", "stroke_ratio",
-               "roof_clearance")
+               "roof_clearance", "mass")
 
 
 def _url_query(s):
@@ -350,6 +350,10 @@ def index(request: Request):
         m = summary_metrics(s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"],
                             s["theta_deg"], s["stroke_ratio"])
         peak_m.text = f"{m['peak']:.2f} N/kg"
+        _tot, _fill, _bcol = lookup.force_bar(m["peak"], s["mass"])
+        force_bar_cap.text = (f"Total peak cylinder force at {int(s['mass']):,} kg: "
+                              f"{_tot:.1f} kN  ({_tot * 1000:,.0f} N)")
+        force_bar_el.content = lookup.force_bar_html(_fill, _bcol, f"{_tot:.1f} kN")
         here_m.text = f"{m['here']:.2f} N/kg"
         stroke_m.text = f"{m['stroke'] * U:.2f} {ulabel}"
         ratio_m.text = f"{m['ratio']:.2f}" + ("  ✓" if m["ok"] else "  ⚠ over")
@@ -660,6 +664,16 @@ def index(request: Request):
                     linked("Roof clearance", "roof_clearance", 0.0, 0.5,
                            help="Gap the piston attachment must keep below the "
                                 "ceiling through the swing.")
+                    ui.label("Wall + load mass (kg)").classes("text-sm mt-2 mb-0")
+                    with ui.row().classes("w-full items-center no-wrap gap-2"):
+                        _msl = ui.slider(min=50, max=5000, step=10).bind_value(s, "mass") \
+                            .props("label-always").classes("grow")
+                        _msn = ui.number(min=50, max=5000, step=10).bind_value(s, "mass") \
+                            .classes("w-24")
+                    for _me in (_msl, _msn):
+                        _me.on("update:model-value", lambda: reseeding["v"] or refresh(),
+                               throttle=REFRESH_THROTTLE, leading_events=True,
+                               trailing_events=True)
                 with ui.tab_panel("Geometry"):
                     with ui.expansion("Variable ranges (mounting limits)").classes("w-full"):
                         ui.label("Narrow where a dimension may sit; the optimizer "
@@ -716,6 +730,8 @@ def index(request: Request):
                     here_m = metric("Force at θ")
                     stroke_m = metric("Stroke")
                     ratio_m = metric("Stroke ratio")
+                force_bar_cap = ui.label("").classes("text-xs text-gray-500 w-full")
+                force_bar_el = ui.html("").classes("w-full")
             with ui.row().classes("w-full no-wrap gap-3 stack"):
                 diag_plot = ui.plotly(diagram_figure(
                     s["a"], s["b"], s["d"], s["f"], s["x_cg"], s["z_cg"],
@@ -753,7 +769,8 @@ def browse_page():
     ui.add_head_html(RESPONSIVE_CSS)
     b = {"container": next(iter(CONTAINERS)), "x_cg": 1.20, "z_cg": 0.55,
          "stroke": float(STROKE_RATIO_MAX), "clear": 0.0, "sort": "peak_force",
-         "asc": True, "topn": 100, "group_cap": 20, "max_force": 0.0, "results": None,
+         "asc": True, "topn": 100, "group_cap": 20, "max_force": 0.0, "mass": 500,
+         "results": None,
          "cols": list(BROWSE_COLS), "view_angle": 45.0,
          "rng_a": {"min": 0.05, "max": WIDTH / 2},
          "rng_b": {"min": 0.05, "max": HEIGHT_MAX},
@@ -826,6 +843,10 @@ def browse_page():
                                              b["view_angle"], w, h, b["clear"], 1.0, "m"))
         force_el.update_figure(force_figure(a, bb, d, f, b["x_cg"], b["z_cg"], 45.0))
         length_el.update_figure(length_figure(a, bb, d, f, 45.0, b["stroke"]))
+        _tot, _fill, _bcol = lookup.force_bar(float(res["peak_force"][i]), b["mass"])
+        bmass_cap.text = (f"Total peak cylinder force at {int(b['mass']):,} kg: "
+                          f"{_tot:.1f} kN  ({_tot * 1000:,.0f} N)")
+        bforce_bar.content = lookup.force_bar_html(_fill, _bcol, f"{_tot:.1f} kN")
 
     async def refine():
         res = b["results"]
@@ -844,15 +865,18 @@ def browse_page():
             f"b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f} m.  "
             f"(Best grid row in the list above: {grid_best:.2f} N/kg.)")
 
-    def _bc(label, key, lo, hi, step):
+    def _bc(label, key, lo, hi, step, on_change=None):
         """Browse scalar: label + slider + number box, all bound to b[key] so you
         can drag OR type."""
         ui.label(label).classes("text-xs mt-1 mb-0")
         with ui.row().classes("w-full items-center no-wrap gap-2"):
-            ui.slider(min=lo, max=hi, step=step).props("label-always") \
+            sl = ui.slider(min=lo, max=hi, step=step).props("label-always") \
                 .bind_value(b, key).classes("grow")
-            ui.number(min=lo, max=hi, step=step).props("dense") \
+            nu = ui.number(min=lo, max=hi, step=step).props("dense") \
                 .bind_value(b, key).classes("w-24")
+        if on_change:
+            for el in (sl, nu):
+                el.on_value_change(on_change)
 
     with ui.row().classes("w-full no-wrap gap-4 p-2 stack"):
         with ui.card().classes("w-96 shrink-0"):
@@ -862,6 +886,7 @@ def browse_page():
             _bc("z_cg — off the wall (m)", "z_cg", 0.0, 1.5, 0.01)
             _bc("Max stroke ratio", "stroke", 1.0, 3.0, 0.05)
             _bc("Roof clearance (m)", "clear", 0.0, 0.5, 0.01)
+            _bc("Wall + load mass (kg)", "mass", 50, 5000, 10, on_change=lambda: inspect())
             ui.label("Mounting limits — min–max for every value").classes("font-medium mt-2")
             ui.label("Where each dimension may sit; the search keeps only "
                      "geometries inside all four ranges.").classes("text-xs text-grey")
@@ -903,6 +928,8 @@ def browse_page():
                     .bind_value(b, "view_angle").on_value_change(lambda: inspect()) \
                     .classes("grow")
             pick_lbl = ui.label("").classes("text-sm")
+            bmass_cap = ui.label("").classes("text-xs text-gray-500")
+            bforce_bar = ui.html("").classes("w-full")
             ui.separator()
             ui.label("The list is a precomputed GRID, so even its top row is only "
                      "near-optimal. “Get the exact optimum” runs the optimizer once "

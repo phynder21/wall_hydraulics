@@ -89,6 +89,32 @@ def force_color(value, lo, hi):
     return "#%02x%02x%02x" % (r, g, b)
 
 
+FORCE_REF = 25.0   # N/kg treated as "high demand" (a full / red total-force bar)
+
+
+def force_bar(peak_per_kg, mass_kg):
+    """Convert a peak force (N/kg) at a given wall+load mass into a total-force
+    readout: (total force in kN, bar fill 0-1, hex colour). Fill/colour are on the
+    same green(low)->red(high) demand scale as the table, scaled to FORCE_REF."""
+    if not np.isfinite(peak_per_kg):
+        return float("nan"), 0.0, ""
+    total_kn = peak_per_kg * mass_kg / 1000.0
+    fill = min(max(peak_per_kg / FORCE_REF, 0.0), 1.0)
+    return total_kn, fill, force_color(peak_per_kg, 0.0, FORCE_REF)
+
+
+def force_bar_html(fill, color, label):
+    """A horizontal fill bar as an HTML string (for st.markdown or ui.html)."""
+    pct = max(0.0, min(fill, 1.0)) * 100.0
+    color = color or "#bbbbbb"
+    return (
+        '<div style="background:#e9e4d6;border:1px solid #d8cdb5;border-radius:5px;'
+        'height:26px;position:relative;overflow:hidden">'
+        f'<div style="background:{color};width:{pct:.1f}%;height:100%"></div>'
+        '<div style="position:absolute;inset:0;display:flex;align-items:center;'
+        f'padding-left:10px;font-weight:600;color:#1a1a1a">{label}</div></div>')
+
+
 def order_columns(columns, sort_by):
     """Display order for the results table: peak force first, then the column
     being sorted by (so it sits just right of peak force), then the rest in their

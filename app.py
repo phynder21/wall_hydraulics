@@ -14,6 +14,7 @@ from wall import (
 # watcher tracks optimize.py and reloads it on edit, like wall.py.
 from optimize import optimize_actuator
 from browse import render_browse
+from lookup import force_bar, force_bar_html
 
 # Human-readable build marker. Bump on notable changes so you can tell at a
 # glance whether a running/deployed page has the latest code (a stale process
@@ -53,6 +54,7 @@ DEFAULTS = {
     "f": 0.40,
     "x_cg": 1.20,
     "z_cg": 0.55,
+    "mass": 500,
     "theta_deg": 45.0,
     "stroke_ratio": STROKE_RATIO_MAX,   # max L_max/L_min (also drives optimizer)
     "roof_clearance": 0.0,              # m the endpoint must stay below the roof
@@ -273,6 +275,9 @@ with tab_setup:
                         fmt=LEN_FMT)
     z_cg = linked_input(f"z_cg — perpendicular off wall [{ULABEL}]", "z_cg",
                         0.0, 1.5, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
+    mass = st.slider("Wall + load mass (kg)", 50, 5000, step=10, key="mass",
+                     help="Total mass of the wall plus anything mounted on it. "
+                          "Peak force per kg × this = the real cylinder force.")
 
     # --- Constraints (shared with the optimizer) ---
     st.subheader("Constraints")
@@ -538,6 +543,12 @@ with st.container(border=True):
               delta=("within limit" if stroke_ok else "over limit"),
               delta_color=("off" if stroke_ok else "inverse"),
               help=f"Extended/retracted length ratio vs. your {stroke_ratio:g}× limit.")
+    total_kn, bar_fill, bar_color = force_bar(peak_mag, mass)
+    st.caption(f"**Total peak cylinder force at {mass:,} kg:** "
+               f"{total_kn:.1f} kN  ({total_kn * 1000:,.0f} N) — "
+               "green = low demand, red = high.")
+    st.markdown(force_bar_html(bar_fill, bar_color, f"{total_kn:.1f} kN"),
+                unsafe_allow_html=True)
 
 # --- Top row: diagram + force ---
 col_diag, col_force = st.columns(2)

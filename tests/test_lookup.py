@@ -170,3 +170,17 @@ def test_group_cap_limits_rows_per_sort_value(table):
     assert max(counts.values()) <= 5
     f0 = capped["f"] == np.unique(capped["f"])[0]     # lowest-force kept per group
     assert np.all(np.diff(capped["peak_force"][f0]) >= -1e-6)
+
+
+def test_force_bar():
+    """Total force = peak x mass; fill/colour on a green->red demand scale."""
+    total, fill, color = lookup.force_bar(10.0, 500.0)
+    assert total == 5.0                              # 10 N/kg * 500 kg = 5000 N = 5 kN
+    assert 0.0 < fill < 1.0
+    assert color.startswith("#")
+    # high demand saturates the bar red-ish; non-finite -> empty
+    assert lookup.force_bar(100.0, 500.0)[1] == 1.0
+    assert lookup.force_bar(float("nan"), 500.0) == (lookup.force_bar(float("nan"), 500.0)[0], 0.0, "") or True
+    import math
+    t, f, c = lookup.force_bar(float("nan"), 500.0)
+    assert math.isnan(t) and f == 0.0 and c == ""

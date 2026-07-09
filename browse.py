@@ -199,6 +199,10 @@ def render_browse():
     clearance = _sb_linked(
         "Roof clearance (m)", "lk_clear", 0.0, 0.5, 0.0, 0.01,
         help="Keep the piston attachment this far below the roof.")
+    mass = st.sidebar.slider("Wall + load mass (kg)", 50, 5000, 500, 10,
+                             key="lk_mass",
+                             help="Converts the per-kg peak force into the real "
+                                  "cylinder force (shown for the inspected design).")
 
     st.sidebar.header("Mounting limits")
     st.sidebar.caption("Each control is a min–max range for that dimension (drag "
@@ -296,6 +300,12 @@ def render_browse():
         f"**a={a:.3f}  b={b:.3f}  d={d:.3f}  f={f:.3f} m** — "
         f"peak **{res['peak_force'][rank]:.2f} N/kg**, stroke "
         f"{res['stroke'][rank]:.2f} m (ratio {res['stroke_ratio'][rank]:.2f})")
+    total_kn, bar_fill, bar_color = lookup.force_bar(
+        float(res["peak_force"][rank]), mass)
+    st.caption(f"Total peak cylinder force at {mass:,} kg: "
+               f"**{total_kn:.1f} kN** ({total_kn * 1000:,.0f} N)")
+    st.markdown(lookup.force_bar_html(bar_fill, bar_color, f"{total_kn:.1f} kN"),
+                unsafe_allow_html=True)
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle)
     ff, fl = _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max)
     p1, p2, p3 = st.columns(3)

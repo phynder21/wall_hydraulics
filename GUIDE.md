@@ -36,7 +36,9 @@ Two limits keep designs realistic:
 2. Drag or type the four geometry values (a, b, d, f). The **diagram** shows the
    layout and the **plots** show force and cylinder length across the full swing.
 3. Watch the **metrics**: *Peak force* is the worst-case push the cylinder must
-   provide — the number you want to make small.
+   provide (per kg) — the number you want to make small. Set the **Wall + load
+   mass** slider and the **total-force bar** below the metrics shows the real
+   cylinder force in kN (green = low demand, red = high).
 4. Press **Optimize** and the tool finds the a, b, d, f that minimize peak force
    for your setup, and lists a few near-optimal alternatives you can click to load.
 
@@ -65,7 +67,8 @@ instant results, no waiting.
      (default 20), so one value (like f = 0) can't flood the list — you see the
      best few at each value and a wide spread of values instead.
 3. Click a row's **rank** to inspect it: its exact diagram (scrub the view angle),
-   force curve, and length curve.
+   force curve, length curve, and — from the **Wall + load mass** slider — its
+   **total cylinder force** in kN on a green→red bar.
 4. The database is a grid, so its best row is only *near*-optimal. Press
    **Get the exact optimum** to run the optimizer once for your settings and get
    the true best geometry (and see how far the grid was off).
@@ -75,7 +78,9 @@ instant results, no waiting.
 ## Reading the results
 
 - **Peak force (N/kg)** — piston force per kg of wall+load. **Lower is better.**
-  Multiply by the wall's mass (kg) to get the real force in newtons.
+- **Wall + load mass (kg)** — set this and the **total-force bar** does the
+  multiplication for you: the real cylinder force in **kN** (and N), shaded
+  green (low demand) → red (high). It's in both the Designer and Browse.
 - **Stroke / stroke ratio** — how much the cylinder extends; keep the ratio under
   your limit so a real cylinder can do it.
 - **Green→red shading** (Browse) — relative to the results shown: greenest is the
