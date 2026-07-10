@@ -1049,7 +1049,6 @@ def reverse_page():
     with ui.row().classes("w-full no-wrap gap-4 p-2 stack"):
         with ui.card().classes("w-96 shrink-0"):
             ui.label("Cylinder — force").classes("font-medium")
-            ui.label("How much push the cylinder can make.").classes("text-xs text-grey")
             ui.toggle(["Bore + pressure", "Rated force"], value="Bore + pressure").bind_value(r, "mode").props("dense")
             with ui.column().classes("w-full gap-0").bind_visibility_from(r, "mode", value="Bore + pressure"):
                 _rc("Bore diameter (mm)", "bore", 20, 200, 1,
@@ -1064,7 +1063,6 @@ def reverse_page():
             _rc("Safety factor", "safety", 1.0, 3.0, 0.1,
                 help="Divide the cylinder force by this before sizing the wall.")
             ui.label("Cylinder — length").classes("font-medium mt-2")
-            ui.label("Its pin-to-pin length must span the wall's motion.").classes("text-xs text-grey")
             _rc("Closed length — fully retracted (mm)", "retracted", 100, 3500, 10,
                 help="Pin-to-pin length with the rod all the way in.")
             _rc("Stroke — how far the rod extends (mm)", "stroke", 50, 3000, 10,

@@ -27,7 +27,6 @@ def render_reverse():
 
     # --- Cylinder force ---
     st.sidebar.header("Cylinder — force")
-    st.sidebar.caption("How much push the cylinder can make.")
     mode = st.sidebar.radio("Give force as", ["Bore + pressure", "Rated force"],
                             key="rv_fmode", horizontal=True)
     if mode == "Bore + pressure":
@@ -56,7 +55,6 @@ def render_reverse():
 
     # --- Cylinder length window ---
     st.sidebar.header("Cylinder — length")
-    st.sidebar.caption("Its pin-to-pin length must span the wall's motion.")
     retracted = _sb_linked(
         "Closed length — fully retracted (mm)", "rv_ret", 100.0, 3500.0, 700.0, 10.0,
         fmt="%.0f", help="Pin-to-pin length with the rod all the way in.")
