@@ -121,14 +121,17 @@ def render_reverse():
     a, b, d, f = (float(res["a"][0]), float(res["b"][0]),
                   float(res["d"][0]), float(res["f"][0]))
     peak = float(res["peak_force"][0])
-    max_mass = force_use / peak
+    max_mass = force_use / peak            # safe: force already ÷ safety factor
+    abs_mass = force_n / peak              # absolute: cylinder flat out, no margin
 
     m1, m2, m3 = st.columns(3)
-    m1.metric("Max wall mass this cylinder raises", f"{max_mass:,.0f} kg",
-              help="Cylinder force ÷ safety factor ÷ peak force per kg.")
-    m2.metric("Peak force needed", f"{peak:.2f} N/kg")
-    m3.metric("Usable cylinder force", f"{force_use / 1000:.1f} kN",
-              help="Rated force ÷ safety factor.")
+    m1.metric("Safe max wall mass", f"{max_mass:,.0f} kg",
+              help="The most you should load it — WITH your safety factor applied "
+                   "(cylinder force ÷ safety factor ÷ peak force per kg).")
+    m2.metric("Absolute cylinder max", f"{abs_mass:,.0f} kg",
+              help="If the cylinder ran flat-out at 100% with no margin. The safe "
+                   "figure is this ÷ your safety factor — use the safe one.")
+    m3.metric("Peak force needed", f"{peak:.2f} N/kg")
     st.markdown(
         f"**Best geometry:** a={a:.3f}  b={b:.3f}  d={d:.3f}  f={f:.3f} m — its "
         f"cylinder runs **{res['L_min'][0] * M_TO_IN:.1f}–{res['L_max'][0] * M_TO_IN:.1f} in** "

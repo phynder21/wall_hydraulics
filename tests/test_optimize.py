@@ -248,3 +248,16 @@ def test_length_window_is_respected():
     assert res["feasible"]
     assert res["L_min"] >= 0.9 - LENGTH_TOL - 1e-6
     assert res["L_max"] <= 1.7 + LENGTH_TOL + 1e-6
+
+
+@pytest.mark.parametrize("window", [(0.9, 1.7), (0.7, 1.5), (1.0, 2.0)])
+def test_length_window_variants(window):
+    """Across several cylinder windows, a feasible reverse optimum keeps its
+    cylinder length inside the window."""
+    from optimize import LENGTH_TOL
+    lo, hi = window
+    res = optimize_actuator(*STANDARD, x_cg=1.2, z_cg=0.55, length_window=window,
+                            stroke_ratio_max=3.0, n_starts=4, maxiter=80)
+    if res["feasible"]:
+        assert res["L_min"] >= lo - LENGTH_TOL - 1e-6
+        assert res["L_max"] <= hi + LENGTH_TOL + 1e-6

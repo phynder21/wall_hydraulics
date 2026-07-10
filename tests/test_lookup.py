@@ -201,3 +201,28 @@ def test_cylinder_matches_fits_window(table):
     assert np.all(np.diff(res["peak_force"]) >= -1e-6)  # ranked by peak, ascending
     # a window longer than any geometry -> impossible (no matches)
     assert lookup.cylinder_matches(table, STANDARD_H, 1.2, 0.55, 5.0, 6.0)["peak_force"].size == 0
+
+
+def test_cylinder_force_scales():
+    """Force is pressure x piston area: linear in pressure, quadratic in bore."""
+    p1, _ = lookup.cylinder_force(100.0, 50.0, 100.0)
+    p2, _ = lookup.cylinder_force(100.0, 50.0, 200.0)   # 2x pressure -> 2x force
+    p3, _ = lookup.cylinder_force(200.0, 50.0, 100.0)   # 2x bore -> 4x area -> 4x force
+    assert abs(p2 - 2 * p1) < 1.0
+    assert abs(p3 - 4 * p1) < 1.0
+
+
+def test_cylinder_matches_windows(table):
+    """Across several cylinder windows, every returned geometry fits the window
+    and is ranked by ascending peak force."""
+    for ret, ext in [(0.5, 1.4), (0.7, 1.6), (0.4, 2.4)]:
+        res = lookup.cylinder_matches(table, STANDARD_H, 1.2, 0.55, ret, ext, limit=100000)
+        if res["peak_force"].size:
+            assert np.all(res["L_min"] >= ret - 1e-9), (ret, ext)
+            assert np.all(res["L_max"] <= ext + 1e-9), (ret, ext)
+            assert np.all(np.diff(res["peak_force"]) >= -1e-6), (ret, ext)
+
+
+def test_impossible_cylinder_returns_no_matches(table):
+    """A window longer than any geometry can span yields no matches (flagged in UI)."""
+    assert lookup.cylinder_matches(table, STANDARD_H, 1.2, 0.55, 4.0, 6.0)["peak_force"].size == 0

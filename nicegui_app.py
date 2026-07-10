@@ -970,7 +970,8 @@ def reverse_page():
             ui.label(f"build: {BUILD}").classes("text-xs text-gray-400")
         _nav_tabs("Cylinder")
 
-    def _force_use():
+    def _forces():
+        """(absolute force, safe force) in newtons — safe = absolute / safety."""
         if r["mode"] == "Bore + pressure":
             push, _pull = lookup.cylinder_force(
                 r["bore"] * 25.4, min(r["rod"], r["bore"] - 0.01) * 25.4,
@@ -978,14 +979,14 @@ def reverse_page():
             fn = push
         else:
             fn = r["frated"] * LBF_TO_N
-        return fn / max(r["safety"], 1e-6)
+        return fn, fn / max(r["safety"], 1e-6)
 
     def solve():
         if _TABLE["data"] is None:
             ui.notify("Building the database (first time, ~15 s)…")
         table = get_table()
         w, h = CONTAINERS[r["container"]]
-        force_use = _force_use()
+        force_full, force_use = _forces()
         L_ret, L_ext = r["retracted"] * IN_TO_M, (r["retracted"] + r["stroke"]) * IN_TO_M
         bounds = {v: (r[f"rng_{v}"]["min"], r[f"rng_{v}"]["max"]) for v in ("a", "b", "d", "f")}
         res = lookup.cylinder_matches(table, h, r["x_cg"], r["z_cg"], L_ret, L_ext,
@@ -1008,7 +1009,8 @@ def reverse_page():
         mass_lbl.text = f"{force_use / peak:,.0f} kg"
         detail_lbl.text = (f"Best geometry a={a:.3f} b={b:.3f} d={d:.3f} f={f:.3f} m · cylinder "
                            f"{res['L_min'][0]*M_TO_IN:.1f}–{res['L_max'][0]*M_TO_IN:.1f} in (inside window) · "
-                           f"peak {peak:.2f} N/kg · usable force {force_use/1000:.1f} kN")
+                           f"peak {peak:.2f} N/kg. Absolute cylinder max (no safety): "
+                           f"{force_full / peak:,.0f} kg.")
         force_el.update_figure(force_figure(a, b, d, f, r["x_cg"], r["z_cg"], 45.0))
         length_el.update_figure(length_figure(a, b, d, f, 45.0, float(res["stroke_ratio"][0])))
         _df = diagram_figure(a, b, d, f, r["x_cg"], r["z_cg"], r["view"], w, h, r["clear"], 1.0, "m")
@@ -1025,7 +1027,7 @@ def reverse_page():
                                  roof_clearance=r["clear"], var_bounds=bounds)
         if opt["feasible"]:
             refine_lbl.text = (f"Exact optimum: peak {opt['peak_force']:.2f} N/kg → raises "
-                               f"{_force_use()/opt['peak_force']:,.0f} kg at a={opt['a']:.3f} "
+                               f"{_forces()[1]/opt['peak_force']:,.0f} kg at a={opt['a']:.3f} "
                                f"b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f} m.")
         else:
             refine_lbl.text = "No geometry fits the exact cylinder window here."
@@ -1072,7 +1074,7 @@ def reverse_page():
             ui.button("Find geometry", on_click=solve).props("color=primary").classes("w-full")
 
         with ui.column().classes("flex-1 gap-2"):
-            ui.label("Max wall mass this cylinder can raise").classes("text-xs text-gray-500 uppercase tracking-wide")
+            ui.label("Safe max wall mass (with safety factor)").classes("text-xs text-gray-500 uppercase tracking-wide")
             mass_lbl = ui.label("—").classes("text-3xl font-semibold")
             detail_lbl = ui.label("Set a cylinder and press Find geometry.").classes("text-sm")
             with ui.row().classes("w-full no-wrap gap-2 stack"):
