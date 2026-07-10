@@ -81,12 +81,12 @@ instant results, no waiting.
 Have a specific hydraulic cylinder in mind? This works backwards: you enter the
 cylinder, and it finds the best geometry and the **biggest wall it can raise**.
 
-1. Enter the cylinder's **force** — either bore Ø + rod Ø + max pressure (it
-   computes push/pull), or a rated force in kN — plus a **safety factor**.
-2. Enter the cylinder's **length** — retracted (closed) length + stroke, **in mm**
-   (the usual cylinder-spec unit; the geometry stays in metres). It shows the
-   extended length. This is a **hard constraint** — the geometry's cylinder length
-   must stay inside [retracted, extended] the whole way up.
+1. Enter the cylinder's **force** — either bore + rod diameter + max pressure (in
+   psi), or a rated push force (in lbf) — plus a **safety factor**.
+2. Enter the cylinder's **length** — closed (retracted) length + stroke, **in
+   inches** (cylinder specs are imperial; the wall geometry stays in metres). It
+   shows the extended length. This is a **hard constraint** — the geometry's
+   cylinder length must stay inside [closed, extended] the whole way up.
 3. Set the **wall** (container, cg) and, optionally, **restrict the output
    geometry** (a, b, d, f ranges) — e.g. keep the base height f low.
 4. It reports the **max wall mass** the cylinder can raise, the best-fitting

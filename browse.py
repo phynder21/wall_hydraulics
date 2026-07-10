@@ -115,9 +115,11 @@ def _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, theta_deg=45.0,
     return fig
 
 
-def _sb_linked(label, key, lo, hi, default, step, fmt="%.2f", help=None):
-    """Sidebar slider + typeable number box bound to one canonical value in
-    st.session_state[key]. Either widget edits the same value."""
+def _sb_linked(label, key, lo, hi, default, step, fmt="%.2f", help=None, ctx=None):
+    """Slider + typeable number box bound to one canonical value in
+    st.session_state[key]. Renders into `ctx` (default the sidebar; pass an
+    expander to group it)."""
+    ctx = ctx if ctx is not None else st.sidebar
     if key not in st.session_state:
         st.session_state[key] = float(default)
     skey, nkey = f"{key}__s", f"{key}__n"
@@ -130,8 +132,8 @@ def _sb_linked(label, key, lo, hi, default, step, fmt="%.2f", help=None):
     def _from_n():
         st.session_state[key] = float(min(max(st.session_state[nkey], lo), hi))
 
-    st.sidebar.markdown(f"**{label}**")
-    c1, c2 = st.sidebar.columns([2, 1])
+    ctx.markdown(f"**{label}**")
+    c1, c2 = ctx.columns([2, 1])
     c1.slider(label, lo, hi, step=step, key=skey, on_change=_from_s,
               help=help, label_visibility="collapsed")
     c2.number_input(label, min_value=lo, max_value=hi, step=step, key=nkey,

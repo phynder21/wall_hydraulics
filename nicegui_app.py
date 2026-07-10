@@ -78,6 +78,8 @@ CONTAINERS = {
 }
 WIDTH = CONTAINER_PRESETS["highcube"][0]
 HEIGHT_MAX = CONTAINER_PRESETS["highcube"][1]     # tallest; fixes slider extents
+# Imperial <-> metric for cylinder specs (US hydraulic convention).
+IN_TO_M, PSI_TO_BAR, LBF_TO_N, M_TO_IN = 0.0254, 0.0689476, 4.44822, 39.37008
 
 DEFAULT_STATE = {
     "container": next(iter(CONTAINERS)),
@@ -954,8 +956,8 @@ def reverse_page():
     ui.colors(primary=PRIMARY)
     ui.add_head_html(RESPONSIVE_CSS)
     r = {"container": next(iter(CONTAINERS)), "mode": "Bore + pressure",
-         "bore": 63.0, "rod": 36.0, "press": 160.0, "frated": 50.0, "safety": 1.5,
-         "retracted": 700.0, "stroke": 500.0, "x_cg": 1.20, "z_cg": 0.55,
+         "bore": 2.5, "rod": 1.5, "press": 2300.0, "frated": 11000.0, "safety": 1.5,
+         "retracted": 28.0, "stroke": 20.0, "x_cg": 1.20, "z_cg": 0.55,
          "clear": 0.0, "view": 45.0,
          "rng_a": {"min": 0.05, "max": WIDTH / 2},
          "rng_b": {"min": 0.05, "max": HEIGHT_MAX},
@@ -970,10 +972,12 @@ def reverse_page():
 
     def _force_use():
         if r["mode"] == "Bore + pressure":
-            push, _pull = lookup.cylinder_force(r["bore"], min(r["rod"], r["bore"] - 1), r["press"])
+            push, _pull = lookup.cylinder_force(
+                r["bore"] * 25.4, min(r["rod"], r["bore"] - 0.01) * 25.4,
+                r["press"] * PSI_TO_BAR)
             fn = push
         else:
-            fn = r["frated"] * 1000.0
+            fn = r["frated"] * LBF_TO_N
         return fn / max(r["safety"], 1e-6)
 
     def solve():
@@ -982,7 +986,7 @@ def reverse_page():
         table = get_table()
         w, h = CONTAINERS[r["container"]]
         force_use = _force_use()
-        L_ret, L_ext = r["retracted"] / 1000.0, (r["retracted"] + r["stroke"]) / 1000.0
+        L_ret, L_ext = r["retracted"] * IN_TO_M, (r["retracted"] + r["stroke"]) * IN_TO_M
         bounds = {v: (r[f"rng_{v}"]["min"], r[f"rng_{v}"]["max"]) for v in ("a", "b", "d", "f")}
         res = lookup.cylinder_matches(table, h, r["x_cg"], r["z_cg"], L_ret, L_ext,
                                       bounds=bounds, roof_clearance=r["clear"], limit=5)
@@ -993,9 +997,9 @@ def reverse_page():
             if allrows["peak_force"].size:
                 lo, hi = float(allrows["L_min"].min()), float(allrows["L_max"].max())
                 detail_lbl.text = (f"No layout keeps the cylinder inside your "
-                                   f"{L_ret*1000:.0f}–{L_ext*1000:.0f} mm window. Feasible layouts "
-                                   f"here need ~{lo*1000:.0f}–{hi*1000:.0f} mm. Try a longer stroke, "
-                                   f"a different retracted length, or looser geometry limits.")
+                                   f"{L_ret*M_TO_IN:.1f}–{L_ext*M_TO_IN:.1f} in window. Feasible layouts "
+                                   f"here need ~{lo*M_TO_IN:.1f}–{hi*M_TO_IN:.1f} in. Try a longer stroke, "
+                                   f"a different closed length, or looser geometry limits.")
             else:
                 detail_lbl.text = "No layout fits the container + geometry limits. Loosen them."
             return
@@ -1003,7 +1007,7 @@ def reverse_page():
         peak = float(res["peak_force"][0])
         mass_lbl.text = f"{force_use / peak:,.0f} kg"
         detail_lbl.text = (f"Best geometry a={a:.3f} b={b:.3f} d={d:.3f} f={f:.3f} m · cylinder "
-                           f"{res['L_min'][0]*1000:.0f}–{res['L_max'][0]*1000:.0f} mm (inside window) · "
+                           f"{res['L_min'][0]*M_TO_IN:.1f}–{res['L_max'][0]*M_TO_IN:.1f} in (inside window) · "
                            f"peak {peak:.2f} N/kg · usable force {force_use/1000:.1f} kN")
         force_el.update_figure(force_figure(a, b, d, f, r["x_cg"], r["z_cg"], 45.0))
         length_el.update_figure(length_figure(a, b, d, f, 45.0, float(res["stroke_ratio"][0])))
@@ -1013,7 +1017,7 @@ def reverse_page():
 
     async def refine():
         w, h = CONTAINERS[r["container"]]
-        L_ret, L_ext = r["retracted"] / 1000.0, (r["retracted"] + r["stroke"]) / 1000.0
+        L_ret, L_ext = r["retracted"] * IN_TO_M, (r["retracted"] + r["stroke"]) * IN_TO_M
         bounds = {v: (r[f"rng_{v}"]["min"], r[f"rng_{v}"]["max"]) for v in ("a", "b", "d", "f")}
         refine_lbl.text = "Optimizing…"
         opt = await run.io_bound(optimize_actuator, w, h, r["x_cg"], r["z_cg"],
@@ -1036,30 +1040,30 @@ def reverse_page():
 
     with ui.row().classes("w-full no-wrap gap-4 p-2 stack"):
         with ui.card().classes("w-96 shrink-0"):
-            ui.label("Cylinder — force").classes("font-medium")
-            ui.toggle(["Bore + pressure", "Rated force"], value="Bore + pressure").bind_value(r, "mode").props("dense")
-            with ui.column().classes("w-full gap-0").bind_visibility_from(r, "mode", value="Bore + pressure"):
-                _rc("Bore diameter (mm)", "bore", 20, 200, 1,
-                    help="Inside diameter of the cylinder barrel. Bigger bore = more force at the same pressure.")
-                _rc("Rod diameter (mm)", "rod", 10, 190, 1,
-                    help="Diameter of the piston rod (used for the pull / retract force).")
-                _rc("Max pressure (bar)", "press", 50, 350, 5,
-                    help="Highest hydraulic pressure the system runs at.")
-            with ui.column().classes("w-full gap-0").bind_visibility_from(r, "mode", value="Rated force"):
-                _rc("Rated push force (kN)", "frated", 1, 300, 1,
-                    help="The cylinder's push force straight from its datasheet, if you have it.")
-            _rc("Safety factor", "safety", 1.0, 3.0, 0.1,
-                help="Divide the cylinder force by this before sizing the wall.")
-            ui.label("Cylinder — length").classes("font-medium mt-2")
-            _rc("Closed length — fully retracted (mm)", "retracted", 100, 3500, 10,
-                help="Pin-to-pin length with the rod all the way in.")
-            _rc("Stroke — how far the rod extends (mm)", "stroke", 50, 3000, 10,
-                help="Rod travel. Extended length = closed length + stroke.")
-            ui.label("Wall").classes("font-medium mt-2")
-            ui.select(list(CONTAINERS), label="Container").bind_value(r, "container")
-            _rc("x_cg — along wall (m)", "x_cg", 0.0, HEIGHT_MAX, 0.01)
-            _rc("z_cg — off the wall (m)", "z_cg", 0.0, 1.5, 0.01)
-            _rc("Roof clearance (m)", "clear", 0.0, 0.5, 0.01)
+            with ui.expansion("Cylinder — force", value=True).classes("w-full"):
+                ui.toggle(["Bore + pressure", "Rated force"], value="Bore + pressure").bind_value(r, "mode").props("dense")
+                with ui.column().classes("w-full gap-0").bind_visibility_from(r, "mode", value="Bore + pressure"):
+                    _rc("Bore diameter (in)", "bore", 0.75, 8.0, 0.25,
+                        help="Inside diameter of the cylinder barrel. Bigger bore = more force at the same pressure.")
+                    _rc("Rod diameter (in)", "rod", 0.4, 7.5, 0.25,
+                        help="Diameter of the piston rod (used for the pull / retract force).")
+                    _rc("Max pressure (psi)", "press", 700, 5000, 50,
+                        help="Highest hydraulic pressure the system runs at.")
+                with ui.column().classes("w-full gap-0").bind_visibility_from(r, "mode", value="Rated force"):
+                    _rc("Rated push force (lbf)", "frated", 200, 70000, 100,
+                        help="The cylinder's push force straight from its datasheet, if you have it.")
+                _rc("Safety factor", "safety", 1.0, 3.0, 0.1,
+                    help="Divide the cylinder force by this before sizing the wall.")
+            with ui.expansion("Cylinder — length", value=True).classes("w-full"):
+                _rc("Closed length — fully retracted (in)", "retracted", 4, 140, 1,
+                    help="Pin-to-pin length with the rod all the way in.")
+                _rc("Stroke — how far the rod extends (in)", "stroke", 2, 120, 1,
+                    help="Rod travel. Extended length = closed length + stroke.")
+            with ui.expansion("Wall", value=True).classes("w-full"):
+                ui.select(list(CONTAINERS), label="Container").bind_value(r, "container")
+                _rc("x_cg — along wall (m)", "x_cg", 0.0, HEIGHT_MAX, 0.01)
+                _rc("z_cg — off the wall (m)", "z_cg", 0.0, 1.5, 0.01)
+                _rc("Roof clearance (m)", "clear", 0.0, 0.5, 0.01)
             with ui.expansion("Restrict the output geometry (a, b, d, f)").classes("w-full"):
                 for _v, (_lo, _hi, _lab) in BROWSE_RANGES.items():
                     ui.label(_lab).classes("text-xs mt-1 mb-0")
