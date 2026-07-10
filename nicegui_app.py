@@ -1038,8 +1038,10 @@ def reverse_page():
         else:
             refine_lbl.text = "No geometry fits the exact cylinder window here."
 
-    def _rc(label, key, lo, hi, step, fmt=None):
-        ui.label(label).classes("text-xs mt-1 mb-0")
+    def _rc(label, key, lo, hi, step, fmt=None, help=None):
+        lab = ui.label(label).classes("text-xs mt-1 mb-0")
+        if help:
+            lab.tooltip(help)
         with ui.row().classes("w-full items-center no-wrap gap-2"):
             ui.slider(min=lo, max=hi, step=step).props("label-always").bind_value(r, key).classes("grow")
             ui.number(min=lo, max=hi, step=step).props("dense").bind_value(r, key).classes("w-24")
@@ -1047,17 +1049,26 @@ def reverse_page():
     with ui.row().classes("w-full no-wrap gap-4 p-2 stack"):
         with ui.card().classes("w-96 shrink-0"):
             ui.label("Cylinder — force").classes("font-medium")
+            ui.label("How much push the cylinder can make.").classes("text-xs text-grey")
             ui.toggle(["Bore + pressure", "Rated force"], value="Bore + pressure").bind_value(r, "mode").props("dense")
             with ui.column().classes("w-full gap-0").bind_visibility_from(r, "mode", value="Bore + pressure"):
-                _rc("Bore Ø (mm)", "bore", 20, 200, 1)
-                _rc("Rod Ø (mm)", "rod", 10, 190, 1)
-                _rc("Max pressure (bar)", "press", 50, 350, 5)
+                _rc("Bore diameter (mm)", "bore", 20, 200, 1,
+                    help="Inside diameter of the cylinder barrel. Bigger bore = more force at the same pressure.")
+                _rc("Rod diameter (mm)", "rod", 10, 190, 1,
+                    help="Diameter of the piston rod (used for the pull / retract force).")
+                _rc("Max pressure (bar)", "press", 50, 350, 5,
+                    help="Highest hydraulic pressure the system runs at.")
             with ui.column().classes("w-full gap-0").bind_visibility_from(r, "mode", value="Rated force"):
-                _rc("Rated force (kN)", "frated", 1, 300, 1)
-            _rc("Safety factor", "safety", 1.0, 3.0, 0.1)
+                _rc("Rated push force (kN)", "frated", 1, 300, 1,
+                    help="The cylinder's push force straight from its datasheet, if you have it.")
+            _rc("Safety factor", "safety", 1.0, 3.0, 0.1,
+                help="Divide the cylinder force by this before sizing the wall.")
             ui.label("Cylinder — length").classes("font-medium mt-2")
-            _rc("Retracted length (mm)", "retracted", 100, 3500, 10)
-            _rc("Stroke (mm)", "stroke", 50, 3000, 10)
+            ui.label("Its pin-to-pin length must span the wall's motion.").classes("text-xs text-grey")
+            _rc("Closed length — fully retracted (mm)", "retracted", 100, 3500, 10,
+                help="Pin-to-pin length with the rod all the way in.")
+            _rc("Stroke — how far the rod extends (mm)", "stroke", 50, 3000, 10,
+                help="Rod travel. Extended length = closed length + stroke.")
             ui.label("Wall").classes("font-medium mt-2")
             ui.select(list(CONTAINERS), label="Container").bind_value(r, "container")
             _rc("x_cg — along wall (m)", "x_cg", 0.0, HEIGHT_MAX, 0.01)

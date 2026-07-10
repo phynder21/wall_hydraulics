@@ -27,30 +27,43 @@ def render_reverse():
 
     # --- Cylinder force ---
     st.sidebar.header("Cylinder — force")
-    mode = st.sidebar.radio("Force from", ["Bore + pressure", "Rated force"],
+    st.sidebar.caption("How much push the cylinder can make.")
+    mode = st.sidebar.radio("Give force as", ["Bore + pressure", "Rated force"],
                             key="rv_fmode", horizontal=True)
     if mode == "Bore + pressure":
-        bore = _sb_linked("Bore Ø (mm)", "rv_bore", 20.0, 200.0, 63.0, 1.0, fmt="%.0f")
-        rod = _sb_linked("Rod Ø (mm)", "rv_rod", 10.0, 190.0, 36.0, 1.0, fmt="%.0f")
-        pressure = _sb_linked("Max pressure (bar)", "rv_press", 50.0, 350.0, 160.0,
-                              5.0, fmt="%.0f")
+        bore = _sb_linked(
+            "Bore diameter (mm)", "rv_bore", 20.0, 200.0, 63.0, 1.0, fmt="%.0f",
+            help="Inside diameter of the cylinder barrel. A bigger bore makes more "
+                 "force at the same pressure.")
+        rod = _sb_linked(
+            "Rod diameter (mm)", "rv_rod", 10.0, 190.0, 36.0, 1.0, fmt="%.0f",
+            help="Diameter of the piston rod (used for the pull / retract force).")
+        pressure = _sb_linked(
+            "Max pressure (bar)", "rv_press", 50.0, 350.0, 160.0, 5.0, fmt="%.0f",
+            help="Highest hydraulic pressure the system runs at.")
         push, pull = lookup.cylinder_force(bore, min(rod, bore - 1), pressure)
         st.sidebar.caption(f"Push **{push / 1000:.1f} kN** · Pull {pull / 1000:.1f} kN. "
                            "Raising the wall extends the cylinder, so push is used.")
         force_n = push
     else:
-        force_n = _sb_linked("Rated force (kN)", "rv_frated", 1.0, 300.0, 50.0, 1.0,
-                             fmt="%.1f") * 1000.0
+        force_n = _sb_linked(
+            "Rated push force (kN)", "rv_frated", 1.0, 300.0, 50.0, 1.0, fmt="%.1f",
+            help="The cylinder's push force straight from its datasheet, if you "
+                 "have it.") * 1000.0
     safety = _sb_linked("Safety factor", "rv_sf", 1.0, 3.0, 1.5, 0.1, fmt="%.1f",
                         help="Divide the cylinder force by this before sizing the wall.")
     force_use = force_n / safety
 
     # --- Cylinder length window ---
     st.sidebar.header("Cylinder — length")
-    retracted = _sb_linked("Retracted (closed) length (mm)", "rv_ret", 100.0, 3500.0,
-                           700.0, 10.0, fmt="%.0f")
-    stroke = _sb_linked("Stroke (mm)", "rv_stroke", 50.0, 3000.0, 500.0, 10.0,
-                        fmt="%.0f")
+    st.sidebar.caption("Its pin-to-pin length must span the wall's motion.")
+    retracted = _sb_linked(
+        "Closed length — fully retracted (mm)", "rv_ret", 100.0, 3500.0, 700.0, 10.0,
+        fmt="%.0f", help="Pin-to-pin length with the rod all the way in.")
+    stroke = _sb_linked(
+        "Stroke — how far the rod extends (mm)", "rv_stroke", 50.0, 3000.0, 500.0,
+        10.0, fmt="%.0f",
+        help="Rod travel. Extended length = closed length + stroke.")
     L_ret, L_ext = retracted / 1000.0, (retracted + stroke) / 1000.0
     st.sidebar.caption(f"Extended length **{L_ret * 1000 + stroke:.0f} mm** "
                        f"(length ratio {L_ext / L_ret:.2f}).")
