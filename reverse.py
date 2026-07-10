@@ -5,15 +5,42 @@ the cylinder's length window AND needs the least force, then reports the largest
 wall mass that cylinder can raise. Same precomputed table + optimizer as the
 other views; some cylinders simply won't fit any geometry, which is flagged.
 """
-import numpy as np
 import streamlit as st
 
 from optimize import optimize_actuator
 import lookup
-
-IN_TO_M, PSI_TO_BAR, LBF_TO_N, M_TO_IN = 0.0254, 0.0689476, 4.44822, 39.37008
 from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
                     _diagram_figure, _force_length_figures, _sb_linked, _sb_range)
+
+# Per-unit spec for each cylinder input: (label, lo, hi, default, step, fmt,
+# to_base) where to_base converts the shown value to the physics base unit —
+# bore/rod -> mm, pressure -> bar, force -> N, closed/stroke -> m.
+_CYL = {
+    "Imperial": {
+        "bore":   ("Bore diameter (in)", 0.75, 8.0, 2.5, 0.25, "%.2f", 25.4),
+        "rod":    ("Rod diameter (in)", 0.4, 7.5, 1.5, 0.25, "%.2f", 25.4),
+        "press":  ("Max pressure (psi)", 700.0, 5000.0, 2300.0, 50.0, "%.0f", 0.0689476),
+        "frated": ("Rated push force (lbf)", 200.0, 70000.0, 11000.0, 100.0, "%.0f", 4.44822),
+        "ret":    ("Closed length — retracted (in)", 4.0, 140.0, 28.0, 1.0, "%.0f", 0.0254),
+        "stroke": ("Stroke — rod travel (in)", 2.0, 120.0, 20.0, 1.0, "%.0f", 0.0254),
+    },
+    "Metric": {
+        "bore":   ("Bore diameter (mm)", 20.0, 200.0, 63.0, 1.0, "%.0f", 1.0),
+        "rod":    ("Rod diameter (mm)", 10.0, 190.0, 36.0, 1.0, "%.0f", 1.0),
+        "press":  ("Max pressure (bar)", 50.0, 350.0, 160.0, 5.0, "%.0f", 1.0),
+        "frated": ("Rated push force (kN)", 1.0, 300.0, 50.0, 1.0, "%.1f", 1000.0),
+        "ret":    ("Closed length — retracted (mm)", 100.0, 3500.0, 700.0, 10.0, "%.0f", 0.001),
+        "stroke": ("Stroke — rod travel (mm)", 50.0, 3000.0, 500.0, 10.0, "%.0f", 0.001),
+    },
+}
+_HELP = {
+    "bore": "Inside diameter of the cylinder barrel. Bigger bore = more force at the same pressure.",
+    "rod": "Diameter of the piston rod (used for the pull / retract force).",
+    "press": "Highest hydraulic pressure the system runs at.",
+    "frated": "The cylinder's push force straight from its datasheet, if you have it.",
+    "ret": "Pin-to-pin length with the rod all the way in.",
+    "stroke": "Rod travel. Extended length = closed length + stroke.",
+}
 
 
 def render_reverse():
@@ -22,32 +49,43 @@ def render_reverse():
     with st.spinner("Building the configuration database (first time only, ~15 s)…"):
         table = _get_table(TABLE_RES)
 
+    # --- Units switch: converts the stored values in place when you flip it. ---
+    units = st.sidebar.radio("Units", ["Imperial", "Metric"], key="rv_units",
+                             horizontal=True)
+    cfg = _CYL[units]
+    prev = st.session_state.get("rv_units_prev")
+    if prev is not None and prev != units:
+        for k, spec in cfg.items():
+            skey = f"rv_{k}"
+            if skey in st.session_state:
+                old_m, new_m = _CYL[prev][k][6], spec[6]
+                lo, hi = spec[1], spec[2]
+                st.session_state[skey] = float(
+                    min(max(st.session_state[skey] * old_m / new_m, lo), hi))
+    st.session_state["rv_units_prev"] = units
+    len_fac, len_u = (39.37008, "in") if units == "Imperial" else (1000.0, "mm")
+
+    def _cyl(k, ctx):
+        """A cylinder input in the current units; returns (shown, base-unit value)."""
+        label, lo, hi, default, step, fmt, mult = cfg[k]
+        val = _sb_linked(label, f"rv_{k}", lo, hi, default, step, fmt=fmt,
+                         help=_HELP[k], ctx=ctx)
+        return val, val * mult
+
     # --- Cylinder force ---
     force_exp = st.sidebar.expander("Cylinder — force", expanded=True)
     mode = force_exp.radio("Give force as", ["Bore + pressure", "Rated force"],
                            key="rv_fmode", horizontal=True)
     if mode == "Bore + pressure":
-        bore = _sb_linked(
-            "Bore diameter (in)", "rv_bore", 0.75, 8.0, 2.5, 0.25, fmt="%.2f",
-            help="Inside diameter of the cylinder barrel. A bigger bore makes more "
-                 "force at the same pressure.", ctx=force_exp)
-        rod = _sb_linked(
-            "Rod diameter (in)", "rv_rod", 0.4, 7.5, 1.5, 0.25, fmt="%.2f",
-            help="Diameter of the piston rod (used for the pull / retract force).",
-            ctx=force_exp)
-        pressure = _sb_linked(
-            "Max pressure (psi)", "rv_press", 700.0, 5000.0, 2300.0, 50.0, fmt="%.0f",
-            help="Highest hydraulic pressure the system runs at.", ctx=force_exp)
-        push, pull = lookup.cylinder_force(bore * 25.4, min(rod, bore - 0.01) * 25.4,
-                                           pressure * PSI_TO_BAR)
+        _, bore_mm = _cyl("bore", force_exp)
+        _, rod_mm = _cyl("rod", force_exp)
+        _, press_bar = _cyl("press", force_exp)
+        push, pull = lookup.cylinder_force(bore_mm, min(rod_mm, bore_mm - 0.1), press_bar)
         force_exp.caption(f"Push **{push / 1000:.1f} kN** · Pull {pull / 1000:.1f} kN. "
                           "Raising the wall extends the cylinder, so push is used.")
         force_n = push
     else:
-        force_n = _sb_linked(
-            "Rated push force (lbf)", "rv_frated", 200.0, 70000.0, 11000.0, 100.0,
-            fmt="%.0f", help="The cylinder's push force straight from its "
-            "datasheet, if you have it.", ctx=force_exp) * LBF_TO_N
+        _, force_n = _cyl("frated", force_exp)
     safety = _sb_linked("Safety factor", "rv_sf", 1.0, 3.0, 1.5, 0.1, fmt="%.1f",
                         help="Divide the cylinder force by this before sizing the "
                         "wall.", ctx=force_exp)
@@ -55,19 +93,13 @@ def render_reverse():
 
     # --- Cylinder length window ---
     len_exp = st.sidebar.expander("Cylinder — length", expanded=True)
-    retracted = _sb_linked(
-        "Closed length — fully retracted (in)", "rv_ret", 4.0, 140.0, 28.0, 1.0,
-        fmt="%.0f", help="Pin-to-pin length with the rod all the way in.",
-        ctx=len_exp)
-    stroke = _sb_linked(
-        "Stroke — how far the rod extends (in)", "rv_stroke", 2.0, 120.0, 20.0, 1.0,
-        fmt="%.0f", help="Rod travel. Extended length = closed length + stroke.",
-        ctx=len_exp)
-    L_ret, L_ext = retracted * IN_TO_M, (retracted + stroke) * IN_TO_M
-    len_exp.caption(f"Extended length **{retracted + stroke:.0f} in** "
+    _, L_ret = _cyl("ret", len_exp)
+    _, stroke_m = _cyl("stroke", len_exp)
+    L_ext = L_ret + stroke_m
+    len_exp.caption(f"Extended length **{L_ext * len_fac:.0f} {len_u}** "
                     f"(length ratio {L_ext / L_ret:.2f}).")
 
-    # --- Wall / problem ---
+    # --- Wall / problem (metric: the container and geometry are metric) ---
     wall_exp = st.sidebar.expander("Wall", expanded=True)
     size = wall_exp.selectbox("Container", list(CONTAINERS), key="rv_size")
     width, height = CONTAINERS[size]
@@ -97,7 +129,6 @@ def render_reverse():
     n = res["peak_force"].size
 
     if n == 0:
-        # Diagnose: what cylinder lengths ARE achievable here?
         allrows = lookup.search(table, height, x_cg, z_cg, stroke_max=1e9,
                                 roof_clearance=clearance, bounds=bounds, limit=1000000)
         st.error("### No geometry fits this cylinder")
@@ -106,18 +137,18 @@ def render_reverse():
             hi = float(allrows["L_max"].max())
             st.markdown(
                 f"No layout keeps the cylinder length inside your window "
-                f"**{L_ret * M_TO_IN:.1f}–{L_ext * M_TO_IN:.1f} in** the whole way "
-                f"up. Feasible layouts here need lengths somewhere in "
-                f"**{lo * M_TO_IN:.1f}–{hi * M_TO_IN:.1f} in**. Try a longer "
+                f"**{L_ret * len_fac:.1f}–{L_ext * len_fac:.1f} {len_u}** the whole "
+                f"way up. Feasible layouts here need lengths somewhere in "
+                f"**{lo * len_fac:.1f}–{hi * len_fac:.1f} {len_u}**. Try a longer "
                 f"**stroke**, a different **closed length**, a bigger container, or "
-                f"geometry limits.")
+                f"loosen the geometry limits.")
         else:
             st.markdown("Even ignoring the cylinder, no layout satisfies the "
                         "container + geometry limits. Loosen the geometry ranges "
                         "or the roof clearance.")
         return
 
-    # --- Best geometry + the headline: max wall mass ---
+    # --- Best geometry + the headline numbers ---
     a, b, d, f = (float(res["a"][0]), float(res["b"][0]),
                   float(res["d"][0]), float(res["f"][0]))
     peak = float(res["peak_force"][0])
@@ -134,8 +165,8 @@ def render_reverse():
     m3.metric("Peak force needed", f"{peak:.2f} N/kg")
     st.markdown(
         f"**Best geometry:** a={a:.3f}  b={b:.3f}  d={d:.3f}  f={f:.3f} m — its "
-        f"cylinder runs **{res['L_min'][0] * M_TO_IN:.1f}–{res['L_max'][0] * M_TO_IN:.1f} in** "
-        f"(inside your {L_ret * M_TO_IN:.1f}–{L_ext * M_TO_IN:.1f} in window). "
+        f"cylinder runs **{res['L_min'][0] * len_fac:.1f}–{res['L_max'][0] * len_fac:.1f} {len_u}** "
+        f"(inside your {L_ret * len_fac:.1f}–{L_ext * len_fac:.1f} {len_u} window). "
         f"{n if n < 5 else 'Many'} layouts fit; this is the lowest-force one.")
 
     # --- Plots: curves small on top, setup diagram large below ---
@@ -158,10 +189,10 @@ def render_reverse():
                                     roof_clearance=clearance, var_bounds=bounds)
         if opt["feasible"]:
             st.success(
-                f"Exact optimum: peak **{opt['peak_force']:.2f} N/kg** → raises up to "
+                f"Exact optimum: peak **{opt['peak_force']:.2f} N/kg** → safe max "
                 f"**{force_use / opt['peak_force']:,.0f} kg** at a={opt['a']:.3f} "
                 f"b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f} m "
-                f"(grid best raised {max_mass:,.0f} kg).")
+                f"(grid best was {max_mass:,.0f} kg).")
         else:
             st.warning("The optimizer couldn't find a geometry that fits the exact "
                        "cylinder window here — the grid match above is the closest.")

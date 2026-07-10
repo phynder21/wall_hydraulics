@@ -30,7 +30,7 @@ Two limits keep designs realistic:
 
 ---
 
-## 🛠 Designer — try a geometry, see what it needs
+## Designer — try a geometry, see what it needs
 
 1. Pick the **container** (Standard or High-Cube) and set the weight (x_cg, z_cg).
 2. Drag or type the four geometry values (a, b, d, f). The **diagram** — looking
@@ -44,13 +44,13 @@ Two limits keep designs realistic:
    for your setup, and lists a few near-optimal alternatives you can click to load.
 
 Extras: switch **units** (m / in), turn on **Fine precision** for smaller steps,
-🔒 **lock** any value so Optimize holds it fixed, and use **Compare** to save two
+**lock** any value so Optimize holds it fixed, and use **Compare** to save two
 designs (A/B) and overlay them on the plots. The Designer's URL captures your
 setup, so you can copy the link to share an exact configuration.
 
 ---
 
-## 🔎 Browse configurations — search a ready-made database
+## Browse configurations — search a ready-made database
 
 Instead of optimizing, this searches a **precomputed database** of geometries —
 instant results, no waiting.
@@ -76,21 +76,24 @@ instant results, no waiting.
 
 ---
 
-## 🔩 Size from a cylinder — the reverse
+## Size from a cylinder — the reverse
 
 Have a specific hydraulic cylinder in mind? This works backwards: you enter the
 cylinder, and it finds the best geometry and the **biggest wall it can raise**.
 
-1. Enter the cylinder's **force** — either bore + rod diameter + max pressure (in
-   psi), or a rated push force (in lbf) — plus a **safety factor**.
-2. Enter the cylinder's **length** — closed (retracted) length + stroke, **in
-   inches** (cylinder specs are imperial; the wall geometry stays in metres). It
-   shows the extended length. This is a **hard constraint** — the geometry's
+1. Pick your **units** (Imperial or Metric) with the toggle at the top — it
+   converts the cylinder inputs in place, so you can enter specs in whichever the
+   datasheet uses. The wall geometry itself always stays in metres.
+2. Enter the cylinder's **force** — either bore + rod diameter + max pressure
+   (psi / bar), or a rated push force (lbf / kN) — plus a **safety factor**.
+3. Enter the cylinder's **length** — closed (retracted) length + stroke (in / mm).
+   It shows the extended length. This is a **hard constraint** — the geometry's
    cylinder length must stay inside [closed, extended] the whole way up.
-3. Set the **wall** (container, cg) and, optionally, **restrict the output
+4. Set the **wall** (container, cg) and, optionally, **restrict the output
    geometry** (a, b, d, f ranges) — e.g. keep the base height f low.
-4. It reports the **max wall mass** the cylinder can raise, the best-fitting
-   geometry, and the setup diagram + plots.
+5. It reports two mass numbers — the **safe max wall mass** (your force ÷ safety
+   factor) and the **absolute cylinder max** (flat-out, no margin) — plus the
+   best-fitting geometry and the setup diagram + plots. Use the safe one.
 
 Because the length window and geometry limits are hard constraints, **some
 cylinders simply won't fit any wall** — when that happens it says so and tells
