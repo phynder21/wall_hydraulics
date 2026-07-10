@@ -18,3 +18,6 @@ lookup_table.npz
 
 # NiceGUI runtime cache (regenerated on every run)
 .nicegui/
+
+# Sensitivity map — interactive HTML is large; regenerate with sensitivity.py
+sensitivity_matrix.html
