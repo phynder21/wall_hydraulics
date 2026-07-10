@@ -173,12 +173,6 @@ def _sb_range(label, key, full_lo, full_hi, step=0.01, fmt="%.2f"):
 
 def render_browse():
     st.header("Browse configurations")
-    st.caption("Search a precomputed database of geometries — instant, no "
-               "optimizer. Set your problem and mounting limits, then filter and "
-               "sort. Lengths are in meters. Every result respects your limits "
-               "exactly; because the database is a grid, its best row is only "
-               "near-optimal — **Get the exact optimum** below runs the optimizer "
-               "for the true best.")
 
     with st.spinner("Building the configuration database (first time only, ~15 s)…"):
         table = _get_table(TABLE_RES)
@@ -213,10 +207,6 @@ def render_browse():
     }
     bounds = {}
     with st.sidebar.expander("Mounting limits", expanded=False):
-        st.caption("Each control is a min–max range for that dimension (drag the "
-                   "slider OR type the min/max) — where you set the max or min for "
-                   "every value. The search keeps only geometries inside all four "
-                   "ranges.")
         for v, (lo, hi, label) in ranges.items():
             bounds[v] = _sb_range(label, f"lk_rng_{v}", lo, hi)
 
@@ -318,11 +308,6 @@ def render_browse():
 
     # --- Refine to the exact continuous optimum for this query ---
     st.subheader("Get the exact optimum")
-    st.caption("The list is a precomputed GRID, so even its top row is only "
-               "near-optimal — it can sit a hair off the true best. This runs the "
-               "optimizer once for your current Problem + Mounting-limits settings "
-               "to compute the exact best geometry, and shows how far the grid was "
-               "off. (Same math as the Designer's Optimize, scoped to this query.)")
     if st.button("Get the exact optimum — run optimizer"):
         with st.spinner("Optimizing…"):
             opt = optimize_actuator(width, height, x_cg, z_cg,

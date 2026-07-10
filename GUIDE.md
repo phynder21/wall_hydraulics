@@ -33,8 +33,9 @@ Two limits keep designs realistic:
 ## 🛠 Designer — try a geometry, see what it needs
 
 1. Pick the **container** (Standard or High-Cube) and set the weight (x_cg, z_cg).
-2. Drag or type the four geometry values (a, b, d, f). The **diagram** shows the
-   layout and the **plots** show force and cylinder length across the full swing.
+2. Drag or type the four geometry values (a, b, d, f). The **diagram** — looking
+   down the container's long axis, the wall swinging up from flat — shows the
+   layout, and the **plots** show force and cylinder length across the full swing.
 3. Watch the **metrics**: *Peak force* is the worst-case push the cylinder must
    provide (per kg) — the number you want to make small. Set the **Wall + load
    mass** slider and the **total-force bar** below the metrics shows the real
@@ -82,9 +83,10 @@ cylinder, and it finds the best geometry and the **biggest wall it can raise**.
 
 1. Enter the cylinder's **force** — either bore Ø + rod Ø + max pressure (it
    computes push/pull), or a rated force in kN — plus a **safety factor**.
-2. Enter the cylinder's **length**: retracted (closed) length + stroke (it shows
-   the extended length). This is a **hard constraint** — the geometry's cylinder
-   length must stay inside [retracted, extended] the whole way up.
+2. Enter the cylinder's **length** — retracted (closed) length + stroke, **in mm**
+   (the usual cylinder-spec unit; the geometry stays in metres). It shows the
+   extended length. This is a **hard constraint** — the geometry's cylinder length
+   must stay inside [retracted, extended] the whole way up.
 3. Set the **wall** (container, cg) and, optionally, **restrict the output
    geometry** (a, b, d, f ranges) — e.g. keep the base height f low.
 4. It reports the **max wall mass** the cylinder can raise, the best-fitting

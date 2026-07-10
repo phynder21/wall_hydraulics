@@ -688,8 +688,6 @@ def index(request: Request):
                                trailing_events=True)
                 with ui.tab_panel("Geometry"):
                     with ui.expansion("Variable ranges (mounting limits)").classes("w-full"):
-                        ui.label("Narrow where a dimension may sit; the optimizer "
-                                 "and its value slider stay within it.").classes("text-xs")
                         range_control("a — floor position", "a", 0.05, WIDTH / 2)
                         range_control("b — along wall", "b", 0.05, HEIGHT_MAX, hcap=True)
                         range_control("d — bracket length", "d", 0.0, 1.0)
@@ -705,8 +703,6 @@ def index(request: Request):
                               on_change=lambda e: (setattr(_sweep, "active", bool(e.value)),
                                                    s.__setitem__("_anim", bool(e.value))))
                 with ui.tab_panel("Optimize"):
-                    ui.label("Find the a, b, d, f that minimize the worst-case "
-                             "piston force for the current setup.").classes("text-sm")
                     ui.label("Show alternatives within __% of the optimum").classes("text-sm mt-2 mb-0")
                     ui.slider(min=0, max=30, step=1).props("label-always") \
                         .bind_value(s, "alt_pct").classes("w-full")
@@ -715,8 +711,6 @@ def index(request: Request):
                     opt_status = ui.label("").classes("text-sm text-gray-600")
                     alts_box = ui.column().classes("w-full gap-1")
                 with ui.tab_panel("Compare"):
-                    ui.label("Snapshot the current geometry as A or B, then "
-                             "overlay both on the plots.").classes("text-sm")
                     with ui.row().classes("gap-2 w-full"):
                         ui.button("Save as A", on_click=lambda: save_design("A")
                                   ).props("outline no-caps").classes("grow")
@@ -901,8 +895,6 @@ def browse_page():
             _bc("Roof clearance (m)", "clear", 0.0, 0.5, 0.01)
             _bc("Wall + load mass (kg)", "mass", 50, 20000, 10, on_change=lambda: inspect())
             with ui.expansion("Mounting limits — min–max for every value").classes("w-full"):
-                ui.label("Where each dimension may sit; the search keeps only "
-                         "geometries inside all four ranges.").classes("text-xs text-grey")
                 for _v, (_lo, _hi, _lab) in BROWSE_RANGES.items():
                     ui.label(_lab).classes("text-xs mt-1 mb-0")
                     ui.range(min=_lo, max=_hi, step=0.01, value={"min": _lo, "max": _hi}) \
@@ -944,10 +936,6 @@ def browse_page():
             bmass_cap = ui.label("").classes("text-xs text-gray-500")
             bforce_bar = ui.html("").classes("w-full")
             ui.separator()
-            ui.label("The list is a precomputed GRID, so even its top row is only "
-                     "near-optimal. “Get the exact optimum” runs the optimizer once "
-                     "for your current settings to compute the true best geometry — "
-                     "and shows how far the grid was off.").classes("text-xs text-grey")
             ui.button("Get the exact optimum", on_click=refine).props("no-caps color=primary")
             refine_lbl = ui.label("").classes("text-sm")
             with ui.row().classes("w-full no-wrap gap-2 stack"):
@@ -1073,7 +1061,6 @@ def reverse_page():
             _rc("z_cg — off the wall (m)", "z_cg", 0.0, 1.5, 0.01)
             _rc("Roof clearance (m)", "clear", 0.0, 0.5, 0.01)
             with ui.expansion("Restrict the output geometry (a, b, d, f)").classes("w-full"):
-                ui.label("Force the found geometry into these ranges.").classes("text-xs text-grey")
                 for _v, (_lo, _hi, _lab) in BROWSE_RANGES.items():
                     ui.label(_lab).classes("text-xs mt-1 mb-0")
                     ui.range(min=_lo, max=_hi, step=0.01, value={"min": _lo, "max": _hi}) \
@@ -1092,7 +1079,6 @@ def reverse_page():
             _rd0.update_layout(height=560)
             diag_el = ui.plotly(_rd0).classes("w-full")
             ui.separator()
-            ui.label("The list is a grid; get the exact best design for your cylinder:").classes("text-xs text-grey")
             ui.button("Get the exact optimum \u25b6", on_click=refine).props("no-caps color=primary")
             refine_lbl = ui.label("").classes("text-sm")
 

@@ -16,11 +16,6 @@ from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
 
 def render_reverse():
     st.header("Size from a cylinder")
-    st.caption("Enter a hydraulic cylinder you can buy. This finds the geometry "
-               "that fits its length window and needs the least force, and the "
-               "largest wall mass it can raise. Lengths are in mm here (cylinder "
-               "spec convention); the geometry is in metres. If nothing fits, "
-               "that's flagged with why.")
 
     with st.spinner("Building the configuration database (first time only, ~15 s)…"):
         table = _get_table(TABLE_RES)
@@ -85,8 +80,6 @@ def render_reverse():
     bounds = {}
     with st.sidebar.expander("Restrict the output geometry (a, b, d, f)",
                              expanded=False):
-        st.caption("Force the found geometry into these ranges — e.g. keep f low, "
-                   "or pin a. Narrower ranges make more cylinders impossible.")
         for v, (lo, hi, label) in ranges.items():
             bounds[v] = _sb_range(label, f"rv_rng_{v}", lo, hi)
 
@@ -147,8 +140,6 @@ def render_reverse():
 
     # --- Refine to the exact optimum for this cylinder ---
     st.subheader("Get the exact optimum")
-    st.caption("The list is a grid; this runs the optimizer once with your exact "
-               "cylinder window and geometry limits for the true best design.")
     if st.button("Get the exact optimum — run optimizer"):
         with st.spinner("Optimizing…"):
             opt = optimize_actuator(width, height, x_cg, z_cg,

@@ -306,10 +306,6 @@ with tab_setup:
 with tab_geometry:
     st.subheader("Variable ranges")
     with st.expander("Restrict where each dimension may sit (optimizer + slider)"):
-        st.caption("Narrow a dimension to your real mounting window; the "
-                   "optimizer searches only within it and the value slider "
-                   "follows. Leave at full range for no restriction; use Lock to "
-                   "pin an exact value.")
         USER_BOUNDS = {
             v: range_input(f"{lbl} [{ULABEL}]", f"rng_{v}", *GEOM_BOUNDS[v],
                            disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
@@ -402,9 +398,6 @@ with tab_optimize:
     if len(_alts) > 1:
         with st.expander(
                 f"{len(_alts) - 1} near-optimal alternatives (click to load)"):
-            st.caption("Geometrically different designs within your tolerance of "
-                       "the optimum. The first is the optimum; the rest trade a "
-                       "little force for a possibly easier build. Click to load.")
             for _i, _x in enumerate(_alts):
                 _pen = _x.get("penalty_pct", 0.0)
                 _tag = "optimum" if _pen < 1e-6 else f"+{_pen:.1f}%"
@@ -419,7 +412,6 @@ with tab_optimize:
 
 with tab_geometry:
     st.subheader(f"Values ({UWORD})")
-    st.caption("Lock a value to hold it fixed while the others are optimized.")
     _geom = dict(disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT, lockable=True)
     a = linked_input(f"a — hinge to cylinder base (along floor) [{ULABEL}]", "a",
                      *USER_BOUNDS["a"], **_geom,
@@ -459,8 +451,6 @@ def _fmt_design(design):
 
 with tab_compare:
     st.subheader("Compare designs")
-    st.caption("Snapshot the current geometry as A or B, then overlay both "
-               "force and length curves to compare them.")
     _current = dict(a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
     _save_a, _save_b = st.columns(2)
     if _save_a.button("Save as A", use_container_width=True):
@@ -493,8 +483,6 @@ if not animating:
 # RIGHT PANEL — the visualization (main area).
 # =============================================================================
 st.title("Shipping container hinged-wall actuator")
-st.caption("Looking down the long axis of the container. The hinged sidewall "
-           "swings down to lie flat outside.")
 
 # --- Computations ---
 # Near-singular geometries make compute_F_piston divide by ~0; we mask those
