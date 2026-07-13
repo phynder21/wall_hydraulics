@@ -299,14 +299,14 @@ def render_browse():
                f"**{total_kn:.1f} kN**")
     st.markdown(lookup.force_bar_html(bar_fill, lookup.BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
+    # The setup diagram is the main thing to read — show it large, on top.
+    diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
+                           fig_height=560)
+    st.plotly_chart(diag, width="stretch")
     ff, fl = _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max)
     pf, pl = st.columns(2)
     pf.plotly_chart(ff, width="stretch")
     pl.plotly_chart(fl, width="stretch")
-    # The setup diagram is the main thing to read — show it large, below.
-    diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
-                           fig_height=560)
-    st.plotly_chart(diag, width="stretch")
 
     # --- Refine to the exact continuous optimum for this query ---
     st.subheader("Get the exact optimum")

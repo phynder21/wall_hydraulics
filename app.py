@@ -545,11 +545,11 @@ with st.container(border=True):
     st.markdown(force_bar_html(bar_fill, BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
 
-# --- Top row: force + length curves (small); the side view goes large below.
-# diag_area is a placeholder slot created here (above the curves in source) but
-# rendered into further down, so the diagram lands full-width beneath the row. ---
-col_force, col_len = st.columns(2)
+# --- Side view large on top; force + length curves small below it. diag_area is
+# created first so its slot sits above the curve row, even though the diagram
+# code appears just below this. ---
 diag_area = st.container()
+col_force, col_len = st.columns(2)
 
 with diag_area:
     fig_geom = go.Figure()

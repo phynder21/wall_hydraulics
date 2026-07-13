@@ -169,16 +169,16 @@ def render_reverse():
         f"(inside your {L_ret * len_fac:.1f}–{L_ext * len_fac:.1f} {len_u} window). "
         f"{n if n < 5 else 'Many'} layouts fit; this is the lowest-force one.")
 
-    # --- Plots: curves small on top, setup diagram large below ---
+    # --- Plots: setup diagram large on top, curves small below ---
     stroke_ratio = float(res["stroke_ratio"][0])
-    ff, fl = _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_ratio)
-    pf, pl = st.columns(2)
-    pf.plotly_chart(ff, width="stretch")
-    pl.plotly_chart(fl, width="stretch")
     view_angle = st.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="rv_view")
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
                            fig_height=560)
     st.plotly_chart(diag, width="stretch")
+    ff, fl = _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_ratio)
+    pf, pl = st.columns(2)
+    pf.plotly_chart(ff, width="stretch")
+    pl.plotly_chart(fl, width="stretch")
 
     # --- Refine to the exact optimum for this cylinder ---
     st.subheader("Get the exact optimum")
