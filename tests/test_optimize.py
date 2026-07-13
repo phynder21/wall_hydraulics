@@ -261,3 +261,29 @@ def test_length_window_variants(window):
     if res["feasible"]:
         assert res["L_min"] >= lo - LENGTH_TOL - 1e-6
         assert res["L_max"] <= hi + LENGTH_TOL + 1e-6
+
+
+def test_length_mode_minimizes_cylinder_length():
+    """Length mode returns a shorter cylinder than force mode and keeps peak
+    force at or below the cap; a tighter cap yields a LONGER cylinder (the
+    force-vs-length tradeoff)."""
+    from optimize import FORCE_CAP_TOL
+    force = optimize_actuator(*STANDARD, x_cg=1.2, z_cg=0.55, alt_rel_tol=0.0, **FAST)
+    lengths = {}
+    for cap in (40.0, 25.0):
+        res = optimize_actuator(*STANDARD, x_cg=1.2, z_cg=0.55,
+                                objective_mode="length", force_cap=cap,
+                                alt_rel_tol=0.0, n_starts=4, maxiter=80)
+        assert res["feasible"], f"cap={cap} should be reachable"
+        assert res["peak_force"] <= cap + FORCE_CAP_TOL + 1e-6
+        assert res["L_max"] < force["L_max"]     # shorter than the min-force design
+        lengths[cap] = res["L_max"]
+    assert lengths[25.0] > lengths[40.0]         # tighter cap -> longer cylinder
+
+
+def test_length_mode_infeasible_when_cap_too_low():
+    """An unreachably low force cap is flagged infeasible."""
+    res = optimize_actuator(*STANDARD, x_cg=1.2, z_cg=0.55,
+                            objective_mode="length", force_cap=3.0,
+                            n_starts=4, maxiter=80)
+    assert not res["feasible"]

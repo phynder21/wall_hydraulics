@@ -43,6 +43,20 @@ Two limits keep designs realistic:
 4. Press **Optimize** and the tool finds the a, b, d, f that minimize peak force
    for your setup, and lists a few near-optimal alternatives you can click to load.
 
+**Optimize to minimize — force or length.** In the Optimize tab you choose what
+to minimize:
+- **Peak force** (default) — the smallest piston force. Best when force is the
+  binding constraint, e.g. a hydraulic cylinder, where force is cheap to buy.
+- **Cylinder length** — the *shortest actuator* (smallest extended length) that
+  still keeps peak force at or below a **Max piston force (kN)** cap you set (for
+  the current Wall + load mass). Best when physical size is what costs — e.g. an
+  **electromechanical actuator**, where you pay most for force/size.
+
+These pull toward different geometries because the work to raise the wall is
+fixed: **lower force ⇒ longer stroke, and a shorter cylinder ⇒ more force.** If no
+geometry meets the force cap, the result is flagged not-buildable — raise the cap
+(or the mass) until one qualifies.
+
 Extras: switch **units** (m / in), turn on **Fine precision** for smaller steps,
 **lock** any value so Optimize holds it fixed, and use **Compare** to save two
 designs (A/B) and overlay them on the plots. The Designer's URL captures your

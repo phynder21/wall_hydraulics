@@ -45,6 +45,7 @@ VAR_NAMES = ("a", "b", "d", "f")
 # feels. Big enough that the optimum sits essentially on the limit, not over it.
 STROKE_PENALTY = 1.0e6
 LENGTH_PENALTY = 1.0e6       # for a cylinder length outside [retracted, extended]
+FORCE_CAP_PENALTY = 1.0e4    # for peak force above the cap when minimizing length
 CEILING_PENALTY = 1.0e6
 OVERCENTER_PENALTY = 1.0e6
 # A crossing (moment arm goes negative) is physically impossible, not merely
@@ -72,6 +73,7 @@ ROOF_CLEARANCE = 0.0
 # margins (for a ceiling design margin, use ROOF_CLEARANCE above).
 STROKE_TOL = 1.0e-3          # stroke ratio (dimensionless)
 LENGTH_TOL = 1.0e-3          # cylinder length window (meters)
+FORCE_CAP_TOL = 1.0e-2       # peak force cap (N/kg)
 CEILING_TOL = 1.0e-3         # meters
 MOMENT_ARM_TOL = 1.0e-3      # moment-arm clearance (dimensionless)
 
@@ -274,7 +276,8 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
                       roof_clearance=ROOF_CLEARANCE, locked=None, var_bounds=None,
                       n_theta=200, m_cg=1.0, seed=0, maxiter=300,
                       n_starts=N_STARTS, popsize=None, alt_rel_tol=ALT_REL_TOL,
-                      fast=False, length_window=None):
+                      fast=False, length_window=None,
+                      objective_mode="force", force_cap=None):
     """Search for the (a, b, d, f) minimizing peak piston force over 0-90 deg.
 
     Runs `n_starts` independent differential-evolution starts (fixed seeds, so the
@@ -293,15 +296,21 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     `alt_rel_tol` sets how far above the optimum's peak force an alternative may
     sit (a fraction, e.g. 0.15 = within 15%).
 
+    `objective_mode` picks what to minimize: "force" (default) minimizes peak
+    piston force; "length" minimizes the cylinder's extended length (L_max) —
+    the smallest actuator that still holds peak force at or below `force_cap`
+    (in N per kg; None = no cap). Use "length" when force is cheap and physical
+    size is what you pay for (e.g. an electromechanical actuator).
+
     Returns a dict with the geometry and resulting metrics, plus `alternatives`:
     a geometrically DIVERSE set of near-optimal designs (each within
-    `alt_rel_tol` of the best peak force, tagged with its `penalty_pct`), so you
-    can trade a little force for an easier-to-build geometry. The optimum itself
-    is always `alternatives[0]`.
+    `alt_rel_tol` of the best objective value, tagged with its `penalty_pct`), so
+    you can trade a little of the objective for an easier-to-build geometry. The
+    optimum itself is always `alternatives[0]`.
     """
     locked = dict(locked or {})
-    if length_window is not None:
-        fast = False   # the fast zoom doesn't model the absolute length window
+    if length_window is not None or objective_mode == "length":
+        fast = False   # the fast zoom models neither the length window nor L_max min
     n_starts = max(1, int(n_starts))   # at least one start
     theta = np.linspace(0.0, np.pi / 2, n_theta)
 
@@ -346,6 +355,11 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
             L_ret, L_ext = length_window
             penalty += LENGTH_PENALTY * max(L_ret - L_min, 0.0) ** 2
             penalty += LENGTH_PENALTY * max(L_max - L_ext, 0.0) ** 2
+        if objective_mode == "length":
+            # Minimize the extended length; keep peak force at or below the cap.
+            if force_cap is not None:
+                penalty += FORCE_CAP_PENALTY * max(peak - force_cap, 0.0) ** 2
+            return L_max + penalty
         return peak + penalty
 
     def evaluate(geom):
@@ -360,6 +374,8 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
             L_ret, L_ext = length_window
             feasible = (feasible and L_min >= L_ret - LENGTH_TOL
                         and L_max <= L_ext + LENGTH_TOL)
+        if objective_mode == "length" and force_cap is not None:
+            feasible = feasible and peak <= force_cap + FORCE_CAP_TOL
         return {"geom": geom, "peak": peak, "ratio": ratio, "L_min": L_min,
                 "L_max": L_max, "ceiling": ceiling, "moment_arm": moment_arm,
                 "feasible": feasible}
@@ -393,7 +409,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     else:
         # Everything locked: nothing to search, just evaluate the fixed geometry.
         best = evaluate(assemble([]))
-        best["fun"] = best["peak"]
+        best["fun"] = best["L_max"] if objective_mode == "length" else best["peak"]
         best["success"] = True
         success = True
         runs = [best]
@@ -408,8 +424,11 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     # chosen -- yielding, each time, the lowest-force geometry that is genuinely
     # different from them. The global best is always first, so alternatives[0] is
     # the geometry shown in the sliders.
-    best_peak = best["peak"]
-    threshold = best_peak * (1 + alt_rel_tol)
+    # Rank/gauge alternatives by whatever is being optimized: L_max in length
+    # mode, else peak force.
+    score = (lambda r: r["L_max"]) if objective_mode == "length" else (lambda r: r["peak"])
+    best_score = score(best)
+    threshold = best_score * (1 + alt_rel_tol)
     ranges = {v: max(full_bounds[v][1] - full_bounds[v][0], 1e-9) for v in free}
 
     def _norm_dist(g1, g2):
@@ -424,16 +443,22 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     def _min_sep(geom, chosen):
         return min((_norm_dist(geom, g) for g in chosen), default=float("inf"))
 
-    selected = [(best["geom"], best_peak)]   # (geom, peak); the optimum is first
+    # Each entry carries geom + both display metrics (peak force, L_max) + the
+    # optimized `score` (L_max in length mode, else peak). The optimum is first.
+    def _entry(r):
+        return {"geom": r["geom"], "peak": r["peak"], "L_max": r["L_max"],
+                "score": score(r)}
+
+    selected = [_entry(best)]
 
     # First, reuse any feasible multi-start winners that are already distinct --
     # they're free (already computed) and capture separate basins.
-    for r in sorted((r for r in runs if r["feasible"] and r["peak"] <= threshold),
+    for r in sorted((r for r in runs if r["feasible"] and score(r) <= threshold),
                     key=lambda r: r["fun"]):
         if len(selected) >= N_ALTERNATIVES:
             break
-        if _min_sep(r["geom"], [g for g, _ in selected]) >= ALT_MIN_SEP:
-            selected.append((r["geom"], r["peak"]))
+        if _min_sep(r["geom"], [s["geom"] for s in selected]) >= ALT_MIN_SEP:
+            selected.append(_entry(r))
 
     # Then top up by re-optimizing with a repulsion penalty away from the chosen
     # designs. Stop as soon as the best distinct design exceeds tolerance.
@@ -441,7 +466,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     if free and best["feasible"]:
         alt_de_kwargs = {"maxiter": 30 if fast else 80, "tol": 1e-7, "polish": True}
         while len(selected) < n_alt:
-            chosen = [g for g, _ in selected]
+            chosen = [s["geom"] for s in selected]
 
             def repelled(free_vals):
                 geom = assemble(free_vals)
@@ -457,16 +482,17 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
             geom = assemble(result.x)
             ev = evaluate(geom)
             if not (ev["feasible"] and np.isfinite(ev["peak"])
-                    and ev["peak"] <= threshold):
+                    and score(ev) <= threshold):
                 break   # no distinct design left within tolerance
             if _min_sep(geom, chosen) < ALT_MIN_SEP:
                 break   # search could not get far enough from the chosen designs
-            selected.append((geom, ev["peak"]))
+            selected.append(_entry(ev))
 
     alternatives = [
-        {"a": g[0], "b": g[1], "d": g[2], "f": g[3], "peak_force": p,
-         "penalty_pct": (p / best_peak - 1.0) * 100.0 if best_peak > 0 else 0.0}
-        for g, p in selected]
+        {"a": s["geom"][0], "b": s["geom"][1], "d": s["geom"][2], "f": s["geom"][3],
+         "peak_force": s["peak"], "L_max": s["L_max"],
+         "penalty_pct": (s["score"] / best_score - 1.0) * 100.0 if best_score > 0 else 0.0}
+        for s in selected]
 
     a, b, d, f = best["geom"]
     return {
@@ -488,6 +514,8 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
         "container_width": container_width,
         "container_height": container_height,
         "success": success,
+        "objective_mode": objective_mode,
+        "force_cap": force_cap,          # N/kg ceiling (length mode); None otherwise
     }
 
 

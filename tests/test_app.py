@@ -241,6 +241,22 @@ def test_optimize_through_ui(units):
         assert 0.0 <= at.session_state[key] <= 3.0
 
 
+@pytest.mark.slow
+def test_optimize_for_length_through_ui():
+    """Length mode: set a force cap, press Optimize, and confirm it fills a sane
+    geometry and renders (the cylinder-length objective) without error."""
+    at = fresh_app()
+    at.session_state["opt_mode"] = "Cylinder length"
+    run_ok(at, "select length mode")
+    at.session_state["force_cap_kn"] = 60.0
+    run_ok(at, "set force cap")
+    button = next(b for b in at.sidebar.button if "Optimize" in b.label)
+    button.click()
+    run_ok(at, "optimize for length")
+    for key in ("a", "b", "d", "f"):
+        assert 0.0 <= at.session_state[key] <= 3.0
+
+
 # --- Animation bounce logic (unit-tested directly; see module docstring) ------
 
 def _advance_angle():

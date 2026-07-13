@@ -328,6 +328,27 @@ with tab_optimize:
              "when the optimum is awkward to build. 0 keeps only the optimum "
              "(and any exact ties). A sharp optimum may need ~10% before a "
              "different design appears.")
+
+    st.session_state.setdefault("opt_mode", "Peak force")
+    opt_mode = st.radio(
+        "Optimize to minimize", ["Peak force", "Cylinder length"], key="opt_mode",
+        horizontal=True,
+        help="Peak force: the smallest piston force (best when force is the limit, "
+             "e.g. a hydraulic cylinder where force is cheap). Cylinder length: the "
+             "smallest actuator — shortest extended length — that still keeps peak "
+             "force at or below a cap you set. Best when physical size is what costs, "
+             "e.g. an electromechanical actuator.")
+    force_cap_per_kg = None
+    if opt_mode == "Cylinder length":
+        st.session_state.setdefault("force_cap_kn", 50.0)
+        force_cap_kn = linked_input(
+            "Max piston force (kN)", "force_cap_kn", 1.0, 2000.0, step=1.0, fmt="%.0f",
+            help="The optimizer returns the shortest cylinder whose peak force stays "
+                 "at or below this, at the Wall + load mass set in the Geometry tab.")
+        force_cap_per_kg = force_cap_kn * 1000.0 / max(mass, 1e-6)
+        st.caption(f"= {force_cap_per_kg:.1f} N/kg at {mass:,.0f} kg. If no geometry "
+                   "qualifies, raise the cap or the mass.")
+
     if st.button("Optimize geometry for current settings", type="primary",
                  use_container_width=True):
         try:
@@ -345,6 +366,9 @@ with tab_optimize:
                     locked=locked, var_bounds=USER_BOUNDS,
                     alt_rel_tol=st.session_state["alt_pct"] / 100.0,
                     fast=True,
+                    objective_mode=("length" if opt_mode == "Cylinder length"
+                                    else "force"),
+                    force_cap=force_cap_per_kg,
                 )
             # Snap to the active slider precision AND clamp into the (possibly
             # narrowed) mounting-limit range, so the value can't exceed the
@@ -355,10 +379,18 @@ with tab_optimize:
                 st.session_state[k] = float(min(max(round(res[k], 4), lo), hi))
             held = f" (held: {', '.join(sorted(locked))})" if locked else ""
             action = "Evaluated" if len(locked) == 4 else "Optimized"
-            detail = (f"peak {res['peak_force']:.2f} N/kg, "
-                      f"stroke {(res['L_max'] - res['L_min']) * U:.2f} {ULABEL} "
-                      f"(ratio {res['stroke_ratio']:.2f}), "
-                      f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}")
+            if opt_mode == "Cylinder length":
+                # Lead with the extended length and the force vs. the cap.
+                detail = (f"extended length {res['L_max'] * U:.2f} {ULABEL}, "
+                          f"peak {res['peak_force']:.2f} N/kg "
+                          f"({res['peak_force'] * mass / 1000:.1f} kN at {mass:,.0f} kg, "
+                          f"cap {force_cap_kn:.1f} kN), "
+                          f"stroke ratio {res['stroke_ratio']:.2f}")
+            else:
+                detail = (f"peak {res['peak_force']:.2f} N/kg, "
+                          f"stroke {(res['L_max'] - res['L_min']) * U:.2f} {ULABEL} "
+                          f"(ratio {res['stroke_ratio']:.2f}), "
+                          f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}")
             # No st.rerun(): the geometry widgets (rendered in the Geometry tab,
             # which executes after this block) re-seed from these canonical
             # values in the same run, so they update immediately.
@@ -401,9 +433,11 @@ with tab_optimize:
             for _i, _x in enumerate(_alts):
                 _pen = _x.get("penalty_pct", 0.0)
                 _tag = "optimum" if _pen < 1e-6 else f"+{_pen:.1f}%"
+                _lmax = (f", ext. {_x['L_max'] * U:.2f} {ULABEL}"
+                         if "L_max" in _x else "")
                 _lbl = (f"a={_x['a'] * U:.2f}  b={_x['b'] * U:.2f}  "
                         f"d={_x['d'] * U:.2f}  f={_x['f'] * U:.2f} {ULABEL}  "
-                        f"— {_x['peak_force']:.2f} N/kg ({_tag})")
+                        f"— {_x['peak_force']:.2f} N/kg{_lmax} ({_tag})")
                 if st.button(_lbl, key=f"alt_{_i}", use_container_width=True):
                     for _k in ("a", "b", "d", "f"):
                         _lo, _hi = USER_BOUNDS[_k]
