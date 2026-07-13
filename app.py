@@ -95,7 +95,7 @@ def _clamp(key, lo, hi):
 
 
 def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
-                 lockable=False, disp_factor=1.0, disp_step=None):
+                 lockable=False, disp_factor=1.0, disp_step=None, wkey=None):
     """A draggable slider AND a typeable number box bound to one value, rendered
     into the CURRENT container (call it inside a `with tab:`/sidebar block).
 
@@ -111,7 +111,10 @@ def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
     show `value * disp_factor` and `lo`/`hi * disp_factor`, and convert edits
     back by dividing. `lo`/`hi` and the returned value stay in canonical units.
     """
-    skey, nkey = f"{key}__sld", f"{key}__num"
+    # wkey lets the SAME value (key) be shown by a second set of widgets in
+    # another place (distinct widget keys) — both stay in sync via `key`.
+    wk = wkey or key
+    skey, nkey = f"{wk}__sld", f"{wk}__num"
     U = disp_factor
     dstep = disp_step if disp_step is not None else step
     st.session_state[skey] = st.session_state[key] * U
@@ -340,14 +343,21 @@ with tab_optimize:
              "e.g. an electromechanical actuator.")
     force_cap_per_kg = None
     if opt_mode == "Cylinder length":
-        st.session_state.setdefault("force_cap_kn", 50.0)
-        force_cap_kn = linked_input(
-            "Max piston force (kN)", "force_cap_kn", 1.0, 2000.0, step=1.0, fmt="%.0f",
-            help="The optimizer returns the shortest cylinder whose peak force stays "
-                 "at or below this, at the Wall + load mass set in the Geometry tab.")
-        force_cap_per_kg = force_cap_kn * 1000.0 / max(mass, 1e-6)
-        st.caption(f"= {force_cap_per_kg:.1f} N/kg at {mass:,.0f} kg. If no geometry "
-                   "qualifies, raise the cap or the mass.")
+        st.session_state.setdefault("force_cap_nkg", 40.0)
+        force_cap_per_kg = linked_input(
+            "Max piston force (N/kg)", "force_cap_nkg", 1.0, 200.0, step=1.0, fmt="%.0f",
+            help="The optimizer returns the shortest cylinder whose PEAK force per kg "
+                 "stays at or below this. Same unit as the Peak force metric; it does "
+                 "not depend on the wall mass.")
+        opt_mass = linked_input(
+            "Wall + load mass (kg)", "mass", 50.0, 20000.0, step=10.0, fmt="%.0f",
+            wkey="mass_opt",
+            help="Same value as the Setup tab (kept in sync). Only translates the cap "
+                 "into a real force in kN — it does not change the optimization.")
+        mc1, mc2 = st.columns(2)
+        mc1.metric("Force cap", f"{force_cap_per_kg:.0f} N/kg")
+        mc2.metric("Real force at this mass", f"{force_cap_per_kg * opt_mass / 1000:.1f} kN",
+                   help=f"Cap × {opt_mass:,.0f} kg. If no geometry qualifies, raise the cap.")
 
     if st.button("Optimize geometry for current settings", type="primary",
                  use_container_width=True):
@@ -383,8 +393,8 @@ with tab_optimize:
                 # Lead with the extended length and the force vs. the cap.
                 detail = (f"extended length {res['L_max'] * U:.2f} {ULABEL}, "
                           f"peak {res['peak_force']:.2f} N/kg "
-                          f"({res['peak_force'] * mass / 1000:.1f} kN at {mass:,.0f} kg, "
-                          f"cap {force_cap_kn:.1f} kN), "
+                          f"({res['peak_force'] * mass / 1000:.1f} kN at {mass:,.0f} kg; "
+                          f"cap {force_cap_per_kg:.0f} N/kg), "
                           f"stroke ratio {res['stroke_ratio']:.2f}")
             else:
                 detail = (f"peak {res['peak_force']:.2f} N/kg, "

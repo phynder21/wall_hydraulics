@@ -248,7 +248,7 @@ def test_optimize_for_length_through_ui():
     at = fresh_app()
     at.session_state["opt_mode"] = "Cylinder length"
     run_ok(at, "select length mode")
-    at.session_state["force_cap_kn"] = 60.0
+    at.session_state["force_cap_nkg"] = 40.0
     run_ok(at, "set force cap")
     button = next(b for b in at.sidebar.button if "Optimize" in b.label)
     button.click()
