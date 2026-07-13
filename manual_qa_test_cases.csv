@@ -18,3 +18,13 @@ R5,Reverse,OVER-RESTRICT geometry (nothing fits at all),"Standard; x_cg=1.2, z_c
 U1,Units toggle,Length conversion round-trip,"Reverse view: enter closed length = 28 in, flip to Metric, flip back","Value in mm, then back to in",28 in -> 711.2 mm -> back to 28.00 in
 U2,Units toggle,Pressure conversion,"Reverse view: enter 2300 psi, flip to Metric",Value in bar,2300 psi -> 158.6 bar
 U3,Units toggle,Bore conversion,"Reverse view: enter 2.5 in bore, flip to Metric",Value in mm,2.5 in -> 63.5 mm
+D4,Designer (manual),Read live metrics for a fixed geometry,"Standard; x_cg=1.2, z_cg=0.55; a=0.5, b=1.5, d=0.1, f=0.5",Peak force / Stroke / Stroke ratio,peak=30.01 N/kg; stroke=0.963 m; ratio=1.89
+D5,Designer (manual),Read live metrics for a fixed geometry,"Standard; x_cg=0.9, z_cg=0.4; a=0.7, b=1.2, d=0.2, f=0.6",Peak force / Stroke / Stroke ratio,peak=19.93 N/kg; stroke=1.161 m; ratio=2.49
+D6,Designer (manual),Read live metrics for a fixed geometry,"High-Cube; x_cg=1.6, z_cg=0.7; a=0.9, b=2.2, d=0.1, f=0.7",Peak force / Stroke / Stroke ratio,peak=30.41 N/kg; stroke=1.458 m; ratio=1.86
+D7,Designer (manual),Read live metrics for a fixed geometry,"High-Cube; x_cg=2.0, z_cg=0.5; a=1.0, b=2.5, d=0.15, f=1.0",Peak force / Stroke / Stroke ratio,peak=26.67 N/kg; stroke=1.878 m; ratio=2.09
+D8,Designer (manual),Over-center / singular geometry,"Standard; x_cg=1.3, z_cg=0.6; a=0.3, b=1.0, d=0.05, f=0.2",Force plot should BREAK (gap at the pole); peak may be capped,singularity=YES; capped peak~49.93 N/kg
+D9,Designer (manual),Read live metrics for a fixed geometry,"Standard; x_cg=1.2, z_cg=0.55; a=1.2, b=1.8, d=0.5, f=1.5",Peak force / Stroke / Stroke ratio,peak=11.28 N/kg; stroke=2.401 m; ratio=4.15
+D10,Designer (manual),Read live metrics for a fixed geometry,"High-Cube; x_cg=1.45, z_cg=0.6; a=0.6, b=2.9, d=0.3, f=2.0",Peak force / Stroke / Stroke ratio,peak=9.26 N/kg; stroke=2.942 m; ratio=4.10
+D11,Designer (manual),Over-center / singular geometry,"Standard; x_cg=1.0, z_cg=0.5; a=0.4, b=0.8, d=0.0, f=0.0",Force plot should BREAK (gap at the pole); peak may be capped,singularity=YES; capped peak~49.54 N/kg
+D12,Designer (manual),Read live metrics for a fixed geometry,"High-Cube; x_cg=1.8, z_cg=0.65; a=0.8, b=2.0, d=0.25, f=0.8",Peak force / Stroke / Stroke ratio,peak=27.99 N/kg; stroke=1.533 m; ratio=2.16
+D13,Designer (manual),Read live metrics for a fixed geometry,"Standard; x_cg=1.1, z_cg=0.45; a=0.55, b=1.6, d=0.12, f=0.45",Peak force / Stroke / Stroke ratio,peak=29.86 N/kg; stroke=0.947 m; ratio=1.77
