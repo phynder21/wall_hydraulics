@@ -545,10 +545,13 @@ with st.container(border=True):
     st.markdown(force_bar_html(bar_fill, BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
 
-# --- Top row: diagram + force ---
-col_diag, col_force = st.columns(2)
+# --- Top row: force + length curves (small); the side view goes large below.
+# diag_area is a placeholder slot created here (above the curves in source) but
+# rendered into further down, so the diagram lands full-width beneath the row. ---
+col_force, col_len = st.columns(2)
+diag_area = st.container()
 
-with col_diag:
+with diag_area:
     fig_geom = go.Figure()
 
     # Ground (the door lies on it when open)
@@ -622,7 +625,7 @@ with col_diag:
                     title=f"x ({ULABEL})", zeroline=False),
         yaxis=dict(range=[-pad, ch + pad],
                     title=f"z ({ULABEL})", scaleanchor="x", scaleratio=1, zeroline=False),
-        height=500,
+        height=560,
         legend=dict(orientation="h", y=-0.15),
         margin=dict(l=10, r=10, t=40, b=10),
     )
@@ -666,7 +669,7 @@ with col_force:
         # Autoscale y when overlaying so A/B curves fit; otherwise frame the
         # current design's extremes.
         yaxis=dict(range=None if overlay else y_range),
-        height=500,
+        height=360,
         showlegend=overlay,
         margin=dict(l=10, r=10, t=40, b=10),
     )
@@ -678,39 +681,40 @@ with col_force:
             "the usable range only."
         )
 
-# --- Bottom row: cylinder length plot (full width) ---
-fig_len = go.Figure()
-fig_len.add_trace(go.Scatter(
-    x=np.degrees(theta_curve), y=L_curve * U, mode="lines", name="L(theta)",
-    line=dict(color=PRIMARY, width=2.5)))
-fig_len.add_trace(go.Scatter(
-    x=[theta_deg], y=[L_here * U], mode="markers",
-    marker=dict(size=14, color="red"), name="current"))
-if overlay:
-    for _lab, _dd, _col in (("A", design_A, "green"), ("B", design_B, "darkorange")):
-        _Ld = compute_cylinder_length(theta_curve, a=_dd["a"], b=_dd["b"],
-                                      d=_dd["d"], f=_dd["f"])
-        fig_len.add_trace(go.Scatter(
-            x=np.degrees(theta_curve), y=_Ld * U, mode="lines",
-            name=f"design {_lab}", line=dict(color=_col, dash="dash")))
-fig_len.add_hline(y=L_min * U, line=dict(color="green", dash="dot"),
-                   annotation_text=f"L_min = {L_min * U:.2f} {ULABEL}",
-                   annotation_position="bottom right")
-fig_len.add_hline(y=stroke_ratio * L_min * U, line=dict(color="red", dash="dot"),
-                   annotation_text=f"{stroke_ratio:g} x L_min = "
-                                   f"{stroke_ratio * L_min * U:.2f} {ULABEL} (max stroke limit)",
-                   annotation_position="top right")
-fig_len.update_layout(
-    template=PLOT_TEMPLATE, font=PLOT_FONT,
-    title="Cylinder length vs. wall angle",
-    xaxis_title="theta (degrees)",
-    yaxis_title=f"Cylinder length ({ULABEL})",
-    xaxis=dict(range=[0, 90]),
-    height=350,
-    showlegend=overlay,
-    margin=dict(l=10, r=10, t=40, b=10),
-)
-st.plotly_chart(fig_len, width="stretch")
+# --- Top row, right: cylinder length plot (beside the force curve) ---
+with col_len:
+    fig_len = go.Figure()
+    fig_len.add_trace(go.Scatter(
+        x=np.degrees(theta_curve), y=L_curve * U, mode="lines", name="L(theta)",
+        line=dict(color=PRIMARY, width=2.5)))
+    fig_len.add_trace(go.Scatter(
+        x=[theta_deg], y=[L_here * U], mode="markers",
+        marker=dict(size=14, color="red"), name="current"))
+    if overlay:
+        for _lab, _dd, _col in (("A", design_A, "green"), ("B", design_B, "darkorange")):
+            _Ld = compute_cylinder_length(theta_curve, a=_dd["a"], b=_dd["b"],
+                                          d=_dd["d"], f=_dd["f"])
+            fig_len.add_trace(go.Scatter(
+                x=np.degrees(theta_curve), y=_Ld * U, mode="lines",
+                name=f"design {_lab}", line=dict(color=_col, dash="dash")))
+    fig_len.add_hline(y=L_min * U, line=dict(color="green", dash="dot"),
+                       annotation_text=f"L_min = {L_min * U:.2f} {ULABEL}",
+                       annotation_position="bottom right")
+    fig_len.add_hline(y=stroke_ratio * L_min * U, line=dict(color="red", dash="dot"),
+                       annotation_text=f"{stroke_ratio:g} x L_min = "
+                                       f"{stroke_ratio * L_min * U:.2f} {ULABEL} (max stroke limit)",
+                       annotation_position="top right")
+    fig_len.update_layout(
+        template=PLOT_TEMPLATE, font=PLOT_FONT,
+        title="Cylinder length vs. wall angle",
+        xaxis_title="theta (degrees)",
+        yaxis_title=f"Cylinder length ({ULABEL})",
+        xaxis=dict(range=[0, 90]),
+        height=360,
+        showlegend=overlay,
+        margin=dict(l=10, r=10, t=40, b=10),
+    )
+    st.plotly_chart(fig_len, width="stretch")
 
 # stroke_ok computed once, up with the summary metrics.
 stroke_status = (f"within {stroke_ratio:g}x limit" if stroke_ok
