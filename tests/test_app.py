@@ -255,6 +255,10 @@ def test_optimize_for_length_through_ui():
     run_ok(at, "optimize for length")
     for key in ("a", "b", "d", "f"):
         assert 0.0 <= at.session_state[key] <= 3.0
+    # the found geometry (a, b, d, f) is reported in the result message itself,
+    # not only pushed into the sliders
+    msgs = [str(m.value) for m in list(at.success) + list(at.warning)]
+    assert any(all(tok in m for tok in ("a=", "b=", "d=", "f=")) for m in msgs), msgs
 
 
 # --- Animation bounce logic (unit-tested directly; see module docstring) ------
