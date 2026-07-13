@@ -389,15 +389,17 @@ with tab_optimize:
                 st.session_state[k] = float(min(max(round(res[k], 4), lo), hi))
             held = f" (held: {', '.join(sorted(locked))})" if locked else ""
             action = "Evaluated" if len(locked) == 4 else "Optimized"
+            geom_str = (f"a={res['a'] * U:.2f}  b={res['b'] * U:.2f}  "
+                        f"d={res['d'] * U:.2f}  f={res['f'] * U:.2f} {ULABEL}")
             if opt_mode == "Cylinder length":
-                # Lead with the extended length and the force vs. the cap.
-                detail = (f"extended length {res['L_max'] * U:.2f} {ULABEL}, "
+                # Lead with the geometry, then the extended length and force vs. cap.
+                detail = (f"{geom_str} — extended length {res['L_max'] * U:.2f} {ULABEL}, "
                           f"peak {res['peak_force']:.2f} N/kg "
                           f"({res['peak_force'] * mass / 1000:.1f} kN at {mass:,.0f} kg; "
                           f"cap {force_cap_per_kg:.0f} N/kg), "
                           f"stroke ratio {res['stroke_ratio']:.2f}")
             else:
-                detail = (f"peak {res['peak_force']:.2f} N/kg, "
+                detail = (f"{geom_str} — peak {res['peak_force']:.2f} N/kg, "
                           f"stroke {(res['L_max'] - res['L_min']) * U:.2f} {ULABEL} "
                           f"(ratio {res['stroke_ratio']:.2f}), "
                           f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}")
