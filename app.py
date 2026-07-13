@@ -354,10 +354,12 @@ with tab_optimize:
             wkey="mass_opt",
             help="Same value as the Setup tab (kept in sync). Only translates the cap "
                  "into a real force in kN — it does not change the optimization.")
-        mc1, mc2 = st.columns(2)
-        mc1.metric("Force cap", f"{force_cap_per_kg:.0f} N/kg")
-        mc2.metric("Real force at this mass", f"{force_cap_per_kg * opt_mass / 1000:.1f} kN",
-                   help=f"Cap × {opt_mass:,.0f} kg. If no geometry qualifies, raise the cap.")
+        st.metric(
+            f"Total force ({force_cap_per_kg:.0f} N/kg × {opt_mass:,.0f} kg)",
+            f"{force_cap_per_kg * opt_mass / 1000:.1f} kN",
+            help="The force limit in real units: the N/kg cap multiplied by the wall "
+                 "+ load mass. The optimizer finds the shortest cylinder whose peak "
+                 "force stays within it.")
 
     if st.button("Optimize geometry for current settings", type="primary",
                  use_container_width=True):
@@ -392,11 +394,11 @@ with tab_optimize:
             geom_str = (f"a={res['a'] * U:.2f}  b={res['b'] * U:.2f}  "
                         f"d={res['d'] * U:.2f}  f={res['f'] * U:.2f} {ULABEL}")
             if opt_mode == "Cylinder length":
-                # Lead with the geometry, then the extended length and force vs. cap.
-                detail = (f"{geom_str} — extended length {res['L_max'] * U:.2f} {ULABEL}, "
-                          f"peak {res['peak_force']:.2f} N/kg "
-                          f"({res['peak_force'] * mass / 1000:.1f} kN at {mass:,.0f} kg; "
-                          f"cap {force_cap_per_kg:.0f} N/kg), "
+                # Lead with the geometry, then the extended length and the total
+                # force (peak per kg x mass).
+                detail = (f"{geom_str} — extended length {res['L_max'] * U:.2f} {ULABEL}; "
+                          f"total force {res['peak_force']:.2f} N/kg × {mass:,.0f} kg = "
+                          f"{res['peak_force'] * mass / 1000:.1f} kN; "
                           f"stroke ratio {res['stroke_ratio']:.2f}")
             else:
                 detail = (f"{geom_str} — peak {res['peak_force']:.2f} N/kg, "
