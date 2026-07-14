@@ -200,6 +200,8 @@ def test_summary_metrics_render():
     # values carry their units
     by_label = {m.label: m.value for m in at.metric}
     assert "N/kg" in next(v for k, v in by_label.items() if "Peak force" in k)
+    # the cylinder-sizing readout (force -> bore) renders below the metrics
+    assert any("Required bore" in str(m.value) for m in at.markdown)
 
 
 def test_browse_view_renders():

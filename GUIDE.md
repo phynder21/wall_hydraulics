@@ -127,6 +127,14 @@ stroke, a different retracted length, or a bigger container).
   both the Designer and Browse.
 - **Stroke / stroke ratio** — how much the cylinder extends; keep the ratio under
   your limit so a real cylinder can do it.
+- **Cylinder sizing — bore & pressure** (Designer) — turns the total force into an
+  actual cylinder. Pick a **bore standard** (ISO metric, NFPA inch, or exact) and
+  a **design pressure**; it shows the **required bore** (`bore = √(4·force / π·pressure)`,
+  full-bore *push* area, since raising the wall extends the cylinder), rounds up to
+  the **next standard size**, and reports the **pressure that size actually needs**
+  and how far that sits below your design pressure (headroom). If the force needs a
+  bore bigger than the largest standard, it says so — raise the pressure or split
+  the load across two cylinders.
 - **Green→red shading** (Browse) — relative to the results shown: greenest is the
   lowest force in the list, reddest the highest. Nearly-equal forces get
   nearly-identical colors.

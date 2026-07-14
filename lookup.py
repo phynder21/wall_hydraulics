@@ -234,6 +234,47 @@ def cylinder_force(bore_mm, rod_mm, pressure_bar):
     return pa * a_bore, pa * max(a_bore - a_rod, 0.0)
 
 
+# Standard cylinder bores. ISO 6020/6022 metric (mm) and NFPA inch series.
+ISO_BORES_MM = [40, 50, 63, 80, 100, 125, 160, 200, 250, 320]
+NFPA_BORES_IN = [1.5, 2.0, 2.5, 3.25, 4.0, 5.0, 6.0, 7.0, 8.0]
+
+
+def required_bore_mm(force_n, pressure_bar):
+    """Exact bore diameter (mm) whose full-bore push area gives `force_n` newtons
+    at `pressure_bar`. Inverse of the push side of cylinder_force:
+    F = P x (pi/4) x bore^2  ->  bore = sqrt(4 F / (pi P))."""
+    import math
+    pa = pressure_bar * 1.0e5
+    if pa <= 0.0 or force_n <= 0.0:
+        return float("nan")
+    area = force_n / pa                        # m^2
+    return math.sqrt(4.0 * area / math.pi) * 1000.0
+
+
+def next_standard_bore_mm(bore_mm, series):
+    """Smallest standard bore (mm) >= bore_mm for the series, with a label, or
+    (None, None) if it exceeds the largest listed size. `series` is
+    'ISO metric' or 'NFPA (inch)'."""
+    if series == "NFPA (inch)":
+        for b in NFPA_BORES_IN:
+            if b * 25.4 >= bore_mm - 1e-9:
+                return b * 25.4, f"{b:g} in"
+        return None, None
+    for b in ISO_BORES_MM:                     # default: ISO metric
+        if b >= bore_mm - 1e-9:
+            return float(b), f"{b:.0f} mm"
+    return None, None
+
+
+def pressure_for_bore_bar(force_n, bore_mm):
+    """Operating pressure (bar) a given bore needs to make `force_n` on push."""
+    import math
+    area = math.pi / 4.0 * (bore_mm / 1000.0) ** 2
+    if area <= 0.0:
+        return float("nan")
+    return force_n / area / 1.0e5
+
+
 def best(table, container_height, x_cg, z_cg, **kw):
     """Convenience: the single lowest-peak-force feasible geometry, or None."""
     res = search(table, container_height, x_cg, z_cg, limit=1, **kw)

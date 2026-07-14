@@ -226,3 +226,37 @@ def test_cylinder_matches_windows(table):
 def test_impossible_cylinder_returns_no_matches(table):
     """A window longer than any geometry can span yields no matches (flagged in UI)."""
     assert lookup.cylinder_matches(table, STANDARD_H, 1.2, 0.55, 4.0, 6.0)["peak_force"].size == 0
+
+
+def test_required_bore_inverts_cylinder_force():
+    """A bore sized for force F at pressure P produces ~F on push at P."""
+    F, P = 25000.0, 180.0
+    bore = lookup.required_bore_mm(F, P)
+    push, _pull = lookup.cylinder_force(bore, 0.0, P)
+    assert abs(push - F) / F < 1e-9
+
+
+def test_required_bore_scales():
+    """Bore grows as sqrt(force) and shrinks as 1/sqrt(pressure)."""
+    b1 = lookup.required_bore_mm(10000.0, 200.0)
+    b4 = lookup.required_bore_mm(40000.0, 200.0)
+    assert abs(b4 / b1 - 2.0) < 1e-9            # 4x force -> 2x bore
+    bp = lookup.required_bore_mm(10000.0, 800.0)
+    assert abs(b1 / bp - 2.0) < 1e-9            # 4x pressure -> half bore
+
+
+def test_next_standard_bore_rounds_up():
+    assert lookup.next_standard_bore_mm(34.8, "ISO metric") == (40.0, "40 mm")
+    std, lbl = lookup.next_standard_bore_mm(34.8, "NFPA (inch)")
+    assert abs(std - 1.5 * 25.4) < 1e-9 and lbl == "1.5 in"
+    # an exact standard size returns itself, not the next size up
+    assert lookup.next_standard_bore_mm(40.0, "ISO metric")[0] == 40.0
+
+
+def test_next_standard_bore_exceeds_max():
+    assert lookup.next_standard_bore_mm(10000.0, "ISO metric") == (None, None)
+
+
+def test_pressure_for_bore_reduces_with_larger_bore():
+    F = 20000.0
+    assert lookup.pressure_for_bore_bar(F, 40.0) < lookup.pressure_for_bore_bar(F, 32.0)

@@ -15,7 +15,8 @@ from wall import (
 from optimize import optimize_actuator, STROKE_TOL
 from browse import render_browse
 from reverse import render_reverse
-from lookup import force_bar, force_bar_html, BAR_NEUTRAL
+from lookup import (force_bar, force_bar_html, BAR_NEUTRAL,
+                    required_bore_mm, next_standard_bore_mm, pressure_for_bore_bar)
 
 # Human-readable build marker. Bump on notable changes so you can tell at a
 # glance whether a running/deployed page has the latest code (a stale process
@@ -592,6 +593,53 @@ with st.container(border=True):
     st.caption(f"**Total peak cylinder force at {mass:,.0f} kg:** {total_kn:.1f} kN")
     st.markdown(force_bar_html(bar_fill, BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
+
+# --- Cylinder sizing: turn the peak force into a bore + operating pressure ---
+with st.container(border=True):
+    st.markdown("**Cylinder sizing — bore & pressure**")
+    cs1, cs2 = st.columns([1, 1])
+    series = cs1.selectbox(
+        "Bore standard", ["ISO metric", "NFPA (inch)", "Exact (no rounding)"],
+        key="bore_series",
+        help="Round the required bore up to a real catalogue size, or show the "
+             "exact number.")
+    if series == "NFPA (inch)":
+        st.session_state.setdefault("des_psi", 3000.0)
+        press_psi = cs2.number_input("Design pressure (psi)", 200.0, 10000.0,
+                                     step=50.0, key="des_psi")
+        pressure_bar = press_psi * 0.0689476
+        press_label = f"{press_psi:,.0f} psi"
+    else:
+        st.session_state.setdefault("des_bar", 210.0)
+        pressure_bar = cs2.number_input("Design pressure (bar)", 20.0, 700.0,
+                                        step=5.0, key="des_bar")
+        press_label = f"{pressure_bar:,.0f} bar"
+
+    if np.isfinite(peak_mag) and mass > 0 and pressure_bar > 0:
+        force_n = peak_mag * mass                       # total peak push, newtons
+        bore_mm = required_bore_mm(force_n, pressure_bar)
+        bore_in = bore_mm / 25.4
+        if series == "Exact (no rounding)":
+            st.markdown(
+                f"Required bore **{bore_mm:.1f} mm** ({bore_in:.2f} in) to make "
+                f"**{force_n / 1000:.1f} kN** at {press_label}.")
+        else:
+            std_mm, std_label = next_standard_bore_mm(bore_mm, series)
+            if std_mm is None:
+                st.warning(
+                    f"Required bore **{bore_mm:.1f} mm** is bigger than the largest "
+                    f"standard size — raise the design pressure, or plan for two "
+                    f"cylinders sharing the load.")
+            else:
+                p_at_std = pressure_for_bore_bar(force_n, std_mm)
+                head = (1.0 - p_at_std / pressure_bar) * 100.0 if pressure_bar else 0.0
+                st.markdown(
+                    f"Required bore **{bore_mm:.1f} mm** ({bore_in:.2f} in) → next "
+                    f"standard **{std_label}**, which needs **{p_at_std:.0f} bar** "
+                    f"({p_at_std * 14.5038:.0f} psi) to make {force_n / 1000:.1f} kN "
+                    f"— **{head:.0f}% below** your {press_label}.")
+    else:
+        st.caption("Set a valid geometry, wall mass, and pressure to size the bore.")
 
 # --- Side view large on top; force + length curves small below it. diag_area is
 # created first so its slot sits above the curve row, even though the diagram
