@@ -827,6 +827,81 @@ if overlay:
         f"**{_peak_force(design_A):.2f} N/kg**   ·   B ({_fmt_design(design_B)}): "
         f"peak **{_peak_force(design_B):.2f} N/kg**.")
 
+# --- Export the current design as a one-page PDF spec sheet ---
+with st.expander("Export design (PDF)"):
+    st.caption("A one-page spec sheet for the current geometry — inputs, forces, "
+               "bore & pressure, the diagram, and the curves. Click Generate to "
+               "capture the design as it stands now.")
+    if st.button("Generate PDF"):
+        import datetime
+        import report
+        with st.spinner("Rendering the PDF…"):
+            force_n = peak_mag * mass if np.isfinite(peak_mag) else float("nan")
+            _pk = (f"{peak_mag:.2f} N/kg" if np.isfinite(peak_mag)
+                   else "n/a (singular geometry)")
+            _tot = f"{force_n / 1000:.1f} kN" if np.isfinite(force_n) else "n/a"
+            cyl_rows = [("Peak force", _pk),
+                        (f"Total force at {mass:,.0f} kg", _tot)]
+            if np.isfinite(peak_mag) and pressure_bar > 0:
+                bore = required_bore_mm(force_n, pressure_bar)
+                cyl_rows.append(("Design pressure", press_label))
+                if series == "Exact (no rounding)":
+                    cyl_rows.append(("Required bore",
+                                     f"{bore:.1f} mm ({bore / 25.4:.2f} in)"))
+                else:
+                    std_mm, std_label = next_standard_bore_mm(bore, series)
+                    if std_mm:
+                        cyl_rows.append(("Required bore",
+                                         f"{bore:.1f} mm -> standard {std_label}"))
+                        cyl_rows.append(("Pressure at that bore",
+                                         f"{pressure_for_bore_bar(force_n, std_mm):.0f} bar"))
+                    else:
+                        cyl_rows.append(("Required bore",
+                                         f"{bore:.1f} mm (exceeds largest standard)"))
+            cyl_rows += [
+                ("Stroke (L_max - L_min)", f"{(L_max - L_min) * U:.2f} {ULABEL}"),
+                ("Retracted / extended", f"{L_min * U:.2f} / {L_max * U:.2f} {ULABEL}"),
+                ("Stroke ratio", f"{L_ratio:.2f}" + ("" if stroke_ok else " (over limit)")),
+            ]
+            tables = [
+                ("Setup", [
+                    ("Container", size_key),
+                    ("Center of gravity x_cg", f"{x_cg * U:.2f} {ULABEL}"),
+                    ("Center of gravity z_cg", f"{z_cg * U:.2f} {ULABEL}"),
+                    ("Wall + load mass", f"{mass:,.0f} kg"),
+                    ("Max stroke ratio", f"{stroke_ratio:g}x"),
+                    ("Roof clearance", f"{roof_clearance * U:.2f} {ULABEL}"),
+                ]),
+                ("Geometry (a, b, d, f)", [
+                    ("a - base along floor", f"{a * U:.3f} {ULABEL}"),
+                    ("b - attachment up wall", f"{b * U:.3f} {ULABEL}"),
+                    ("d - bracket offset", f"{d * U:.3f} {ULABEL}"),
+                    ("f - base height", f"{f * U:.3f} {ULABEL}"),
+                ]),
+                ("Cylinder", cyl_rows),
+            ]
+            images = [
+                ("Side view", fig_geom.to_image(format="png", width=900, height=560, scale=2)),
+                ("Piston force vs. wall angle",
+                 fig.to_image(format="png", width=900, height=380, scale=2)),
+                ("Cylinder length vs. wall angle",
+                 fig_len.to_image(format="png", width=900, height=380, scale=2)),
+            ]
+            notes = [
+                "Forces are static holding forces (no inertia, friction, wind, or flex).",
+                "Apply a factor of safety (>=1.5x is a common start).",
+                "Real installs usually use two cylinders; per-cylinder force is ~half.",
+                "Bore uses the full-bore push area (raising the wall extends the cylinder).",
+            ]
+            ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            st.session_state["design_pdf"] = report.build_spec_pdf(
+                "Container Wall Actuator - Design Report",
+                f"{size_key} - generated {ts}", tables, images=images, notes=notes)
+    if st.session_state.get("design_pdf"):
+        st.download_button("Download PDF", st.session_state["design_pdf"],
+                           file_name="wall_actuator_design.pdf",
+                           mime="application/pdf")
+
 # --- Animation driver -------------------------------------------------------
 # Streamlit has no background loop, so we animate by advancing the sweep angle
 # and re-running. This sits at the very end so every widget has already rendered

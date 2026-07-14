@@ -153,6 +153,15 @@ each design's force and length curve as a dashed line (A, B) alongside the
 current one, with a caption reporting each design's peak force. **Clear A/B**
 removes a snapshot.
 
+### Export design (PDF)
+
+The **Export design (PDF)** panel downloads a one-page spec sheet for the current
+configuration — setup (container, cg, mass, constraints), the `a, b, d, f`
+geometry, the cylinder spec (peak/total force, required bore, standard size and
+its pressure, stroke, retracted/extended length, stroke ratio), the side-view
+diagram and both curves, and the standard sizing caveats. Click **Generate PDF**
+to capture the design as it stands, then **Download PDF**.
+
 ---
 
 ## 4. How the math works

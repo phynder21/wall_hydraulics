@@ -62,8 +62,10 @@ until one qualifies.
 
 Extras: switch **units** (m / in), turn on **Fine precision** for smaller steps,
 **lock** any value so Optimize holds it fixed, and use **Compare** to save two
-designs (A/B) and overlay them on the plots. The Designer's URL captures your
-setup, so you can copy the link to share an exact configuration.
+designs (A/B) and overlay them on the plots. **Export design (PDF)** downloads a
+one-page spec sheet for the current design — inputs, geometry, forces, bore &
+pressure, the diagram, and the curves. The Designer's URL captures your setup, so
+you can copy the link to share an exact configuration.
 
 ---
 
