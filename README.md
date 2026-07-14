@@ -3,8 +3,18 @@
 Interactive tool for sizing the hydraulic cylinder that raises and lowers
 a hinged sidewall on a shipping container. Drag or type the mounting
 dimensions, watch the geometry update in real time, and read off the
-required piston force and cylinder length range — or let the built-in
-optimizer find the force-minimizing geometry for you.
+required piston force, cylinder length range, and the **bore + operating
+pressure** to buy — or let the built-in optimizer find the geometry for you.
+
+Three views share one physics core:
+
+- **Designer** — set a geometry (or optimize it), read the force, stroke, and a
+  **bore & pressure** sizing panel. The optimizer minimizes **peak force**, or
+  minimizes the **cylinder's length** under a force cap you set.
+- **Browse configurations** — instant search over a precomputed database of
+  geometries (no optimizer wait).
+- **Size from a cylinder** — the reverse: enter a real cylinder's force and
+  length window and it finds the geometry and the biggest wall it can raise.
 
 ---
 
@@ -68,7 +78,7 @@ in meters internally, so shared links are identical regardless of unit.
 The left panel groups the controls into tabs that follow the workflow:
 **Setup** (container, units, center of gravity, constraints), **Geometry**
 (the variable *ranges* that bound each dimension, the `a, b, d, f` *values*
-with 🔒 locks, and the wall angle), **Optimize** (run the search, pick an
+with locks, and the wall angle), **Optimize** (run the search, pick an
 alternative), and **Compare** (overlay two designs). The visualization is on
 the right.
 
@@ -102,15 +112,16 @@ range and both the **value slider** and the **optimizer's search** are
 restricted to that window — so you get the best design *you can
 actually build*, not an optimal-but-unmountable one (e.g. the base pinned at
 the ceiling). Leave a range at full for no restriction; to pin an exact value
-use the 🔒 lock instead. Tighter ranges = less freedom, so the best
+use the lock instead. Tighter ranges = less freedom, so the best
 achievable force can only rise.
 
 ### Optimize
 
 | Control | Meaning |
 | ------- | ------- |
-| **Optimize geometry** button | Searches for the `a, b, d, f` that minimize the worst-case piston force for the current container, cg, and constraints, then fills them in. See [section 6](#6-optimizing-the-geometry-optimizepy). |
-| 🔒 lock (beside `a`, `b`, `d`, `f`) | Hold that dimension at its current value so the optimizer searches only the unlocked ones. Lock all four to just evaluate that exact geometry. |
+| **Optimize to minimize** | *Peak force* (default) — the geometry with the lowest worst-case piston force. *Cylinder length* — the **shortest** cylinder (smallest extended length) whose peak force stays at or below a **Max piston force (N/kg)** cap; a synced wall-mass slider shows that cap as a real force in kN. The two pull toward different geometries because the work to raise the wall is fixed: **lower force ⇒ longer stroke**. Use *force* for a hydraulic (force is cheap), *length* for an electromechanical actuator (size/force is what you pay for). |
+| **Optimize geometry** button | Searches for the `a, b, d, f` that minimize the chosen objective for the current container, cg, and constraints, then fills them in. The result banner leads with the found `a, b, d, f`. See [section 6](#6-optimizing-the-geometry-optimizepy). |
+| lock (beside `a`, `b`, `d`, `f`) | Hold that dimension at its current value so the optimizer searches only the unlocked ones. Lock all four to just evaluate that exact geometry. |
 | Show alternatives within __% | How far above the optimum's force a listed alternative may sit. The true optimum is often awkward to build (on the standard container it wants the cylinder base right at the ceiling); a design a few percent worse can be far easier. A **sharp** optimum sits alone, so you may need ~10% before a genuinely different design appears. `0` keeps just the optimum (and exact ties). |
 | Result banner | The optimizer **never returns an impossible (over-center) geometry**. After it runs, a banner reports the design: **green** = buildable and all limits met; **yellow** = best buildable design, but a stroke/roof limit can't be met (still usable — you'd just need different hardware); **red** = the (locked) geometry over-centers and can't be built, so unlock something. |
 | Near-optimal alternatives | A **geometrically diverse** set of designs within your tolerance of the optimum appears in an expander below the button, each tagged with its force penalty (e.g. `+10.5%`). **Click any one to load it into the geometry and diagrams.** The first is the optimum itself. |
@@ -131,14 +142,14 @@ The optimizer writes its result here; you can also edit any value by hand.
 | Parameter   | Meaning                              |
 | ----------- | ------------------------------------ |
 | `theta_deg` | Current angle for the side-view diagram. Slide it to scrub through the motion; both plots mark the current angle in red. |
-| ▶ Sweep θ   | Toggle to **continuously animate** the wall opening and closing (0 → 90 → 0°). The angle slider sweeps along; toggle off to freeze and scrub manually. |
+| Sweep θ   | Toggle to **continuously animate** the wall opening and closing (0 → 90 → 0°). The angle slider sweeps along; toggle off to freeze and scrub manually. |
 
 ### Compare designs
 
 Weigh two designs side by side — typically the optimum against a near-optimal
-alternative you clicked in. **📌 Save as A** / **📌 Save as B** snapshot the
+alternative you clicked in. **Save as A** / **Save as B** snapshot the
 current geometry; **Overlay A & B on plots** (enabled once both are saved) draws
-each design's force and length curve as a dashed line (🟩 A, 🟧 B) alongside the
+each design's force and length curve as a dashed line (A, B) alongside the
 current one, with a caption reporting each design's peak force. **Clear A/B**
 removes a snapshot.
 
@@ -197,6 +208,24 @@ peak **magnitude**, not the sign.
   *Roof clearance* > 0, a dashed red line marks the effective ceiling the
   linkage must stay below.
 
+### Cylinder sizing — bore & pressure
+
+The **Cylinder sizing** card (below the metrics) turns the total force into a
+buyable cylinder. A hydraulic cylinder makes `force = pressure × piston area`,
+so for a chosen system pressure the required bore is `bore = √(4·force / π·P)`
+— using the full-bore **push** area, since raising the wall *extends* the
+cylinder. Pick a **bore standard** — *ISO metric* (40, 50, 63 mm…), *NFPA inch*
+(1.5, 2, 2.5 in…), or *Exact* (no rounding) — and a **design pressure**. It
+reports:
+
+- the **exact required bore**,
+- the **next standard bore** up (a real catalogue size),
+- the **pressure that standard bore actually needs** for your force, and how far
+  that sits **below your design pressure** (headroom).
+
+If the force needs a bore bigger than the largest standard size, it says so —
+raise the pressure, or split the load across two cylinders.
+
 ### Before sizing real hardware
 
 - **Multiply by real mass.** Plot values are per kg; wall + equipment is
@@ -238,7 +267,7 @@ design is feasible, and a paste-ready line for the app's sliders.
 **Locking variables.** Real installs often fix some dimensions (a bracket
 height, an existing floor mount). Pass `--lock VAR=VALUE` (repeatable) to
 hold those fixed and search only the rest — e.g. `--lock f=0.5 --lock a=0.6`.
-In the app, tick the 🔒 box next to `a`, `b`, `d`, or `f` to do the same.
+In the app, tick the box next to `a`, `b`, `d`, or `f` to do the same.
 Locking removes design freedom, so the best achievable peak force can only
 stay equal or rise, and tight locks may make the constraints infeasible
 (reported as such). Locking all four just evaluates that fixed geometry.
@@ -400,6 +429,20 @@ appear (at ratio ~1.85, not exactly 1.80). Plots for any selected config are
 recomputed **exactly** from `wall.py`, and **Refine** runs the real optimizer
 for the exact-limit optimum.
 
+### Size from a cylinder: the reverse
+
+The **Size from a cylinder** view (the third sidebar view) works backwards from a
+real cylinder. Enter its **force** (bore + rod + pressure, or a rated force) and
+its **length window** (retracted length + stroke) in whichever units you like (an
+Imperial/Metric toggle converts in place), plus a safety factor. It searches the
+same precomputed table for geometries whose cylinder length stays entirely inside
+[retracted, extended] the whole way up, and reports the **biggest wall mass** that
+cylinder can raise — both a *safe* figure (force ÷ safety factor) and the
+*absolute* cylinder maximum. Because the length window is a hard constraint, some
+cylinders won't fit any geometry; when that happens it says so and gives the
+length range that *would* work. **Refine** runs the exact optimizer with the
+length window as a constraint.
+
 ---
 
 ## 7. Run it locally (for developers)
@@ -529,18 +572,22 @@ are done in both `app.py` and `nicegui_app.py`.
 ├── lookup.py          # Fast filter + rank query over the precomputed table.
 ├── lookup_build.py    # Builds the precomputed geometry table (Browse mode).
 │  # --- front-end 1: Streamlit ---
-├── app.py             # Streamlit UI (Designer + Browse view switch).
+├── app.py             # Streamlit UI (Designer + view switch; cylinder bore/pressure sizing).
 ├── browse.py          # Streamlit "Browse configurations" view.
+├── reverse.py         # Streamlit "Size from a cylinder" (reverse) view.
+├── sensitivity.py     # Standalone: geometry sensitivity heatmap (PNG/HTML). See GUIDE.
 ├── .streamlit/config.toml   # Streamlit theme.
-├── requirements.txt   # Streamlit deps (streamlit, numpy, plotly, scipy, pytest).
+├── requirements.txt   # Streamlit deps (streamlit, numpy, plotly, scipy, pytest, kaleido).
 │  # --- front-end 2: NiceGUI ---
-├── nicegui_app.py     # NiceGUI UI (same features; /browse route). See NICEGUI.md.
+├── nicegui_app.py     # NiceGUI UI (same features; /browse, /reverse routes). See NICEGUI.md.
 ├── requirements-nicegui.txt # NiceGUI deps (separate, so the two deploys never mix).
 ├── render.yaml        # Render.com blueprint for the NiceGUI deploy.
 ├── NICEGUI.md         # How to run + deploy the NiceGUI front-end.
 │  # --- tests & docs ---
 ├── tests/             # pytest suite (physics, optimizer, lookup, both UIs). Section 7.
 ├── docs/              # Reproducible test plan (experiment_plan.md + test_cases.csv).
+├── GUIDE.md           # Short user guide to the three views.
+├── manual_qa_test_cases.csv  # Ground-truth inputs/outputs for manual QA across the app.
 ├── prototypes/        # Static HTML UI mockups — open in a browser; not part of either app.
 ├── pytest.ini
 └── README.md
