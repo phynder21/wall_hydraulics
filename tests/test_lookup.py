@@ -160,6 +160,16 @@ def test_order_columns_puts_sort_next_to_peak():
     assert lookup.order_columns(["a", "b", "f"], "f")[0] == "f"   # peak not shown
 
 
+def test_order_columns_surfaces_unselected_sort_column():
+    # Sorting by a column that wasn't picked (e.g. extended length) still shows it.
+    cols = ["peak_force", "a", "b", "d", "f"]
+    out = lookup.order_columns(cols, "L_max")
+    assert out[:2] == ["peak_force", "L_max"]
+    assert set(cols).issubset(out)          # nothing the user picked is dropped
+    # Even with peak force hidden, sorting by peak force surfaces it.
+    assert lookup.order_columns(["a", "b"], "peak_force")[0] == "peak_force"
+
+
 def test_group_cap_limits_rows_per_sort_value(table):
     """group_cap keeps at most K rows per distinct sort value (the lowest-force
     ones in each), so one value can't flood the list."""

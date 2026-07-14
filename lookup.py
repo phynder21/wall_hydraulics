@@ -120,12 +120,13 @@ def force_bar_html(fill, color, label):
 
 def order_columns(columns, sort_by):
     """Display order for the results table: peak force first, then the column
-    being sorted by (so it sits just right of peak force), then the rest in their
-    original order."""
+    being sorted by, then the rest in their original order. The sort column is
+    added even if it wasn't picked, so you always see the values you're sorting by
+    (e.g. sorting by extended length surfaces that column automatically)."""
     ordered = []
-    if "peak_force" in columns:
+    if "peak_force" in columns or sort_by == "peak_force":
         ordered.append("peak_force")
-    if sort_by != "peak_force" and sort_by in columns:
+    if sort_by != "peak_force" and sort_by not in ordered:
         ordered.append(sort_by)
     ordered += [c for c in columns if c not in ordered]
     return ordered
