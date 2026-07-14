@@ -617,12 +617,13 @@ with st.container(border=True):
 
     if np.isfinite(peak_mag) and mass > 0 and pressure_bar > 0:
         force_n = peak_mag * mass                       # total peak push, newtons
+        force_lbl = f"{force_n / 1000:.1f} kN ({force_n / 4.44822:,.0f} lbf)"
         bore_mm = required_bore_mm(force_n, pressure_bar)
         bore_in = bore_mm / 25.4
         if series == "Exact (no rounding)":
             st.markdown(
                 f"Required bore diameter **{bore_mm:.1f} mm** ({bore_in:.2f} in) to "
-                f"make **{force_n / 1000:.1f} kN** at {press_label}.")
+                f"make **{force_lbl}** at {press_label}.")
         else:
             std_mm, std_label = next_standard_bore_mm(bore_mm, series)
             if std_mm is None:
@@ -636,7 +637,7 @@ with st.container(border=True):
                 st.markdown(
                     f"Required bore diameter **{bore_mm:.1f} mm** ({bore_in:.2f} in) → "
                     f"next standard **{std_label}**, which needs **{p_at_std:.0f} bar** "
-                    f"({p_at_std * 14.5038:.0f} psi) to make {force_n / 1000:.1f} kN "
+                    f"({p_at_std * 14.5038:.0f} psi) to make {force_lbl} "
                     f"— **{head:.0f}% below** your {press_label}.")
     else:
         st.caption("Set a valid geometry, wall mass, and pressure to size the bore.")
