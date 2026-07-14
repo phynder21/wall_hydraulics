@@ -438,6 +438,14 @@ with tab_optimize:
         except Exception as exc:  # surface any other optimizer error in the UI
             st.error(f"Optimizer failed: {exc}")
 
+    # Persistent geometry readout. The optimizer (force OR length mode) writes its
+    # result into a/b/d/f, so this stays visible after the transient result banner
+    # clears — you always see the current/optimized geometry here.
+    st.caption(
+        f"**Geometry (a, b, d, f):**  a={st.session_state['a'] * U:.3f}  "
+        f"b={st.session_state['b'] * U:.3f}  d={st.session_state['d'] * U:.3f}  "
+        f"f={st.session_state['f'] * U:.3f} {ULABEL}")
+
     # Clickable list of the last optimize's near-optimal alternatives. Rendered
     # here — before the Geometry tab executes — so a click loads the chosen
     # geometry into a/b/d/f and the sliders re-seed from it in the same run.

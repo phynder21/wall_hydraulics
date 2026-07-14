@@ -202,6 +202,8 @@ def test_summary_metrics_render():
     assert "N/kg" in next(v for k, v in by_label.items() if "Peak force" in k)
     # the cylinder-sizing readout (force -> bore) renders below the metrics
     assert any("Required bore" in str(m.value) for m in at.markdown)
+    # the Optimize tab shows a persistent a/b/d/f geometry readout
+    assert any("Geometry (a, b, d, f)" in str(c.value) for c in at.caption)
 
 
 def test_browse_view_renders():
