@@ -150,10 +150,6 @@ def _metrics(p, theta, x_cg, z_cg, m_cg, container_width, container_height,
 
 # Grid density per number of free variables, keeping the seed grid ~<=10k cells.
 _GRID_NPTS = {1: 400, 2: 60, 3: 18, 4: 11}
-# Grid points near the true optimum sit a step over the stroke limit, so the
-# feasibility screen for the SEED allows this much slack (the polish enforces the
-# real limit). Same idea as the lookup table's tolerance.
-_SEED_STROKE_TOL = 0.20
 
 
 def _batch_metrics(P, theta, x_cg, z_cg, m_cg, W, H, roof_clearance):
@@ -181,7 +177,7 @@ def _batch_metrics(P, theta, x_cg, z_cg, m_cg, W, H, roof_clearance):
     top = np.where(inside, z_att, -np.inf).max(axis=1)
     ceiling = np.maximum(top - (H - roof_clearance), 0.0)
     ceiling = np.where(np.isfinite(ceiling), ceiling, 0.0)
-    return peak, ratio, moment, ceiling
+    return peak, ratio, moment, ceiling, Lmax
 
 
 _ZOOM_NPTS = {1: 33, 2: 15, 3: 11, 4: 8}   # local-grid points per free variable
@@ -191,12 +187,13 @@ _ZOOM_THETA = 121                           # theta samples for the refine sweep
 
 
 def _zoom_refine(cell, spacing, free, locked, full_bounds, x_cg, z_cg, m_cg,
-                 W, H, roof_clearance, stroke_ratio_max):
+                 W, H, roof_clearance, score_fn):
     """Sharpen a coarse-grid seed to its local optimum with a pure-NumPy zoom:
     evaluate a small grid inside a window, keep the best point, recenter on it and
     shrink the window, repeat. Replaces the scipy DE polish -- no per-iteration
     Python overhead, so it stays fast on a throttled CPU (e.g. Render's free tier).
-    The batch score mirrors the scalar `objective` (peak + the same penalties)."""
+    `score_fn(peak, ratio, moment, ceiling, Lmax)` is the batch score to minimize;
+    it mirrors the scalar `objective` (with the same full-weight penalties)."""
     theta = np.linspace(0.0, np.pi / 2, _ZOOM_THETA)
     fcol = {v: i for i, v in enumerate(free)}
     npz = _ZOOM_NPTS.get(len(free), 7)
@@ -213,13 +210,9 @@ def _zoom_refine(cell, spacing, free, locked, full_bounds, x_cg, z_cg, m_cg,
         P = np.empty((mesh[0].size, 4))
         for j, v in enumerate(VAR_NAMES):
             P[:, j] = mesh[fcol[v]] if v in fcol else locked[v]
-        peak, ratio, moment, ceiling = _batch_metrics(
+        peak, ratio, moment, ceiling, Lmax = _batch_metrics(
             P, theta, x_cg, z_cg, m_cg, W, H, roof_clearance)
-        score = np.where(np.isfinite(peak), peak, np.inf) \
-            + STROKE_PENALTY * np.maximum(ratio - stroke_ratio_max, 0.0) ** 2 \
-            + CEILING_PENALTY * np.maximum(ceiling, 0.0) ** 2 \
-            + np.where(moment < 0.0, OVERCENTER_HARD, 0.0) \
-            + OVERCENTER_PENALTY * np.maximum(MIN_MOMENT_ARM - moment, 0.0) ** 2
+        score = score_fn(peak, ratio, moment, ceiling, Lmax)
         k = int(np.argmin(score))
         center = np.array([mesh[fcol[v]][k] for v in free])
         best = center
@@ -228,11 +221,13 @@ def _zoom_refine(cell, spacing, free, locked, full_bounds, x_cg, z_cg, m_cg,
 
 
 def _fast_runs(free, locked, full_bounds, assemble, objective, evaluate,
-               x_cg, z_cg, m_cg, W, H, roof_clearance, stroke_ratio_max):
+               x_cg, z_cg, m_cg, W, H, roof_clearance, seed_score_fn, refine_score_fn):
     """Replace the 20 blind DE restarts AND the scipy polish with a vectorized
     coarse grid sweep (finds the good basin) plus a pure-NumPy zoom refine on the
     best few cells. Lands on the constraint-boundary global optimum with no scipy
-    in the hot path, so it is fast even on a throttled CPU."""
+    in the hot path, so it is fast even on a throttled CPU. The seed/refine scores
+    are supplied by the caller so this works for either objective (min force, or
+    min length under a force cap)."""
     npg = _GRID_NPTS.get(len(free), 9)
     axes = [np.linspace(*full_bounds[v], npg) for v in free]
     mesh = [m.ravel() for m in np.meshgrid(*axes, indexing="ij")]
@@ -243,16 +238,13 @@ def _fast_runs(free, locked, full_bounds, assemble, objective, evaluate,
         P[:, j] = mesh[col[v]] if v in col else locked[v]
 
     theta_c = np.linspace(0.0, np.pi / 2, 61)     # coarse sweep is enough to rank
-    peak, ratio, moment, ceiling = _batch_metrics(
+    peak, ratio, moment, ceiling, Lmax = _batch_metrics(
         P, theta_c, x_cg, z_cg, m_cg, W, H, roof_clearance)
-    # SOFT ranking: mostly by peak, with a gentle push toward feasibility and a
-    # hard reject for over-center. Soft (not hard) so a grid cell near the
+    # SOFT ranking: mostly by the objective, with a gentle push toward feasibility
+    # and a hard reject for over-center. Soft (not hard) so a grid cell near the
     # boundary optimum — a step over the stroke limit — still ranks well and gets
     # refined; the refine then enforces the real limit via the same penalties.
-    score = np.where(np.isfinite(peak), peak, 1e18) \
-        + 10.0 * np.maximum(ratio - stroke_ratio_max, 0.0) ** 2 \
-        + 10.0 * ceiling ** 2 + np.where(moment < 0.0, 1e18, 0.0)
-    order = np.argsort(score)
+    order = np.argsort(seed_score_fn(peak, ratio, moment, ceiling, Lmax))
 
     spacing = [(full_bounds[v][1] - full_bounds[v][0]) / (npg - 1) for v in free]
     seeds, runs = [], []
@@ -264,7 +256,7 @@ def _fast_runs(free, locked, full_bounds, assemble, objective, evaluate,
             continue                               # too close to an already-refined cell
         seeds.append(cell)
         best_vals = _zoom_refine(cell, spacing, free, locked, full_bounds,
-                                 x_cg, z_cg, m_cg, W, H, roof_clearance, stroke_ratio_max)
+                                 x_cg, z_cg, m_cg, W, H, roof_clearance, refine_score_fn)
         r = evaluate(assemble(best_vals))
         r["fun"], r["success"] = float(objective(best_vals)), True
         runs.append(r)
@@ -309,8 +301,8 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     optimum itself is always `alternatives[0]`.
     """
     locked = dict(locked or {})
-    if length_window is not None or objective_mode == "length":
-        fast = False   # the fast zoom models neither the length window nor L_max min
+    if length_window is not None:
+        fast = False   # the fast zoom doesn't model the absolute length window
     n_starts = max(1, int(n_starts))   # at least one start
     theta = np.linspace(0.0, np.pi / 2, n_theta)
 
@@ -384,13 +376,47 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     if popsize is not None:
         de_kwargs["popsize"] = popsize
 
+    # Batch scores for the fast grid solver, matching the active objective. Each is
+    # a SEED score (soft feasibility so near-boundary cells still rank and then get
+    # refined) and a REFINE score (full-weight penalties, to land on the boundary).
+    # 'length' minimizes L_max and pushes peak force to at-or-below the cap; 'force'
+    # minimizes peak force — byte-identical to the original hardcoded scores.
+    if objective_mode == "length":
+        def seed_score(peak, ratio, moment, ceiling, Lmax):
+            s = np.where(np.isfinite(Lmax) & np.isfinite(peak), Lmax, 1e18)
+            if force_cap is not None:
+                s = s + 10.0 * np.maximum(peak - force_cap, 0.0) ** 2
+            return (s + 10.0 * np.maximum(ratio - stroke_ratio_max, 0.0) ** 2
+                    + 10.0 * ceiling ** 2 + np.where(moment < 0.0, 1e18, 0.0))
+
+        def refine_score(peak, ratio, moment, ceiling, Lmax):
+            s = np.where(np.isfinite(Lmax) & np.isfinite(peak), Lmax, np.inf)
+            if force_cap is not None:
+                s = s + FORCE_CAP_PENALTY * np.maximum(peak - force_cap, 0.0) ** 2
+            return (s + STROKE_PENALTY * np.maximum(ratio - stroke_ratio_max, 0.0) ** 2
+                    + CEILING_PENALTY * np.maximum(ceiling, 0.0) ** 2
+                    + np.where(moment < 0.0, OVERCENTER_HARD, 0.0)
+                    + OVERCENTER_PENALTY * np.maximum(MIN_MOMENT_ARM - moment, 0.0) ** 2)
+    else:
+        def seed_score(peak, ratio, moment, ceiling, Lmax):
+            return (np.where(np.isfinite(peak), peak, 1e18)
+                    + 10.0 * np.maximum(ratio - stroke_ratio_max, 0.0) ** 2
+                    + 10.0 * ceiling ** 2 + np.where(moment < 0.0, 1e18, 0.0))
+
+        def refine_score(peak, ratio, moment, ceiling, Lmax):
+            return (np.where(np.isfinite(peak), peak, np.inf)
+                    + STROKE_PENALTY * np.maximum(ratio - stroke_ratio_max, 0.0) ** 2
+                    + CEILING_PENALTY * np.maximum(ceiling, 0.0) ** 2
+                    + np.where(moment < 0.0, OVERCENTER_HARD, 0.0)
+                    + OVERCENTER_PENALTY * np.maximum(MIN_MOMENT_ARM - moment, 0.0) ** 2)
+
     if free and fast:
         # Fast: coarse grid seed + a pure-NumPy zoom refine instead of 20 blind DE
         # restarts (no scipy in the hot path). ~15x faster and just as accurate;
         # suitable for interactive / low-power hosts (e.g. Render's free tier).
         runs = _fast_runs(free, locked, full_bounds, assemble, objective, evaluate,
                           x_cg, z_cg, m_cg, container_width, container_height,
-                          roof_clearance, stroke_ratio_max)
+                          roof_clearance, seed_score, refine_score)
         best = min(runs, key=lambda r: r["fun"])
         success = best["success"]
     elif free:

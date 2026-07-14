@@ -287,3 +287,19 @@ def test_length_mode_infeasible_when_cap_too_low():
                             objective_mode="length", force_cap=3.0,
                             n_starts=4, maxiter=80)
     assert not res["feasible"]
+
+
+def test_fast_length_matches_slow_optimizer():
+    """The fast grid solver for the length objective lands on the same optimum as
+    the thorough differential-evolution path — no accuracy compromise. Its
+    extended length matches the DE result within 1%, and it respects the cap."""
+    for cap in (45.0, 20.0):
+        fast = optimize_actuator(*STANDARD, x_cg=1.2, z_cg=0.55,
+                                 objective_mode="length", force_cap=cap,
+                                 fast=True, alt_rel_tol=0.0)
+        slow = optimize_actuator(*STANDARD, x_cg=1.2, z_cg=0.55,
+                                 objective_mode="length", force_cap=cap,
+                                 fast=False, n_starts=6, maxiter=150, alt_rel_tol=0.0)
+        assert fast["feasible"] and slow["feasible"]
+        assert fast["peak_force"] <= cap + 0.5
+        assert abs(fast["L_max"] - slow["L_max"]) / slow["L_max"] < 0.01
