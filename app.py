@@ -578,9 +578,8 @@ stroke_ok = L_ratio <= stroke_ratio + STROKE_TOL
 with st.container(border=True):
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Peak force (worst case)", f"{peak_mag:.2f} N/kg",
-              help="Largest |force| over the whole 0–90° swing — the number to "
-                   "size the cylinder by. Multiply by the wall+equipment mass "
-                   "for newtons.")
+              help="Largest force over the full 0–90° swing — the number to size "
+                   "the cylinder by.")
     m2.metric(f"Force at θ = {theta_deg:.0f}°", f"{F_here:.2f} N/kg",
               help="Force at the current wall angle (red marker on the plots).")
     m3.metric("Stroke", f"{(L_max - L_min) * U:.2f} {ULABEL}",
@@ -590,7 +589,7 @@ with st.container(border=True):
               delta_color=("off" if stroke_ok else "inverse"),
               help=f"Extended/retracted length ratio vs. your {stroke_ratio:g}× limit.")
     total_kn, bar_fill, bar_color = force_bar(peak_mag, mass)
-    st.caption(f"**Total peak cylinder force at {mass:,.0f} kg:** {total_kn:.1f} kN")
+    st.caption(f"**Peak cylinder force at {mass:,.0f} kg:**")
     st.markdown(force_bar_html(bar_fill, BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
 
@@ -812,17 +811,8 @@ with col_len:
     )
     st.plotly_chart(fig_len, width="stretch")
 
-# stroke_ok computed once, up with the summary metrics.
-stroke_status = (f"within {stroke_ratio:g}x limit" if stroke_ok
-                 else f"EXCEEDS {stroke_ratio:g}x stroke limit")
-st.caption(
-    f"At theta = {theta_deg:.0f} deg: piston force = **{F_here:.2f} N/kg**, "
-    f"cylinder length = **{L_here * U:.2f} {ULABEL}**.  "
-    f"Across 0-90 deg: L_min = {L_min * U:.2f} {ULABEL}, "
-    f"L_max = {L_max * U:.2f} {ULABEL}, "
-    f"**stroke = {(L_max - L_min) * U:.2f} {ULABEL}** "
-    f"(ratio = **{L_ratio:.2f}**, {stroke_status})."
-)
+# The stroke, ratio, L_min/L_max, and force-at-angle are already in the metrics
+# row and on the plots, so no summary caption is repeated here.
 
 if overlay:
     def _peak_force(design):

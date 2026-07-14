@@ -295,8 +295,7 @@ def render_browse():
         f"{res['stroke'][rank]:.2f} m (ratio {res['stroke_ratio'][rank]:.2f})")
     total_kn, bar_fill, bar_color = lookup.force_bar(
         float(res["peak_force"][rank]), mass)
-    st.caption(f"Total peak cylinder force at {mass:,.0f} kg: "
-               f"**{total_kn:.1f} kN**")
+    st.caption(f"**Peak cylinder force at {mass:,.0f} kg:**")
     st.markdown(lookup.force_bar_html(bar_fill, lookup.BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
     # The setup diagram is the main thing to read — show it large, on top.
