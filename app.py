@@ -596,6 +596,7 @@ with st.container(border=True):
 # --- Cylinder sizing: turn the peak force into a bore + operating pressure ---
 with st.container(border=True):
     st.markdown("**Cylinder sizing — bore & pressure**")
+    st.caption("Bore = the cylinder barrel's inner **diameter**.")
     cs1, cs2 = st.columns([1, 1])
     series = cs1.selectbox(
         "Bore standard", ["ISO metric", "NFPA (inch)", "Exact (no rounding)"],
@@ -620,21 +621,21 @@ with st.container(border=True):
         bore_in = bore_mm / 25.4
         if series == "Exact (no rounding)":
             st.markdown(
-                f"Required bore **{bore_mm:.1f} mm** ({bore_in:.2f} in) to make "
-                f"**{force_n / 1000:.1f} kN** at {press_label}.")
+                f"Required bore diameter **{bore_mm:.1f} mm** ({bore_in:.2f} in) to "
+                f"make **{force_n / 1000:.1f} kN** at {press_label}.")
         else:
             std_mm, std_label = next_standard_bore_mm(bore_mm, series)
             if std_mm is None:
                 st.warning(
-                    f"Required bore **{bore_mm:.1f} mm** is bigger than the largest "
-                    f"standard size — raise the design pressure, or plan for two "
-                    f"cylinders sharing the load.")
+                    f"Required bore diameter **{bore_mm:.1f} mm** is bigger than the "
+                    f"largest standard size — raise the design pressure, or plan for "
+                    f"two cylinders sharing the load.")
             else:
                 p_at_std = pressure_for_bore_bar(force_n, std_mm)
                 head = (1.0 - p_at_std / pressure_bar) * 100.0 if pressure_bar else 0.0
                 st.markdown(
-                    f"Required bore **{bore_mm:.1f} mm** ({bore_in:.2f} in) → next "
-                    f"standard **{std_label}**, which needs **{p_at_std:.0f} bar** "
+                    f"Required bore diameter **{bore_mm:.1f} mm** ({bore_in:.2f} in) → "
+                    f"next standard **{std_label}**, which needs **{p_at_std:.0f} bar** "
                     f"({p_at_std * 14.5038:.0f} psi) to make {force_n / 1000:.1f} kN "
                     f"— **{head:.0f}% below** your {press_label}.")
     else:
@@ -846,17 +847,17 @@ with st.expander("Export design (PDF)"):
                 bore = required_bore_mm(force_n, pressure_bar)
                 cyl_rows.append(("Design pressure", press_label))
                 if series == "Exact (no rounding)":
-                    cyl_rows.append(("Required bore",
+                    cyl_rows.append(("Required bore (diameter)",
                                      f"{bore:.1f} mm ({bore / 25.4:.2f} in)"))
                 else:
                     std_mm, std_label = next_standard_bore_mm(bore, series)
                     if std_mm:
-                        cyl_rows.append(("Required bore",
+                        cyl_rows.append(("Required bore (diameter)",
                                          f"{bore:.1f} mm -> standard {std_label}"))
                         cyl_rows.append(("Pressure at that bore",
                                          f"{pressure_for_bore_bar(force_n, std_mm):.0f} bar"))
                     else:
-                        cyl_rows.append(("Required bore",
+                        cyl_rows.append(("Required bore (diameter)",
                                          f"{bore:.1f} mm (exceeds largest standard)"))
             cyl_rows += [
                 ("Stroke (L_max - L_min)", f"{(L_max - L_min) * U:.2f} {ULABEL}"),
@@ -880,19 +881,26 @@ with st.expander("Export design (PDF)"):
                 ]),
                 ("Cylinder", cyl_rows),
             ]
-            images = [
-                ("Side view", fig_geom.to_image(format="png", width=900, height=560, scale=2)),
-                ("Piston force vs. wall angle",
-                 fig.to_image(format="png", width=900, height=380, scale=2)),
-                ("Cylinder length vs. wall angle",
-                 fig_len.to_image(format="png", width=900, height=380, scale=2)),
-            ]
             notes = [
                 "Forces are static holding forces (no inertia, friction, wind, or flex).",
                 "Apply a factor of safety (>=1.5x is a common start).",
                 "Real installs usually use two cylinders; per-cylinder force is ~half.",
-                "Bore uses the full-bore push area (raising the wall extends the cylinder).",
+                "Bore is the barrel inner diameter; it uses the full-bore push area "
+                "(raising the wall extends the cylinder).",
             ]
+            # Rendering figures to PNG needs an image backend (kaleido); if it is
+            # unavailable, still produce a numbers-only PDF rather than crash.
+            images = []
+            try:
+                images = [
+                    ("Side view", fig_geom.to_image(format="png", width=900, height=560, scale=2)),
+                    ("Piston force vs. wall angle",
+                     fig.to_image(format="png", width=900, height=380, scale=2)),
+                    ("Cylinder length vs. wall angle",
+                     fig_len.to_image(format="png", width=900, height=380, scale=2)),
+                ]
+            except Exception:
+                notes.append("Diagrams omitted (image rendering unavailable here).")
             ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
             st.session_state["design_pdf"] = report.build_spec_pdf(
                 "Container Wall Actuator - Design Report",

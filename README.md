@@ -220,8 +220,9 @@ peak **magnitude**, not the sign.
 ### Cylinder sizing — bore & pressure
 
 The **Cylinder sizing** card (below the metrics) turns the total force into a
-buyable cylinder. A hydraulic cylinder makes `force = pressure × piston area`,
-so for a chosen system pressure the required bore is `bore = √(4·force / π·P)`
+buyable cylinder. **Bore** here means the barrel's inner **diameter**. A hydraulic
+cylinder makes `force = pressure × piston area`, so for a chosen system pressure
+the required bore diameter is `bore = √(4·force / π·P)`
 — using the full-bore **push** area, since raising the wall *extends* the
 cylinder. Pick a **bore standard** — *ISO metric* (40, 50, 63 mm…), *NFPA inch*
 (1.5, 2, 2.5 in…), or *Exact* (no rounding) — and a **design pressure**. It
