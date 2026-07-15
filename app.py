@@ -846,47 +846,64 @@ with st.expander("Export design (PDF)"):
         import datetime
         import report
         with st.spinner("Rendering the PDF…"):
+            # The PDF shows BOTH unit systems for every value, regardless of the
+            # app's display toggle.
+            M_TO_IN, N_TO_LBF, BAR_TO_PSI, KG_TO_LB = 39.3700787, 0.224809, 14.5037738, 2.2046226
+
+            def _len(m):    # metres -> "0.600 m (23.62 in)"
+                return f"{m:.3f} m ({m * M_TO_IN:.2f} in)"
+
+            def _force(n):  # newtons -> "6.5 kN (1,455 lbf)"
+                return f"{n / 1000:.1f} kN ({n * N_TO_LBF:,.0f} lbf)"
+
+            def _press(bar):
+                return f"{bar:.0f} bar ({bar * BAR_TO_PSI:,.0f} psi)"
+
+            def _bore(mm):  # "33.3 mm (1.31 in)"
+                return f"{mm:.1f} mm ({mm / 25.4:.2f} in)"
+
             force_n = peak_mag * mass if np.isfinite(peak_mag) else float("nan")
             _pk = (f"{peak_mag:.2f} N/kg" if np.isfinite(peak_mag)
                    else "n/a (singular geometry)")
-            _tot = f"{force_n / 1000:.1f} kN" if np.isfinite(force_n) else "n/a"
+            _tot = _force(force_n) if np.isfinite(force_n) else "n/a"
             cyl_rows = [("Peak force", _pk),
                         (f"Total force at {mass:,.0f} kg", _tot)]
             if np.isfinite(peak_mag) and pressure_bar > 0:
                 bore = required_bore_mm(force_n, pressure_bar)
-                cyl_rows.append(("Design pressure", press_label))
+                cyl_rows.append(("Design pressure", _press(pressure_bar)))
                 if series == "Exact (no rounding)":
-                    cyl_rows.append(("Required bore (diameter)",
-                                     f"{bore:.1f} mm ({bore / 25.4:.2f} in)"))
+                    cyl_rows.append(("Required bore (diameter)", _bore(bore)))
                 else:
                     std_mm, std_label = next_standard_bore_mm(bore, series)
                     if std_mm:
+                        other = (f"{std_mm / 25.4:.2f} in" if series == "ISO metric"
+                                 else f"{std_mm:.1f} mm")
                         cyl_rows.append(("Required bore (diameter)",
-                                         f"{bore:.1f} mm -> standard {std_label}"))
+                                         f"{_bore(bore)} -> standard {std_label} ({other})"))
                         cyl_rows.append(("Pressure at that bore",
-                                         f"{pressure_for_bore_bar(force_n, std_mm):.0f} bar"))
+                                         _press(pressure_for_bore_bar(force_n, std_mm))))
                     else:
                         cyl_rows.append(("Required bore (diameter)",
-                                         f"{bore:.1f} mm (exceeds largest standard)"))
+                                         f"{_bore(bore)} (exceeds largest standard)"))
             cyl_rows += [
-                ("Stroke (L_max - L_min)", f"{(L_max - L_min) * U:.2f} {ULABEL}"),
-                ("Retracted / extended", f"{L_min * U:.2f} / {L_max * U:.2f} {ULABEL}"),
+                ("Stroke (L_max - L_min)", _len(L_max - L_min)),
+                ("Retracted / extended", f"{_len(L_min)} / {_len(L_max)}"),
                 ("Stroke ratio", f"{L_ratio:.2f}" + ("" if stroke_ok else " (over limit)")),
             ]
             tables = [
                 ("Setup", [
                     ("Container", size_key),
-                    ("Center of gravity x_cg", f"{x_cg * U:.2f} {ULABEL}"),
-                    ("Center of gravity z_cg", f"{z_cg * U:.2f} {ULABEL}"),
-                    ("Wall + load mass", f"{mass:,.0f} kg"),
+                    ("Center of gravity x_cg", _len(x_cg)),
+                    ("Center of gravity z_cg", _len(z_cg)),
+                    ("Wall + load mass", f"{mass:,.0f} kg ({mass * KG_TO_LB:,.0f} lb)"),
                     ("Max stroke ratio", f"{stroke_ratio:g}x"),
-                    ("Roof clearance", f"{roof_clearance * U:.2f} {ULABEL}"),
+                    ("Roof clearance", _len(roof_clearance)),
                 ]),
                 ("Geometry (a, b, d, f)", [
-                    ("a - base along floor", f"{a * U:.3f} {ULABEL}"),
-                    ("b - attachment up wall", f"{b * U:.3f} {ULABEL}"),
-                    ("d - bracket offset", f"{d * U:.3f} {ULABEL}"),
-                    ("f - base height", f"{f * U:.3f} {ULABEL}"),
+                    ("a - base along floor", _len(a)),
+                    ("b - attachment up wall", _len(b)),
+                    ("d - bracket offset", _len(d)),
+                    ("f - base height", _len(f)),
                 ]),
                 ("Cylinder", cyl_rows),
             ]
