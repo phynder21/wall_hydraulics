@@ -34,3 +34,12 @@ def test_ascii_replaces_known_glyphs():
     assert report._ascii("a×b→c°") == "axb->c deg"
     # unmapped non-latin-1 is replaced, never raised
     assert isinstance(report._ascii("emoji 😀 and 汉字"), str)
+
+
+def test_dual_unit_formatters():
+    # metric first, imperial in parentheses; guards the conversion constants
+    assert report.dual_len(1.0) == "1.000 m (39.37 in)"
+    assert report.dual_force(25000.0) == "25.0 kN (5,620 lbf)"
+    assert report.dual_pressure(210.0) == "210 bar (3,046 psi)"
+    assert report.dual_bore(40.0) == "40.0 mm (1.57 in)"
+    assert report.dual_mass(500.0) == "500 kg (1,102 lb)"

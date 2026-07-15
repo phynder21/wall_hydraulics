@@ -25,6 +25,35 @@ def _ascii(s):
     return s.encode("latin-1", "replace").decode("latin-1")
 
 
+# Dual-unit display (metric first, imperial in parentheses) for the spec sheet.
+_M_TO_IN, _N_TO_LBF, _BAR_TO_PSI, _KG_TO_LB = 39.3700787, 0.224809, 14.5037738, 2.2046226
+
+
+def dual_len(m):
+    """Length in metres -> 'X m (Y in)'."""
+    return f"{m:.3f} m ({m * _M_TO_IN:.2f} in)"
+
+
+def dual_force(n):
+    """Force in newtons -> 'X kN (Y lbf)'."""
+    return f"{n / 1000:.1f} kN ({n * _N_TO_LBF:,.0f} lbf)"
+
+
+def dual_pressure(bar):
+    """Pressure in bar -> 'X bar (Y psi)'."""
+    return f"{bar:.0f} bar ({bar * _BAR_TO_PSI:,.0f} psi)"
+
+
+def dual_bore(mm):
+    """Bore diameter in mm -> 'X mm (Y in)'."""
+    return f"{mm:.1f} mm ({mm / 25.4:.2f} in)"
+
+
+def dual_mass(kg):
+    """Mass in kg -> 'X kg (Y lb)'."""
+    return f"{kg:,.0f} kg ({kg * _KG_TO_LB:,.0f} lb)"
+
+
 def build_spec_pdf(title, subtitle, tables, images=None, notes=None):
     """Return PDF bytes for a design spec sheet.
 

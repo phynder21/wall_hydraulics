@@ -846,21 +846,10 @@ with st.expander("Export design (PDF)"):
         import datetime
         import report
         with st.spinner("Rendering the PDF…"):
-            # The PDF shows BOTH unit systems for every value, regardless of the
-            # app's display toggle.
-            M_TO_IN, N_TO_LBF, BAR_TO_PSI, KG_TO_LB = 39.3700787, 0.224809, 14.5037738, 2.2046226
-
-            def _len(m):    # metres -> "0.600 m (23.62 in)"
-                return f"{m:.3f} m ({m * M_TO_IN:.2f} in)"
-
-            def _force(n):  # newtons -> "6.5 kN (1,455 lbf)"
-                return f"{n / 1000:.1f} kN ({n * N_TO_LBF:,.0f} lbf)"
-
-            def _press(bar):
-                return f"{bar:.0f} bar ({bar * BAR_TO_PSI:,.0f} psi)"
-
-            def _bore(mm):  # "33.3 mm (1.31 in)"
-                return f"{mm:.1f} mm ({mm / 25.4:.2f} in)"
+            # The PDF shows BOTH unit systems for every value (see report.dual_*),
+            # regardless of the app's display toggle.
+            _len, _force = report.dual_len, report.dual_force
+            _press, _bore = report.dual_pressure, report.dual_bore
 
             force_n = peak_mag * mass if np.isfinite(peak_mag) else float("nan")
             _pk = (f"{peak_mag:.2f} N/kg" if np.isfinite(peak_mag)
@@ -895,7 +884,7 @@ with st.expander("Export design (PDF)"):
                     ("Container", size_key),
                     ("Center of gravity x_cg", _len(x_cg)),
                     ("Center of gravity z_cg", _len(z_cg)),
-                    ("Wall + load mass", f"{mass:,.0f} kg ({mass * KG_TO_LB:,.0f} lb)"),
+                    ("Wall + load mass", report.dual_mass(mass)),
                     ("Max stroke ratio", f"{stroke_ratio:g}x"),
                     ("Roof clearance", _len(roof_clearance)),
                 ]),
