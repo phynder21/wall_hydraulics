@@ -392,8 +392,8 @@ with tab_optimize:
                 st.session_state[k] = float(min(max(round(res[k], 4), lo), hi))
             held = f" (held: {', '.join(sorted(locked))})" if locked else ""
             action = "Evaluated" if len(locked) == 4 else "Optimized"
-            geom_str = (f"a={res['a'] * U:.2f}  b={res['b'] * U:.2f}  "
-                        f"d={res['d'] * U:.2f}  f={res['f'] * U:.2f} {ULABEL}")
+            geom_str = (f"a = {res['a'] * U:.2f}  b = {res['b'] * U:.2f}  "
+                        f"d = {res['d'] * U:.2f}  f = {res['f'] * U:.2f} {ULABEL}")
             if opt_mode == "Cylinder length":
                 # Lead with the geometry, then the extended length and the total
                 # force (peak per kg x mass).
@@ -442,9 +442,9 @@ with tab_optimize:
     # result into a/b/d/f, so this stays visible after the transient result banner
     # clears — you always see the current/optimized geometry here.
     st.caption(
-        f"**Geometry (a, b, d, f):**  a={st.session_state['a'] * U:.3f}  "
-        f"b={st.session_state['b'] * U:.3f}  d={st.session_state['d'] * U:.3f}  "
-        f"f={st.session_state['f'] * U:.3f} {ULABEL}")
+        f"**Geometry (a, b, d, f):**  a = {st.session_state['a'] * U:.3f}  "
+        f"b = {st.session_state['b'] * U:.3f}  d = {st.session_state['d'] * U:.3f}  "
+        f"f = {st.session_state['f'] * U:.3f} {ULABEL}")
 
     # Clickable list of the last optimize's near-optimal alternatives. Rendered
     # here — before the Geometry tab executes — so a click loads the chosen
@@ -458,8 +458,8 @@ with tab_optimize:
                 _tag = "optimum" if _pen < 1e-6 else f"+{_pen:.1f}%"
                 _lmax = (f", ext. {_x['L_max'] * U:.2f} {ULABEL}"
                          if "L_max" in _x else "")
-                _lbl = (f"a={_x['a'] * U:.2f}  b={_x['b'] * U:.2f}  "
-                        f"d={_x['d'] * U:.2f}  f={_x['f'] * U:.2f} {ULABEL}  "
+                _lbl = (f"a = {_x['a'] * U:.2f}  b = {_x['b'] * U:.2f}  "
+                        f"d = {_x['d'] * U:.2f}  f = {_x['f'] * U:.2f} {ULABEL}  "
                         f"— {_x['peak_force']:.2f} N/kg{_lmax} ({_tag})")
                 if st.button(_lbl, key=f"alt_{_i}", use_container_width=True):
                     for _k in ("a", "b", "d", "f"):
@@ -502,8 +502,8 @@ with tab_geometry:
 def _fmt_design(design):
     if not design:
         return "empty"
-    return (f"a={design['a'] * U:.2f} b={design['b'] * U:.2f} "
-            f"d={design['d'] * U:.2f} f={design['f'] * U:.2f} {ULABEL}")
+    return (f"a = {design['a'] * U:.2f} b = {design['b'] * U:.2f} "
+            f"d = {design['d'] * U:.2f} f = {design['f'] * U:.2f} {ULABEL}")
 
 
 with tab_compare:

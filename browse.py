@@ -290,7 +290,7 @@ def render_browse():
     a, b, d, f = (float(res["a"][rank]), float(res["b"][rank]),
                   float(res["d"][rank]), float(res["f"][rank]))
     st.markdown(
-        f"**a={a:.3f}  b={b:.3f}  d={d:.3f}  f={f:.3f} m** — "
+        f"**a = {a:.3f}  b = {b:.3f}  d = {d:.3f}  f = {f:.3f} m** — "
         f"peak **{res['peak_force'][rank]:.2f} N/kg**, stroke "
         f"{res['stroke'][rank]:.2f} m (ratio {res['stroke_ratio'][rank]:.2f})")
     total_kn, bar_fill, bar_color = lookup.force_bar(
@@ -317,5 +317,5 @@ def render_browse():
         grid_best = float(res["peak_force"].min())
         st.success(
             f"Exact optimum: peak **{opt['peak_force']:.2f} N/kg** at "
-            f"a={opt['a']:.3f} b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f} m "
+            f"a = {opt['a']:.3f} b = {opt['b']:.3f} d = {opt['d']:.3f} f = {opt['f']:.3f} m "
             f"(grid best in the list was {grid_best:.2f}).")

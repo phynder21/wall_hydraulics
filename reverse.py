@@ -164,7 +164,7 @@ def render_reverse():
                    "figure is this ÷ your safety factor — use the safe one.")
     m3.metric("Peak force needed", f"{peak:.2f} N/kg")
     st.markdown(
-        f"**Best geometry:** a={a:.3f}  b={b:.3f}  d={d:.3f}  f={f:.3f} m — its "
+        f"**Best geometry:** a = {a:.3f}  b = {b:.3f}  d = {d:.3f}  f = {f:.3f} m — its "
         f"cylinder runs **{res['L_min'][0] * len_fac:.1f}–{res['L_max'][0] * len_fac:.1f} {len_u}** "
         f"(inside your {L_ret * len_fac:.1f}–{L_ext * len_fac:.1f} {len_u} window). "
         f"{n if n < 5 else 'Many'} layouts fit; this is the lowest-force one.")
@@ -190,8 +190,8 @@ def render_reverse():
         if opt["feasible"]:
             st.success(
                 f"Exact optimum: peak **{opt['peak_force']:.2f} N/kg** → safe max "
-                f"**{force_use / opt['peak_force']:,.0f} kg** at a={opt['a']:.3f} "
-                f"b={opt['b']:.3f} d={opt['d']:.3f} f={opt['f']:.3f} m "
+                f"**{force_use / opt['peak_force']:,.0f} kg** at a = {opt['a']:.3f} "
+                f"b = {opt['b']:.3f} d = {opt['d']:.3f} f = {opt['f']:.3f} m "
                 f"(grid best was {max_mass:,.0f} kg).")
         else:
             st.warning("The optimizer couldn't find a geometry that fits the exact "
