@@ -891,9 +891,12 @@ with st.expander("Export design (PDF)"):
                 ("Cylinder", cyl_rows),
             ]
             notes = [
+                "All forces and the bore above are for ONE cylinder carrying the "
+                "whole wall.",
+                "Real installs often use two cylinders (one near each end); then each "
+                "carries about half this force, so each can use a smaller bore.",
                 "Forces are static holding forces (no inertia, friction, wind, or flex).",
                 "Apply a factor of safety (>=1.5x is a common start).",
-                "Real installs usually use two cylinders; per-cylinder force is ~half.",
                 "Bore is the barrel inner diameter; it uses the full-bore push area "
                 "(raising the wall extends the cylinder).",
             ]
