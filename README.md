@@ -246,8 +246,10 @@ raise the pressure, or split the load across two cylinders.
 - **The model is static.** No inertia, no friction, no flow dynamics,
   no wind loads, no flex.
 - **2-D only.** Real installations usually use two cylinders (one near
-  each end of the wall) to prevent twist. Per-cylinder force is roughly
-  half the plotted value for a symmetric, rigid load.
+  each end of the wall) to prevent twist. The sidebar's **Cylinders sharing
+  the load** switch (1 or 2, in every view) handles this: with 2, the load is
+  split equally and **every force and bore size shown becomes per cylinder**
+  (and the reverse view's max wall mass doubles). The geometry is unchanged.
 
 ---
 

@@ -175,6 +175,11 @@ def _sb_range(label, key, full_lo, full_hi, step=0.01, fmt="%.2f"):
 
 def render_browse():
     st.header("Browse configurations")
+    # Per-cylinder display: the table's peak force is the whole-wall (one-cylinder)
+    # value; with n_cyl cylinders sharing the load each carries 1/n_cyl, so every
+    # displayed force is divided by n_cyl (and a user force cap is scaled up).
+    n_cyl = int(st.session_state.get("n_cyl", 1))
+    st.info(lookup.cylinder_banner(n_cyl))
 
     with st.spinner("Building the configuration database (first time only, ~15 s)…"):
         table = _get_table(TABLE_RES)
@@ -240,7 +245,8 @@ def render_browse():
 
     filters = {}
     if max_force > 0:
-        filters["peak_force"] = (None, max_force)
+        # The cap is entered per cylinder; the table stores whole-wall force.
+        filters["peak_force"] = (None, max_force * n_cyl)
 
     res = lookup.search(table, height, x_cg, z_cg, stroke_max=stroke_max,
                         roof_clearance=clearance, bounds=bounds, filters=filters,
@@ -256,8 +262,11 @@ def render_browse():
     # Peak force first, then whatever we're sorting by, then the rest.
     show = lookup.order_columns(cols or DEFAULT_COLUMNS, sort_by)
     # Rank the list from 1 (not 0); the "rank" index matches the inspector below.
-    df = pd.DataFrame({COLUMNS[k]: np.round(res[k], 3) for k in show},
-                      index=np.arange(1, n + 1))
+    # Peak force is shown PER CYLINDER (divided by n_cyl); other columns are as-is.
+    df = pd.DataFrame(
+        {COLUMNS[k]: np.round(res[k] / n_cyl if k == "peak_force" else res[k], 3)
+         for k in show},
+        index=np.arange(1, n + 1))
     df.index.name = "rank"
     capped = f" — showing the top {n}" if total > n else ""
     st.markdown(f"**{total:,} matching configurations**{capped} (best "
@@ -289,12 +298,12 @@ def render_browse():
     view_angle = ic2.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="lk_view")
     a, b, d, f = (float(res["a"][rank]), float(res["b"][rank]),
                   float(res["d"][rank]), float(res["f"][rank]))
+    peak_pc = float(res["peak_force"][rank]) / n_cyl        # per cylinder
     st.markdown(
         f"**a = {a:.3f}  b = {b:.3f}  d = {d:.3f}  f = {f:.3f} m** — "
-        f"peak **{res['peak_force'][rank]:.2f} N/kg**, stroke "
+        f"peak **{peak_pc:.2f} N/kg** per cylinder, stroke "
         f"{res['stroke'][rank]:.2f} m (ratio {res['stroke_ratio'][rank]:.2f})")
-    total_kn, bar_fill, bar_color = lookup.force_bar(
-        float(res["peak_force"][rank]), mass)
+    total_kn, bar_fill, bar_color = lookup.force_bar(peak_pc, mass)
     st.caption(f"**Peak cylinder force at {mass:,.0f} kg:**")
     st.markdown(lookup.force_bar_html(bar_fill, lookup.BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
@@ -314,8 +323,8 @@ def render_browse():
             opt = optimize_actuator(width, height, x_cg, z_cg,
                                     stroke_ratio_max=stroke_max,
                                     roof_clearance=clearance, var_bounds=bounds)
-        grid_best = float(res["peak_force"].min())
+        grid_best = float(res["peak_force"].min()) / n_cyl
         st.success(
-            f"Exact optimum: peak **{opt['peak_force']:.2f} N/kg** at "
+            f"Exact optimum: peak **{opt['peak_force'] / n_cyl:.2f} N/kg** per cylinder at "
             f"a = {opt['a']:.3f} b = {opt['b']:.3f} d = {opt['d']:.3f} f = {opt['f']:.3f} m "
             f"(grid best in the list was {grid_best:.2f}).")

@@ -225,6 +225,15 @@ def cylinder_matches(table, container_height, x_cg, z_cg, retracted, extended,
                   sort_by="peak_force", ascending=True, limit=limit)
 
 
+def cylinder_banner(n_cyl):
+    """Headline stating how many cylinders share the wall load. `n_cyl` >= 1."""
+    if n_cyl <= 1:
+        return ("**1 cylinder** — the whole wall is carried by one cylinder; the "
+                "forces and bore below are for that cylinder.")
+    return (f"**{n_cyl} cylinders sharing the load** — each carries 1/{n_cyl} of the "
+            f"wall, so every force and bore size below is **per cylinder**.")
+
+
 def cylinder_force(bore_mm, rod_mm, pressure_bar):
     """(push, pull) force in newtons: pressure x area. Push uses the full bore;
     pull uses the bore area minus the rod area (the annulus)."""

@@ -270,3 +270,9 @@ def test_next_standard_bore_exceeds_max():
 def test_pressure_for_bore_reduces_with_larger_bore():
     F = 20000.0
     assert lookup.pressure_for_bore_bar(F, 40.0) < lookup.pressure_for_bore_bar(F, 32.0)
+
+
+def test_cylinder_banner():
+    assert "1 cylinder" in lookup.cylinder_banner(1)
+    two = lookup.cylinder_banner(2)
+    assert "2 cylinders" in two and "per cylinder" in two

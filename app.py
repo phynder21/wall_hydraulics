@@ -15,7 +15,7 @@ from wall import (
 from optimize import optimize_actuator, STROKE_TOL
 from browse import render_browse
 from reverse import render_reverse
-from lookup import (force_bar, force_bar_html, BAR_NEUTRAL,
+from lookup import (force_bar, force_bar_html, BAR_NEUTRAL, cylinder_banner,
                     required_bore_mm, next_standard_bore_mm, pressure_for_bore_bar)
 
 # Human-readable build marker. Bump on notable changes so you can tell at a
@@ -36,6 +36,11 @@ st.sidebar.markdown("### Wall actuator")
 _view = st.sidebar.radio(
     "View", ["Designer", "Browse configurations", "Size from a cylinder"],
     key="view", label_visibility="collapsed")
+n_cyl = st.sidebar.radio(
+    "Cylinders sharing the load", [1, 2], key="n_cyl", horizontal=True,
+    help="How many cylinders share the wall load equally. With 2, each carries "
+         "half — so every force and bore size shown is PER CYLINDER. The geometry "
+         "is the same either way.")
 st.sidebar.caption(f"build: {BUILD}")
 if _view == "Browse configurations":
     render_browse()
@@ -381,7 +386,10 @@ with tab_optimize:
                     fast=True,
                     objective_mode=("length" if opt_mode == "Cylinder length"
                                     else "force"),
-                    force_cap=force_cap_per_kg,
+                    # The cap is entered per cylinder; the optimizer works in the
+                    # intrinsic whole-wall force, so scale it up by the count.
+                    force_cap=(force_cap_per_kg * n_cyl
+                               if force_cap_per_kg is not None else None),
                 )
             # Snap to the active slider precision AND clamp into the (possibly
             # narrowed) mounting-limit range, so the value can't exceed the
@@ -394,15 +402,17 @@ with tab_optimize:
             action = "Evaluated" if len(locked) == 4 else "Optimized"
             geom_str = (f"a = {res['a'] * U:.2f}  b = {res['b'] * U:.2f}  "
                         f"d = {res['d'] * U:.2f}  f = {res['f'] * U:.2f} {ULABEL}")
+            # Report forces PER CYLINDER (the banner states the count).
+            _pk_pc = res["peak_force"] / n_cyl
             if opt_mode == "Cylinder length":
                 # Lead with the geometry, then the extended length and the total
-                # force (peak per kg x mass).
+                # force per cylinder (peak per kg x mass).
                 detail = (f"{geom_str} — extended length {res['L_max'] * U:.2f} {ULABEL}; "
-                          f"total force {res['peak_force']:.2f} N/kg × {mass:,.0f} kg = "
-                          f"{res['peak_force'] * mass / 1000:.1f} kN; "
+                          f"total force {_pk_pc:.2f} N/kg × {mass:,.0f} kg = "
+                          f"{_pk_pc * mass / 1000:.1f} kN per cylinder; "
                           f"stroke ratio {res['stroke_ratio']:.2f}")
             else:
-                detail = (f"{geom_str} — peak {res['peak_force']:.2f} N/kg, "
+                detail = (f"{geom_str} — peak {_pk_pc:.2f} N/kg per cylinder, "
                           f"stroke {(res['L_max'] - res['L_min']) * U:.2f} {ULABEL} "
                           f"(ratio {res['stroke_ratio']:.2f}), "
                           f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}")
@@ -460,7 +470,7 @@ with tab_optimize:
                          if "L_max" in _x else "")
                 _lbl = (f"a = {_x['a'] * U:.2f}  b = {_x['b'] * U:.2f}  "
                         f"d = {_x['d'] * U:.2f}  f = {_x['f'] * U:.2f} {ULABEL}  "
-                        f"— {_x['peak_force']:.2f} N/kg{_lmax} ({_tag})")
+                        f"— {_x['peak_force'] / n_cyl:.2f} N/kg{_lmax} ({_tag})")
                 if st.button(_lbl, key=f"alt_{_i}", use_container_width=True):
                     for _k in ("a", "b", "d", "f"):
                         _lo, _hi = USER_BOUNDS[_k]
@@ -582,21 +592,28 @@ pad = 0.5 * U                                        # display-unit plot margin
 
 # --- Key results at a glance (a bordered results card) ---
 peak_mag = max(abs(F_min), abs(F_max)) if F_valid.size else float("nan")
+# Per-cylinder force: with n_cyl cylinders sharing the load, each carries 1/n_cyl.
+# The geometry/optimizer use the intrinsic (whole-wall) value; every displayed
+# force is per cylinder so peak x mass stays consistent with the total-force bar.
+peak_pc = peak_mag / n_cyl
+F_here_pc = F_here / n_cyl
 stroke_ok = L_ratio <= stroke_ratio + STROKE_TOL
+st.info(cylinder_banner(n_cyl))
 with st.container(border=True):
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Peak force (worst case)", f"{peak_mag:.2f} N/kg",
-              help="Largest force over the full 0–90° swing — the number to size "
-                   "the cylinder by.")
-    m2.metric(f"Force at θ = {theta_deg:.0f}°", f"{F_here:.2f} N/kg",
-              help="Force at the current wall angle (red marker on the plots).")
+    m1.metric("Peak force (worst case)", f"{peak_pc:.2f} N/kg",
+              help="Largest force over the full 0–90° swing, per cylinder — the "
+                   "number to size the cylinder by.")
+    m2.metric(f"Force at θ = {theta_deg:.0f}°", f"{F_here_pc:.2f} N/kg",
+              help="Force at the current wall angle (red marker on the plots), "
+                   "per cylinder.")
     m3.metric("Stroke", f"{(L_max - L_min) * U:.2f} {ULABEL}",
               help="Rod travel you order a cylinder by (L_max − L_min).")
     m4.metric("Stroke ratio", f"{L_ratio:.2f}",
               delta=("within limit" if stroke_ok else "over limit"),
               delta_color=("off" if stroke_ok else "inverse"),
               help=f"Extended/retracted length ratio vs. your {stroke_ratio:g}× limit.")
-    total_kn, bar_fill, bar_color = force_bar(peak_mag, mass)
+    total_kn, bar_fill, bar_color = force_bar(peak_pc, mass)
     st.caption(f"**Peak cylinder force at {mass:,.0f} kg:**")
     st.markdown(force_bar_html(bar_fill, BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
@@ -624,7 +641,7 @@ with st.container(border=True):
         press_label = f"{pressure_bar:,.0f} bar"
 
     if np.isfinite(peak_mag) and mass > 0 and pressure_bar > 0:
-        force_n = peak_mag * mass                       # total peak push, newtons
+        force_n = peak_pc * mass                        # per-cylinder peak push, N
         force_lbl = f"{force_n / 1000:.1f} kN ({force_n / 4.44822:,.0f} lbf)"
         bore_mm = required_bore_mm(force_n, pressure_bar)
         bore_in = bore_mm / 25.4
@@ -851,12 +868,13 @@ with st.expander("Export design (PDF)"):
             _len, _force = report.dual_len, report.dual_force
             _press, _bore = report.dual_pressure, report.dual_bore
 
-            force_n = peak_mag * mass if np.isfinite(peak_mag) else float("nan")
-            _pk = (f"{peak_mag:.2f} N/kg" if np.isfinite(peak_mag)
+            # Per cylinder (n_cyl cylinders share the load).
+            force_n = peak_pc * mass if np.isfinite(peak_pc) else float("nan")
+            _pk = (f"{peak_pc:.2f} N/kg" if np.isfinite(peak_pc)
                    else "n/a (singular geometry)")
             _tot = _force(force_n) if np.isfinite(force_n) else "n/a"
-            cyl_rows = [("Peak force", _pk),
-                        (f"Total force at {mass:,.0f} kg", _tot)]
+            cyl_rows = [("Peak force per cylinder", _pk),
+                        (f"Force per cylinder at {mass:,.0f} kg", _tot)]
             if np.isfinite(peak_mag) and pressure_bar > 0:
                 bore = required_bore_mm(force_n, pressure_bar)
                 cyl_rows.append(("Design pressure", _press(pressure_bar)))
@@ -882,6 +900,7 @@ with st.expander("Export design (PDF)"):
             tables = [
                 ("Setup", [
                     ("Container", size_key),
+                    ("Cylinders sharing the load", str(n_cyl)),
                     ("Center of gravity x_cg", _len(x_cg)),
                     ("Center of gravity z_cg", _len(z_cg)),
                     ("Wall + load mass", report.dual_mass(mass)),
@@ -896,11 +915,15 @@ with st.expander("Export design (PDF)"):
                 ]),
                 ("Cylinder", cyl_rows),
             ]
+            if n_cyl <= 1:
+                cyl_note = ("All forces and the bore above are for ONE cylinder "
+                            "carrying the whole wall.")
+            else:
+                cyl_note = (f"All forces and the bore above are PER CYLINDER; the wall "
+                            f"load is shared across {n_cyl} cylinders (each carries "
+                            f"1/{n_cyl}).")
             notes = [
-                "All forces and the bore above are for ONE cylinder carrying the "
-                "whole wall.",
-                "Real installs often use two cylinders (one near each end); then each "
-                "carries about half this force, so each can use a smaller bore.",
+                cyl_note,
                 "Forces are static holding forces (no inertia, friction, wind, or flex).",
                 "Apply a factor of safety (>=1.5x is a common start).",
                 "Bore is the barrel inner diameter.",
@@ -921,7 +944,8 @@ with st.expander("Export design (PDF)"):
             ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
             st.session_state["design_pdf"] = report.build_spec_pdf(
                 "Container Wall Actuator - Design Report",
-                f"{size_key} - generated {ts}", tables, images=images, notes=notes)
+                f"{size_key} - {n_cyl} cylinder(s) - generated {ts}",
+                tables, images=images, notes=notes)
     if st.session_state.get("design_pdf"):
         st.download_button("Download PDF", st.session_state["design_pdf"],
                            file_name="wall_actuator_design.pdf",

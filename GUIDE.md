@@ -28,6 +28,14 @@ Two limits keep designs realistic:
   hydraulic cylinders are ~1.8–2×. This is a hard cap: results never exceed it.
 - **Roof clearance** — how far the moving parts must stay below the ceiling.
 
+**Cylinders sharing the load (1 or 2).** A sidebar switch (visible in every view)
+sets how many cylinders share the wall equally — a normal setup uses **2**, one
+near each end. The geometry is identical either way; with 2 cylinders each carries
+**half**, so **every force and bore size shown becomes per cylinder** (the reverse
+view's max wall mass doubles instead). A banner at the top of each view states the
+count. This keeps things consistent: peak force (N/kg) × mass = the per-cylinder
+total force.
+
 ---
 
 ## Designer — try a geometry, see what it needs

@@ -309,3 +309,16 @@ def test_reverse_view_renders():
     at.session_state["rv_stroke"] = 50.0
     at.run()
     assert not at.exception, at.exception
+
+
+def test_two_cylinder_mode_halves_designer_force():
+    """With 2 cylinders sharing the load, the Designer peak-force metric is halved
+    (per cylinder) and a banner states the count."""
+    at = fresh_app()
+    one = next(m.value for m in at.metric if "Peak force" in (m.label or ""))
+    at.session_state["n_cyl"] = 2
+    run_ok(at, "two cylinders")
+    two = next(m.value for m in at.metric if "Peak force" in (m.label or ""))
+    v1, v2 = float(one.split()[0]), float(two.split()[0])
+    assert abs(v2 - v1 / 2) < 0.01
+    assert any("per cylinder" in str(i.value) for i in at.info)
