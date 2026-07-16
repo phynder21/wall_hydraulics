@@ -903,8 +903,7 @@ with st.expander("Export design (PDF)"):
                 "carries about half this force, so each can use a smaller bore.",
                 "Forces are static holding forces (no inertia, friction, wind, or flex).",
                 "Apply a factor of safety (>=1.5x is a common start).",
-                "Bore is the barrel inner diameter; it uses the full-bore push area "
-                "(raising the wall extends the cylinder).",
+                "Bore is the barrel inner diameter.",
             ]
             # Rendering figures to PNG needs an image backend (kaleido); if it is
             # unavailable, still produce a numbers-only PDF rather than crash.
