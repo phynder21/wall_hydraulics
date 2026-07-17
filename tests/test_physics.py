@@ -164,3 +164,14 @@ def test_peak_force_matches_curve_max():
     F = compute_F_piston(theta, a=0.6, b=1.8, d=0.1, f=0.4, x_cg=1.2, z_cg=0.55)
     assert peak_force(0.6, 1.8, 0.1, 0.4, 1.2, 0.55) == pytest.approx(
         float(np.max(np.abs(F))), rel=1e-9)
+
+
+def test_force_sensitivity_varies_with_geometry():
+    """Sensitivity is design-specific: two different geometries give materially
+    different swings — so the live Designer chart genuinely updates rather than
+    returning a frozen value (guards the cache-key wiring in app.py)."""
+    from wall import force_sensitivity
+    bounds = {"a": (0.05, 1.219), "b": (0.05, 2.896), "d": (0.0, 1.0), "f": (0.0, 2.896)}
+    s1 = force_sensitivity(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds, n=21)
+    s2 = force_sensitivity(1.0, 1.0, 0.5, 1.5, 0.9, 0.40, bounds, n=21)
+    assert any(abs(s1[v] - s2[v]) > 1.0 for v in s1)

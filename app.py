@@ -858,10 +858,12 @@ if overlay:
 
 # --- Sensitivity: which dimension moves the peak force most (at this design) ---
 @st.cache_data(show_spinner=False)
-def _sensitivity(_a, _b, _d, _f, _xcg, _zcg, bounds_items):
-    """Cached one-at-a-time force sensitivity. bounds_items is a hashable
-    ((var, (lo, hi)), ...) so animation reruns (geometry unchanged) hit the cache."""
-    return force_sensitivity(_a, _b, _d, _f, _xcg, _zcg, dict(bounds_items))
+def _sensitivity(a, b, d, f, x_cg, z_cg, bounds_items):
+    """Cached one-at-a-time force sensitivity. All args are hashable and part of
+    the cache key (do NOT prefix with '_', which would exclude them), so the chart
+    updates when the design changes but animation reruns (same geometry) hit the
+    cache. bounds_items is a hashable ((var, (lo, hi)), ...)."""
+    return force_sensitivity(a, b, d, f, x_cg, z_cg, dict(bounds_items))
 
 
 with st.container(border=True):
