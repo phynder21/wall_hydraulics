@@ -9,6 +9,7 @@ from wall import (
     compute_F_piston,
     compute_geometry,
     compute_cylinder_length,
+    force_sensitivity,
 )
 # Imported at top level (not lazily inside the button) so Streamlit's file
 # watcher tracks optimize.py and reloads it on edit, like wall.py.
@@ -16,7 +17,8 @@ from optimize import optimize_actuator, STROKE_TOL
 from browse import render_browse
 from reverse import render_reverse
 from lookup import (force_bar, force_bar_html, BAR_NEUTRAL, cylinder_banner,
-                    required_bore_mm, next_standard_bore_mm, pressure_for_bore_bar)
+                    force_color, required_bore_mm, next_standard_bore_mm,
+                    pressure_for_bore_bar)
 
 # Human-readable build marker. Bump on notable changes so you can tell at a
 # glance whether a running/deployed page has the latest code (a stale process
@@ -853,6 +855,39 @@ if overlay:
         f"**Overlay** — A ({_fmt_design(design_A)}): peak "
         f"**{_peak_force(design_A):.2f} N/kg**   ·   B ({_fmt_design(design_B)}): "
         f"peak **{_peak_force(design_B):.2f} N/kg**.")
+
+# --- Sensitivity: which dimension moves the peak force most (at this design) ---
+@st.cache_data(show_spinner=False)
+def _sensitivity(_a, _b, _d, _f, _xcg, _zcg, bounds_items):
+    """Cached one-at-a-time force sensitivity. bounds_items is a hashable
+    ((var, (lo, hi)), ...) so animation reruns (geometry unchanged) hit the cache."""
+    return force_sensitivity(_a, _b, _d, _f, _xcg, _zcg, dict(bounds_items))
+
+
+with st.container(border=True):
+    st.markdown("**Sensitivity — which dimension moves the force most?**")
+    _bounds_items = tuple(sorted((k, tuple(v)) for k, v in USER_BOUNDS.items()))
+    _sw = _sensitivity(a, b, d, f, st.session_state["x_cg"],
+                       st.session_state["z_cg"], _bounds_items)
+    _labels = {"a": "a — base along floor", "b": "b — attach up wall",
+               "d": "d — bracket offset", "f": "f — base height"}
+    _ordered = sorted(("a", "b", "d", "f"), key=lambda v: _sw[v])   # small→big (big on top)
+    _xs = [_sw[v] / n_cyl for v in _ordered]
+    _ys = [_labels[v] for v in _ordered]
+    _mx = max(_xs) if any(_xs) else 1.0
+    _cols = [force_color(x, 0.0, _mx) or "#63be7b" for x in _xs]
+    fig_sens = go.Figure(go.Bar(
+        x=_xs, y=_ys, orientation="h", marker=dict(color=_cols),
+        text=[f"{x:.1f}" for x in _xs], textposition="outside", hoverinfo="skip"))
+    fig_sens.update_layout(
+        template=PLOT_TEMPLATE, font=PLOT_FONT, height=230,
+        xaxis_title=f"peak-force swing (N/kg{' per cylinder' if n_cyl > 1 else ''})",
+        xaxis=dict(range=[0, _mx * 1.18]),
+        margin=dict(l=10, r=10, t=6, b=34))
+    st.plotly_chart(fig_sens, width="stretch")
+    st.caption("How much the peak force swings as each dimension sweeps its allowed "
+               "range, with the others held at the current design — **longer / redder "
+               "= more impact.** Reflects your current cg and mounting limits.")
 
 # --- Export the current design as a one-page PDF spec sheet ---
 with st.expander("Export design (PDF)"):

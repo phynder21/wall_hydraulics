@@ -65,5 +65,37 @@ def compute_F_piston(theta, a=0.5, b=1.0, d=0.1, f=0.5,
     return torque_gravity / (r_attachment * np.sin(beta - phi))
 
 
+def peak_force(a, b, d, f, x_cg=1.2, z_cg=0.55, n_theta=200, cap=50.0):
+    """Peak |piston force| (N/kg) over the 0-90 deg swing, ignoring near-singular
+    samples above `cap` (the same rule the app uses for its Peak-force metric).
+    Returns NaN if the geometry is singular across the whole swing."""
+    theta = np.linspace(0.0, np.pi / 2, n_theta)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        F = compute_F_piston(theta, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
+    F = F[np.isfinite(F) & (np.abs(F) <= cap)]
+    return float(np.max(np.abs(F))) if F.size else float("nan")
+
+
+def force_sensitivity(a, b, d, f, x_cg, z_cg, bounds, n=41):
+    """One-at-a-time sensitivity of peak force to each geometry variable. For each
+    of a, b, d, f, sweep it across bounds[var] = (lo, hi) with the other three held
+    at the given (a, b, d, f) and measure how much the peak force moves. Returns
+    {var: swing} where swing = max - min peak force over the buildable part of the
+    sweep. A larger swing means the force is more sensitive to that variable here.
+    """
+    base = dict(a=a, b=b, d=d, f=f)
+    swings = {}
+    for v in ("a", "b", "d", "f"):
+        lo, hi = bounds[v]
+        forces = []
+        for x in np.linspace(lo, hi, n):
+            g = dict(base, **{v: float(x)})
+            forces.append(peak_force(g["a"], g["b"], g["d"], g["f"], x_cg, z_cg))
+        fin = np.array(forces, dtype=float)
+        fin = fin[np.isfinite(fin)]
+        swings[v] = float(fin.max() - fin.min()) if fin.size else 0.0
+    return swings
+
+
 if __name__ == "__main__":
     print(compute_F_piston(math.radians(45)))

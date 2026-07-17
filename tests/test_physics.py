@@ -142,3 +142,25 @@ def test_cylinder_length_is_base_to_attachment_distance():
         expected = np.hypot(float(ax) - float(bx), float(az) - float(bz))
         got = float(compute_cylinder_length(th, a=a, b=b, d=d, f=f))
         assert abs(got - expected) < 1e-12
+
+
+def test_force_sensitivity_structure_and_ranking():
+    """One-at-a-time sensitivity returns a swing per variable; near this design
+    the base height f dominates (it drives the moment arm and over-center)."""
+    from wall import force_sensitivity
+    bounds = {"a": (0.05, 1.219), "b": (0.05, 2.896), "d": (0.0, 1.0), "f": (0.0, 2.896)}
+    sw = force_sensitivity(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds, n=21)
+    assert set(sw) == {"a", "b", "d", "f"}
+    assert all(v >= 0.0 for v in sw.values())
+    assert sw["f"] == max(sw.values())          # f is the most influential here
+    assert sw["f"] > sw["b"]
+
+
+def test_peak_force_matches_curve_max():
+    """peak_force equals the max |force| over the swing for a smooth geometry."""
+    import numpy as np
+    from wall import peak_force, compute_F_piston
+    theta = np.linspace(0.0, np.pi / 2, 200)
+    F = compute_F_piston(theta, a=0.6, b=1.8, d=0.1, f=0.4, x_cg=1.2, z_cg=0.55)
+    assert peak_force(0.6, 1.8, 0.1, 0.4, 1.2, 0.55) == pytest.approx(
+        float(np.max(np.abs(F))), rel=1e-9)
