@@ -76,23 +76,31 @@ def peak_force(a, b, d, f, x_cg=1.2, z_cg=0.55, n_theta=200, cap=50.0):
     return float(np.max(np.abs(F))) if F.size else float("nan")
 
 
-def force_sensitivity(a, b, d, f, x_cg, z_cg, bounds, n=41):
-    """One-at-a-time sensitivity of peak force to each geometry variable. For each
-    of a, b, d, f, sweep it across bounds[var] = (lo, hi) with the other three held
-    at the given (a, b, d, f) and measure how much the peak force moves. Returns
-    {var: swing} where swing = max - min peak force over the buildable part of the
-    sweep. A larger swing means the force is more sensitive to that variable here.
-    """
+def force_profiles(a, b, d, f, x_cg, z_cg, bounds, n=41):
+    """For each of a, b, d, f: sweep that variable across bounds[var] = (lo, hi)
+    with the other three held at (a, b, d, f) and record the peak force at each
+    sample. Returns {var: (values, forces)} as numpy arrays (forces are NaN at
+    near-singular samples). This is the raw curve behind both the tornado swing
+    and the within-range (local-slope) sensitivity."""
     base = dict(a=a, b=b, d=d, f=f)
-    swings = {}
+    out = {}
     for v in ("a", "b", "d", "f"):
         lo, hi = bounds[v]
-        forces = []
-        for x in np.linspace(lo, hi, n):
-            g = dict(base, **{v: float(x)})
-            forces.append(peak_force(g["a"], g["b"], g["d"], g["f"], x_cg, z_cg))
-        fin = np.array(forces, dtype=float)
-        fin = fin[np.isfinite(fin)]
+        vals = np.linspace(lo, hi, n)
+        forces = np.array([peak_force(**dict(base, **{v: float(x)}),
+                                      x_cg=x_cg, z_cg=z_cg) for x in vals])
+        out[v] = (vals, forces)
+    return out
+
+
+def force_sensitivity(a, b, d, f, x_cg, z_cg, bounds, n=41):
+    """One-at-a-time sensitivity of peak force to each geometry variable: how much
+    the peak force moves as each of a, b, d, f sweeps its range (others fixed).
+    Returns {var: swing} where swing = max - min peak force over the buildable part
+    of the sweep. Larger swing = more sensitive to that variable here."""
+    swings = {}
+    for v, (_vals, forces) in force_profiles(a, b, d, f, x_cg, z_cg, bounds, n).items():
+        fin = forces[np.isfinite(forces)]
         swings[v] = float(fin.max() - fin.min()) if fin.size else 0.0
     return swings
 

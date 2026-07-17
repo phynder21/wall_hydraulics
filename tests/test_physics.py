@@ -175,3 +175,22 @@ def test_force_sensitivity_varies_with_geometry():
     s1 = force_sensitivity(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds, n=21)
     s2 = force_sensitivity(1.0, 1.0, 0.5, 1.5, 0.9, 0.40, bounds, n=21)
     assert any(abs(s1[v] - s2[v]) > 1.0 for v in s1)
+
+
+def test_force_profiles_shapes_and_consistency():
+    """force_profiles returns the value/force sweep per variable spanning its
+    bounds, and force_sensitivity's swing is derived consistently from it."""
+    import numpy as np
+    from wall import force_profiles, force_sensitivity
+    bounds = {"a": (0.05, 1.219), "b": (0.05, 2.896), "d": (0.0, 1.0), "f": (0.0, 2.896)}
+    prof = force_profiles(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds, n=21)
+    assert set(prof) == {"a", "b", "d", "f"}
+    for v, (vals, forces) in prof.items():
+        assert vals.shape == (21,) and forces.shape == (21,)
+        assert vals[0] == pytest.approx(bounds[v][0])
+        assert vals[-1] == pytest.approx(bounds[v][1])
+    sw = force_sensitivity(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds, n=21)
+    for v, (_vals, F) in prof.items():
+        fin = F[np.isfinite(F)]
+        expect = float(fin.max() - fin.min()) if fin.size else 0.0
+        assert sw[v] == pytest.approx(expect)

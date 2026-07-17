@@ -51,11 +51,15 @@ total force.
 4. Press **Optimize** and the tool finds the a, b, d, f that minimize peak force
    for your setup, and lists a few near-optimal alternatives you can click to load.
 
-**Sensitivity — which dimension moves the force most.** A bar chart below the
-plots shows, for your *current* design, how much the peak force swings as each of
-`a, b, d, f` sweeps its allowed range with the others held fixed — **longer /
-redder bars = more impact** (e.g. base height `f` usually dominates). It updates
-with your cg and mounting limits, so you can see which knob is worth tuning.
+**Sensitivity — which dimension moves the force most, and where.** Two aligned
+charts below the plots, for your *current* design. **Top (tornado bars):** how
+much the peak force swings as each of `a, b, d, f` sweeps its allowed range
+(others fixed) — longer / redder = more impact overall (e.g. base height `f`
+usually dominates). **Bottom (strip):** *where within* each variable's range the
+force is most sensitive — redder = a small change there moves the force more,
+blank = over-centre, and the **white dot** is your current value. So you see both
+*which* knob matters and whether you're sitting in a steep or a flat spot for it.
+Updates with your cg and mounting limits.
 
 **Optimize to minimize — force or length.** In the Optimize tab you choose what
 to minimize:

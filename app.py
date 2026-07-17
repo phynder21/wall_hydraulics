@@ -9,7 +9,7 @@ from wall import (
     compute_F_piston,
     compute_geometry,
     compute_cylinder_length,
-    force_sensitivity,
+    force_profiles,
 )
 # Imported at top level (not lazily inside the button) so Streamlit's file
 # watcher tracks optimize.py and reloads it on edit, like wall.py.
@@ -856,40 +856,81 @@ if overlay:
         f"**{_peak_force(design_A):.2f} N/kg**   ·   B ({_fmt_design(design_B)}): "
         f"peak **{_peak_force(design_B):.2f} N/kg**.")
 
-# --- Sensitivity: which dimension moves the peak force most (at this design) ---
+# --- Sensitivity: which dimension moves the force most, and WHERE in its range ---
 @st.cache_data(show_spinner=False)
 def _sensitivity(a, b, d, f, x_cg, z_cg, bounds_items):
-    """Cached one-at-a-time force sensitivity. All args are hashable and part of
-    the cache key (do NOT prefix with '_', which would exclude them), so the chart
-    updates when the design changes but animation reruns (same geometry) hit the
-    cache. bounds_items is a hashable ((var, (lo, hi)), ...)."""
-    return force_sensitivity(a, b, d, f, x_cg, z_cg, dict(bounds_items))
+    """Cached force-vs-value curves for each variable (the raw sensitivity data).
+    All args are hashable and part of the cache key (do NOT prefix with '_', which
+    would exclude them), so the chart updates when the design changes but animation
+    reruns (same geometry) hit the cache. bounds_items is ((var, (lo, hi)), ...)."""
+    return force_profiles(a, b, d, f, x_cg, z_cg, dict(bounds_items))
 
 
 with st.container(border=True):
     st.markdown("**Sensitivity — which dimension moves the force most?**")
     _bounds_items = tuple(sorted((k, tuple(v)) for k, v in USER_BOUNDS.items()))
-    _sw = _sensitivity(a, b, d, f, st.session_state["x_cg"],
-                       st.session_state["z_cg"], _bounds_items)
+    _prof = _sensitivity(a, b, d, f, st.session_state["x_cg"],
+                         st.session_state["z_cg"], _bounds_items)
+    _cur = {"a": a, "b": b, "d": d, "f": f}
     _labels = {"a": "a — base along floor", "b": "b — attach up wall",
                "d": "d — bracket offset", "f": "f — base height"}
-    _ordered = sorted(("a", "b", "d", "f"), key=lambda v: _sw[v])   # small→big (big on top)
-    _xs = [_sw[v] / n_cyl for v in _ordered]
+
+    def _swing(v):
+        _F = _prof[v][1]
+        _F = _F[np.isfinite(_F)]
+        return float(_F.max() - _F.min()) / n_cyl if _F.size else 0.0
+
+    _ordered = sorted(("a", "b", "d", "f"), key=_swing)   # small→big (big on top)
     _ys = [_labels[v] for v in _ordered]
+
+    # Top — tornado: total peak-force swing per variable (length + colour = impact).
+    _xs = [_swing(v) for v in _ordered]
     _mx = max(_xs) if any(_xs) else 1.0
     _cols = [force_color(x, 0.0, _mx) or "#63be7b" for x in _xs]
     fig_sens = go.Figure(go.Bar(
         x=_xs, y=_ys, orientation="h", marker=dict(color=_cols),
         text=[f"{x:.1f}" for x in _xs], textposition="outside", hoverinfo="skip"))
     fig_sens.update_layout(
-        template=PLOT_TEMPLATE, font=PLOT_FONT, height=230,
-        xaxis_title=f"peak-force swing (N/kg{' per cylinder' if n_cyl > 1 else ''})",
-        xaxis=dict(range=[0, _mx * 1.18]),
-        margin=dict(l=10, r=10, t=6, b=34))
+        template=PLOT_TEMPLATE, font=PLOT_FONT, height=190,
+        xaxis_title=f"total peak-force swing (N/kg{' per cyl' if n_cyl > 1 else ''})",
+        xaxis=dict(range=[0, _mx * 1.18]), margin=dict(l=10, r=10, t=6, b=30))
     st.plotly_chart(fig_sens, width="stretch")
-    st.caption("How much the peak force swings as each dimension sweeps its allowed "
-               "range, with the others held at the current design — **longer / redder "
-               "= more impact.** Reflects your current cg and mounting limits.")
+
+    # Bottom — within-range strip: local |dForce/dvar| along each variable's range,
+    # on a shared (global) scale so intensity is comparable; the dot = current value.
+    _pos = np.linspace(0.0, 1.0, _prof["a"][0].size)
+    _Z, _finite = [], []
+    for v in _ordered:
+        _vals, _F = _prof[v]
+        with np.errstate(invalid="ignore"):
+            _sl = np.abs(np.gradient(_F, _vals)) / n_cyl
+        _Z.append(_sl)
+        _finite.append(_sl[np.isfinite(_sl)])
+    _all = np.concatenate([s for s in _finite if s.size]) if any(s.size for s in _finite) \
+        else np.array([1.0])
+    _zmax = float(np.nanpercentile(_all, 90)) or 1.0   # clip so one near-singular spike
+    _zmax = _zmax if _zmax > 0 else 1.0                #   doesn't wash out the rest
+    _curpos = [float(np.clip((_cur[v] - USER_BOUNDS[v][0]) /
+                             max(USER_BOUNDS[v][1] - USER_BOUNDS[v][0], 1e-9), 0.0, 1.0))
+               for v in _ordered]
+    fig_strip = go.Figure(go.Heatmap(
+        x=_pos, y=_ys, z=_Z, zmin=0.0, zmax=_zmax,
+        colorscale=[[0.0, "#f6f6f6"], [0.5, "#fca082"], [1.0, "#a50f15"]],
+        colorbar=dict(title="local<br>impact", thickness=10, len=0.9)))
+    fig_strip.add_trace(go.Scatter(
+        x=_curpos, y=_ys, mode="markers", hoverinfo="skip", showlegend=False,
+        marker=dict(color="white", size=10, line=dict(color="#111", width=1.6))))
+    fig_strip.update_layout(
+        template=PLOT_TEMPLATE, font=PLOT_FONT, height=210,
+        xaxis=dict(title="position in each variable's range  (0 = min → 1 = max)",
+                   range=[0.0, 1.0]),
+        margin=dict(l=10, r=10, t=6, b=40))
+    st.plotly_chart(fig_strip, width="stretch")
+    st.caption("**Top:** each dimension's total impact (bar length + colour). "
+               "**Bottom:** *where* in each dimension's range the force is most "
+               "sensitive — redder = a small change there moves the force more; blank "
+               "= over-centre (unbuildable). The **white dot** is your current value. "
+               "Reflects your cg and mounting limits.")
 
 # --- Export the current design as a one-page PDF spec sheet ---
 with st.expander("Export design (PDF)"):
