@@ -896,32 +896,32 @@ with st.container(border=True):
         xaxis=dict(range=[0, _mx * 1.18]), margin=dict(l=10, r=10, t=6, b=30))
     st.plotly_chart(fig_sens, width="stretch")
 
-    # Bottom — within-range strip: local |dForce/dvar| along each variable's range,
-    # on a shared (global) scale so intensity is comparable; the dot = current value.
+    # Bottom — within-range strip. Colour = the % the peak force changes for each
+    # 1 cm you move that variable, i.e. |dForce/dx| (N/kg per metre) x 1 cm, taken
+    # as a percent of the local force. Mass- and cylinder-count-independent (it's a
+    # ratio), and intuitive ("a 1 cm nudge here shifts the force ~2%"). Shared scale
+    # across variables so rows are comparable; the dot marks your current value.
     _pos = np.linspace(0.0, 1.0, _prof["a"][0].size)
     _Z, _finite = [], []
     for v in _ordered:
         _vals, _F = _prof[v]
-        with np.errstate(invalid="ignore"):
-            _sl = np.abs(np.gradient(_F, _vals)) / n_cyl
-        _Z.append(_sl)
-        _finite.append(_sl[np.isfinite(_sl)])
+        with np.errstate(invalid="ignore", divide="ignore"):
+            _pct = np.abs(np.gradient(_F, _vals)) * 0.01 / _F * 100.0   # % per cm
+        _pct = np.where(np.isfinite(_F) & (_F > 0.0), _pct, np.nan)
+        _Z.append(_pct)
+        _finite.append(_pct[np.isfinite(_pct)])
     _all = np.concatenate([s for s in _finite if s.size]) if any(s.size for s in _finite) \
         else np.array([1.0])
-    _zmax = float(np.nanpercentile(_all, 90)) or 1.0   # clip so one near-singular spike
+    _zmax = float(np.nanpercentile(_all, 95)) or 1.0   # clip so a near-singular spike
     _zmax = _zmax if _zmax > 0 else 1.0                #   doesn't wash out the rest
-    # Show a RELATIVE colour scale (low -> high). The absolute slope is in
-    # N/kg-per-metre, which is unintuitive, so normalize to 0..1 and label the
-    # legend low/high — the message is "redder = the force changes faster here".
-    _Zn = [np.clip(s / _zmax, 0.0, 1.0) for s in _Z]
     _curpos = [float(np.clip((_cur[v] - USER_BOUNDS[v][0]) /
                              max(USER_BOUNDS[v][1] - USER_BOUNDS[v][0], 1e-9), 0.0, 1.0))
                for v in _ordered]
     fig_strip = go.Figure(go.Heatmap(
-        x=_pos, y=_ys, z=_Zn, zmin=0.0, zmax=1.0,
+        x=_pos, y=_ys, z=_Z, zmin=0.0, zmax=_zmax,
         colorscale=[[0.0, "#f6f6f6"], [0.5, "#fca082"], [1.0, "#a50f15"]],
-        colorbar=dict(title="impact", thickness=10, len=0.9,
-                      tickvals=[0.0, 1.0], ticktext=["low", "high"])))
+        colorbar=dict(title="force change<br>per 1 cm", ticksuffix="%",
+                      thickness=10, len=0.9)))
     fig_strip.add_trace(go.Scatter(
         x=_curpos, y=_ys, mode="markers", hoverinfo="skip", showlegend=False,
         marker=dict(color="white", size=10, line=dict(color="#111", width=1.6))))
@@ -932,10 +932,11 @@ with st.container(border=True):
         margin=dict(l=10, r=10, t=6, b=40))
     st.plotly_chart(fig_strip, width="stretch")
     st.caption("**Top:** each dimension's total impact (bar length + colour). "
-               "**Bottom:** *where* in each dimension's range the force is most "
-               "sensitive — redder = a small change there moves the force more; blank "
-               "= over-centre (unbuildable). The **white dot** is your current value. "
-               "Reflects your cg and mounting limits.")
+               "**Bottom:** colour = **how much the peak force changes for each 1 cm** "
+               "you move that dimension, as a percent of the force (so 2% means a 1 cm "
+               "nudge shifts the force about 2%). Redder = more sensitive there; blank "
+               "= over-centre. The **white dot** is your current value. Reflects your "
+               "cg and mounting limits.")
 
 # --- Export the current design as a one-page PDF spec sheet ---
 with st.expander("Export design (PDF)"):
