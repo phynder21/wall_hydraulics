@@ -1,19 +1,19 @@
 """Sensitivity map for the actuator geometry.
 
 Peak piston force depends on four geometry variables (a, b, d, f) plus the
-wall's centre of gravity (x_cg, z_cg). Fixing the cg, this sweeps a dense 4-D
+wall's center of gravity (x_cg, z_cg). Fixing the cg, this sweeps a dense 4-D
 grid over the geometry, computes the peak |force| over the full 0-90 deg swing
-for every layout (marking over-centre layouts as unbuildable), and renders a
+for every layout (marking over-center layouts as unbuildable), and renders a
 PAIRWISE SENSITIVITY MATRIX:
 
-  * 6 lower-triangle heatmaps  -- each variable pair on the axes, colour = the
+  * 6 lower-triangle heatmaps  -- each variable pair on the axes, color = the
     BEST achievable peak force at that combination (minimised over the other
-    two variables). Green = low force (good), red = high (bad). A steep colour
+    two variables). Green = low force (good), red = high (bad). A steep color
     gradient means that pair strongly drives the force (sensitive); a flat
     field means it barely matters.
   * 4 diagonal profiles        -- peak force vs a single variable (best case
     over the other three): the pure one-variable sensitivity.
-  * blank cells                -- over-centre / unbuildable regions.
+  * blank cells                -- over-center / unbuildable regions.
 
 It also prints a TORNADO RANKING: holding the others at the grid-optimum, how
 much each variable alone swings the force -- the one-line "which knob matters
@@ -53,8 +53,8 @@ def geometry_ranges():
 def peak_force_grid(res, x_cg, z_cg, n_theta=121):
     """4-D array peak[a,b,d,f] of peak |force| (N/kg) over the 0-90 deg swing.
 
-    Layouts that over-centre (the cylinder line crosses the hinge, so the force
-    diverges) are set to NaN -- they can't be built and shouldn't colour the map.
+    Layouts that over-center (the cylinder line crosses the hinge, so the force
+    diverges) are set to NaN -- they can't be built and shouldn't color the map.
     """
     rng = geometry_ranges()
     grids = {v: np.linspace(*rng[v], res) for v in VARS}
@@ -112,7 +112,7 @@ def reduce_single(peak, i, how="min"):
 def main_effects(peak, cap):
     """First-order (Sobol-style) sensitivity: the share of force variation each
     variable explains on its own = Var(E[force | var]) / Var(force), over the
-    buildable region with force clipped to `cap` so over-centre spikes don't
+    buildable region with force clipped to `cap` so over-center spikes don't
     dominate. Robust to where the optimum sits. Returns [(var, share)] ranked."""
     pc = np.clip(peak, 0.0, cap)
     with warnings.catch_warnings():
@@ -186,8 +186,8 @@ def build_figure(grids, peak, cap, x_cg, z_cg, effects):
                        colorbar=dict(title="peak force<br>N/kg", len=0.5, y=0.78)),
         title=dict(text=(f"Geometry sensitivity — peak piston force (N/kg), "
                          f"cg at x={x_cg}, z={z_cg} m<br>"
-                         f"<sup>heatmaps: green=low force (good), red=high, blank=over-centre; "
-                         f"colour = BEST force over the two hidden variables · "
+                         f"<sup>heatmaps: green=low force (good), red=high, blank=over-center; "
+                         f"color = BEST force over the two hidden variables · "
                          f"share of force variation: {rank}</sup>"),
                    x=0.5, xanchor="center"),
         legend=dict(orientation="h", x=0.62, y=0.97, xanchor="left"),
@@ -203,7 +203,7 @@ def main():
     p.add_argument("--z-cg", type=float, default=0.55, help="cg off wall (m)")
     p.add_argument("--res", type=int, default=34, help="grid points per variable")
     p.add_argument("--cap", type=float, default=60.0,
-                   help="colour-scale max (N/kg); forces above clamp to red")
+                   help="color-scale max (N/kg); forces above clamp to red")
     p.add_argument("--prefix", default="sensitivity_matrix", help="output filename prefix")
     args = p.parse_args()
 
@@ -212,7 +212,7 @@ def main():
     grids, peak = peak_force_grid(args.res, args.x_cg, args.z_cg)
     buildable = np.isfinite(peak).sum()
     print(f"  {buildable:,} buildable ({100*buildable/peak.size:.0f}%); "
-          f"{peak.size - buildable:,} over-centre.")
+          f"{peak.size - buildable:,} over-center.")
 
     base, base_force = grid_optimum(grids, peak)
     print(f"\nGrid optimum: {base_force:.2f} N/kg at "

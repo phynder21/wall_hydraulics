@@ -57,7 +57,7 @@ much the peak force swings as each of `a, b, d, f` sweeps its allowed range
 (others fixed) — longer / redder = more impact overall (e.g. base height `f`
 usually dominates). **Bottom (strip):** *where within* each variable's range the
 force is most sensitive — redder = a small change there moves the force more,
-blank = over-centre, and the **white dot** is your current value. So you see both
+blank = over-center, and the **white dot** is your current value. So you see both
 *which* knob matters and whether you're sitting in a steep or a flat spot for it.
 Updates with your cg and mounting limits.
 
@@ -121,7 +121,7 @@ cylinder, and it finds the best geometry and the **biggest wall it can raise**.
 
 1. Pick your **units** (Imperial or Metric) with the toggle at the top — it
    converts the cylinder inputs in place, so you can enter specs in whichever the
-   datasheet uses. The wall geometry itself always stays in metres.
+   datasheet uses. The wall geometry itself always stays in meters.
 2. Enter the cylinder's **force** — either bore + rod diameter + max pressure
    (psi / bar), or a rated push force (lbf / kN) — plus a **safety factor**.
 3. Enter the cylinder's **length** — closed (retracted) length + stroke (in / mm).

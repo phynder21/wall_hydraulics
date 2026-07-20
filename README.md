@@ -229,7 +229,7 @@ cylinder. Pick a **bore standard** — *ISO metric* (40, 50, 63 mm…), *NFPA in
 reports:
 
 - the **exact required bore**,
-- the **next standard bore** up (a real catalogue size),
+- the **next standard bore** up (a real catalog size),
 - the **pressure that standard bore actually needs** for your force, and how far
   that sits **below your design pressure** (headroom).
 

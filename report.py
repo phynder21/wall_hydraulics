@@ -14,7 +14,7 @@ _SUBS = {"×": "x", "→": "->", "°": " deg", "–": "-", "—": "-", "≤": "<
          "≥": ">=", "√": "sqrt", "·": "-", "±": "+/-", "≈": "~", "θ": "theta"}
 
 # multi_cell in fpdf2 2.8 does not return x to the left margin by default; make
-# the "next line, back to the left margin" behaviour explicit.
+# the "next line, back to the left margin" behavior explicit.
 _NL = dict(new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
 
@@ -30,7 +30,7 @@ _M_TO_IN, _N_TO_LBF, _BAR_TO_PSI, _KG_TO_LB = 39.3700787, 0.224809, 14.5037738, 
 
 
 def dual_len(m):
-    """Length in metres -> 'X m (Y in)'."""
+    """Length in meters -> 'X m (Y in)'."""
     return f"{m:.3f} m ({m * _M_TO_IN:.2f} in)"
 
 

@@ -71,15 +71,15 @@ ATTRIBUTES = {
 }
 
 
-# Excel-style 3-colour scale for the peak-force column: green = low force (good),
+# Excel-style 3-color scale for the peak-force column: green = low force (good),
 # yellow = middling, red = high (needs a bigger cylinder). Continuous linear
-# interpolation, so two nearly-equal forces get nearly-identical colours.
+# interpolation, so two nearly-equal forces get nearly-identical colors.
 _FORCE_SCALE = ((0x63, 0xbe, 0x7b), (0xff, 0xeb, 0x84), (0xf8, 0x69, 0x6b))
 
 
 def force_color(value, lo, hi):
-    """Hex colour ('#rrggbb') for `value` on a green(lo) -> red(hi) scale, scaled
-    to the [lo, hi] range of the shown results. Returns '' if not colourable."""
+    """Hex color ('#rrggbb') for `value` on a green(lo) -> red(hi) scale, scaled
+    to the [lo, hi] range of the shown results. Returns '' if not colorable."""
     if not np.isfinite(value) or hi <= lo:
         return ""
     t = min(max((value - lo) / (hi - lo), 0.0), 1.0)
@@ -91,13 +91,13 @@ def force_color(value, lo, hi):
 
 FORCE_REF = 25.0   # N/kg treated as "high demand" (a full total-force bar)
 # The total-force bar shows ONE design, so a green->red scale is misleading
-# (even the optimum would look "bad"); the fill uses a neutral colour instead.
+# (even the optimum would look "bad"); the fill uses a neutral color instead.
 BAR_NEUTRAL = "#9fb3c8"
 
 
 def force_bar(peak_per_kg, mass_kg):
     """Convert a peak force (N/kg) at a given wall+load mass into a total-force
-    readout: (total force in kN, bar fill 0-1, hex colour). Fill/colour are on the
+    readout: (total force in kN, bar fill 0-1, hex color). Fill/color are on the
     same green(low)->red(high) demand scale as the table, scaled to FORCE_REF."""
     if not np.isfinite(peak_per_kg):
         return float("nan"), 0.0, ""
@@ -216,7 +216,7 @@ def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0
 def cylinder_matches(table, container_height, x_cg, z_cg, retracted, extended,
                      bounds=None, roof_clearance=0.0, limit=200):
     """Geometries whose cylinder length stays ENTIRELY within a real cylinder's
-    [retracted, extended] window (metres), ranked by peak force (lowest first).
+    [retracted, extended] window (meters), ranked by peak force (lowest first).
     Max wall mass a row supports = cylinder force / peak_force. The stroke-ratio
     limit is left open here -- the absolute length window is the real constraint."""
     filters = {"L_min": (retracted, None), "L_max": (None, extended)}

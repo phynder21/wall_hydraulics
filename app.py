@@ -580,7 +580,7 @@ F_max = float(F_valid.max()) if F_valid.size else float("nan")
 has_singularity = not bool(np.all(usable))
 
 # Diagram coordinates — all scaled by U into the chosen display unit. (These are
-# display-only; the physics above uses the canonical metre values directly.)
+# display-only; the physics above uses the canonical meter values directly.)
 geom = compute_geometry(theta, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
 x_att, z_att = (float(v) * U for v in geom["attachment"])
 x_cgw, z_cgw = (float(v) * U for v in geom["cg"])
@@ -628,7 +628,7 @@ with st.container(border=True):
     series = cs1.selectbox(
         "Bore standard", ["ISO metric", "NFPA (inch)", "Exact (no rounding)"],
         key="bore_series",
-        help="Round the required bore up to a real catalogue size, or show the "
+        help="Round the required bore up to a real catalog size, or show the "
              "exact number.")
     if series == "NFPA (inch)":
         st.session_state.setdefault("des_psi", 3000.0)
@@ -892,7 +892,7 @@ with st.container(border=True):
         text=[f"{x:.1f}" for x in _xs], textposition="outside", hoverinfo="skip"))
     fig_sens.update_layout(
         template=PLOT_TEMPLATE, font=PLOT_FONT, height=190,
-        xaxis_title=f"total peak-force swing (N/kg{' per cyl' if n_cyl > 1 else ''})",
+        xaxis_title=f"Total peak-force swing (N/kg{' per cyl' if n_cyl > 1 else ''})",
         xaxis=dict(range=[0, _mx * 1.18]), margin=dict(l=10, r=10, t=6, b=30))
     st.plotly_chart(fig_sens, width="stretch")
 
@@ -922,14 +922,14 @@ with st.container(border=True):
     fig_strip = go.Figure(go.Heatmap(
         x=_pos, y=_ys, z=_Z, zmin=0.0, zmax=_zmax,
         colorscale=[[0.0, "#f6f6f6"], [0.5, "#fca082"], [1.0, "#a50f15"]],
-        colorbar=dict(title=f"force change<br>per {_step_lbl}", ticksuffix="%",
+        colorbar=dict(title=f"Force change<br>per {_step_lbl}", ticksuffix="%",
                       thickness=10, len=0.9)))
     fig_strip.add_trace(go.Scatter(
         x=_curpos, y=_ys, mode="markers", hoverinfo="skip", showlegend=False,
         marker=dict(color="white", size=10, line=dict(color="#111", width=1.6))))
     fig_strip.update_layout(
         template=PLOT_TEMPLATE, font=PLOT_FONT, height=210,
-        xaxis=dict(title="position in each variable's range  (0 = min → 1 = max)",
+        xaxis=dict(title="Position in each variable's range  (0 = min → 1 = max)",
                    range=[0.0, 1.0]),
         margin=dict(l=10, r=10, t=6, b=40))
     st.plotly_chart(fig_strip, width="stretch")
@@ -937,7 +937,7 @@ with st.container(border=True):
                f"**Bottom:** color = **how much the peak force changes for each "
                f"{_step_lbl}** you move that dimension, as a percent of the force (so "
                f"2% means a {_step_lbl} nudge shifts the force about 2%). Redder = more "
-               f"sensitive there; blank = over-centre. The **white dot** is your "
+               f"sensitive there; blank = over-center. The **white dot** is your "
                f"current value. Follows the m/in units toggle; reflects your cg and "
                f"mounting limits.")
 
