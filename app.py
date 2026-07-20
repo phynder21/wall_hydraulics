@@ -910,13 +910,18 @@ with st.container(border=True):
         else np.array([1.0])
     _zmax = float(np.nanpercentile(_all, 90)) or 1.0   # clip so one near-singular spike
     _zmax = _zmax if _zmax > 0 else 1.0                #   doesn't wash out the rest
+    # Show a RELATIVE colour scale (low -> high). The absolute slope is in
+    # N/kg-per-metre, which is unintuitive, so normalize to 0..1 and label the
+    # legend low/high — the message is "redder = the force changes faster here".
+    _Zn = [np.clip(s / _zmax, 0.0, 1.0) for s in _Z]
     _curpos = [float(np.clip((_cur[v] - USER_BOUNDS[v][0]) /
                              max(USER_BOUNDS[v][1] - USER_BOUNDS[v][0], 1e-9), 0.0, 1.0))
                for v in _ordered]
     fig_strip = go.Figure(go.Heatmap(
-        x=_pos, y=_ys, z=_Z, zmin=0.0, zmax=_zmax,
+        x=_pos, y=_ys, z=_Zn, zmin=0.0, zmax=1.0,
         colorscale=[[0.0, "#f6f6f6"], [0.5, "#fca082"], [1.0, "#a50f15"]],
-        colorbar=dict(title="local<br>impact", thickness=10, len=0.9)))
+        colorbar=dict(title="impact", thickness=10, len=0.9,
+                      tickvals=[0.0, 1.0], ticktext=["low", "high"])))
     fig_strip.add_trace(go.Scatter(
         x=_curpos, y=_ys, mode="markers", hoverinfo="skip", showlegend=False,
         marker=dict(color="white", size=10, line=dict(color="#111", width=1.6))))
