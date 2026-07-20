@@ -883,7 +883,7 @@ with st.container(border=True):
     _ordered = sorted(("a", "b", "d", "f"), key=_swing)   # small→big (big on top)
     _ys = [_labels[v] for v in _ordered]
 
-    # Top — tornado: total peak-force swing per variable (length + colour = impact).
+    # Top — tornado: total peak-force swing per variable (length + color = impact).
     _xs = [_swing(v) for v in _ordered]
     _mx = max(_xs) if any(_xs) else 1.0
     _cols = [force_color(x, 0.0, _mx) or "#63be7b" for x in _xs]
@@ -896,17 +896,19 @@ with st.container(border=True):
         xaxis=dict(range=[0, _mx * 1.18]), margin=dict(l=10, r=10, t=6, b=30))
     st.plotly_chart(fig_sens, width="stretch")
 
-    # Bottom — within-range strip. Colour = the % the peak force changes for each
-    # 1 cm you move that variable, i.e. |dForce/dx| (N/kg per metre) x 1 cm, taken
-    # as a percent of the local force. Mass- and cylinder-count-independent (it's a
-    # ratio), and intuitive ("a 1 cm nudge here shifts the force ~2%"). Shared scale
-    # across variables so rows are comparable; the dot marks your current value.
+    # Bottom — within-range strip. Color = the % the peak force changes for each
+    # step you move that variable (1 cm in metric, 1 in in imperial — follows the
+    # units toggle), i.e. |dForce/dx| x step, as a percent of the local force. Mass-
+    # and cylinder-count-independent (it's a ratio), and intuitive ("a 1 cm nudge
+    # here shifts the force ~2%"). Shared scale across variables so rows are
+    # comparable; the dot marks your current value.
+    _step_m, _step_lbl = (0.0254, "1 in") if inches else (0.01, "1 cm")
     _pos = np.linspace(0.0, 1.0, _prof["a"][0].size)
     _Z, _finite = [], []
     for v in _ordered:
         _vals, _F = _prof[v]
         with np.errstate(invalid="ignore", divide="ignore"):
-            _pct = np.abs(np.gradient(_F, _vals)) * 0.01 / _F * 100.0   # % per cm
+            _pct = np.abs(np.gradient(_F, _vals)) * _step_m / _F * 100.0   # % per step
         _pct = np.where(np.isfinite(_F) & (_F > 0.0), _pct, np.nan)
         _Z.append(_pct)
         _finite.append(_pct[np.isfinite(_pct)])
@@ -920,7 +922,7 @@ with st.container(border=True):
     fig_strip = go.Figure(go.Heatmap(
         x=_pos, y=_ys, z=_Z, zmin=0.0, zmax=_zmax,
         colorscale=[[0.0, "#f6f6f6"], [0.5, "#fca082"], [1.0, "#a50f15"]],
-        colorbar=dict(title="force change<br>per 1 cm", ticksuffix="%",
+        colorbar=dict(title=f"force change<br>per {_step_lbl}", ticksuffix="%",
                       thickness=10, len=0.9)))
     fig_strip.add_trace(go.Scatter(
         x=_curpos, y=_ys, mode="markers", hoverinfo="skip", showlegend=False,
@@ -931,12 +933,13 @@ with st.container(border=True):
                    range=[0.0, 1.0]),
         margin=dict(l=10, r=10, t=6, b=40))
     st.plotly_chart(fig_strip, width="stretch")
-    st.caption("**Top:** each dimension's total impact (bar length + colour). "
-               "**Bottom:** colour = **how much the peak force changes for each 1 cm** "
-               "you move that dimension, as a percent of the force (so 2% means a 1 cm "
-               "nudge shifts the force about 2%). Redder = more sensitive there; blank "
-               "= over-centre. The **white dot** is your current value. Reflects your "
-               "cg and mounting limits.")
+    st.caption(f"**Top:** each dimension's total impact (bar length + color). "
+               f"**Bottom:** color = **how much the peak force changes for each "
+               f"{_step_lbl}** you move that dimension, as a percent of the force (so "
+               f"2% means a {_step_lbl} nudge shifts the force about 2%). Redder = more "
+               f"sensitive there; blank = over-centre. The **white dot** is your "
+               f"current value. Follows the m/in units toggle; reflects your cg and "
+               f"mounting limits.")
 
 # --- Export the current design as a one-page PDF spec sheet ---
 with st.expander("Export design (PDF)"):
