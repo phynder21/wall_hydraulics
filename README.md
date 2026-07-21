@@ -162,6 +162,13 @@ its pressure, stroke, retracted/extended length, stroke ratio), the side-view
 diagram and both curves, and the standard sizing caveats. Click **Generate PDF**
 to capture the design as it stands, then **Download PDF**.
 
+The same export lives in the **Browse** inspector (for the configuration you're
+viewing) and in **Reverse** (a cylinder-sizing sheet: the cylinder you entered
+plus the geometry it sized and the safe max wall mass). All three share one
+implementation (`pdf_export.py`), as do the **sensitivity** panel
+(`sensitivity_panel.py`) and the **bore & pressure** card (`cylinder_panel.py`,
+Designer + Browse), so a design carries the same tools wherever you land on it.
+
 ---
 
 ## 4. How the math works
@@ -584,9 +591,12 @@ are done in both `app.py` and `nicegui_app.py`.
 ├── lookup.py          # Fast filter + rank query over the precomputed table.
 ├── lookup_build.py    # Builds the precomputed geometry table (Browse mode).
 │  # --- front-end 1: Streamlit ---
-├── app.py             # Streamlit UI (Designer + view switch; cylinder bore/pressure sizing).
+├── app.py             # Streamlit UI (Designer + view switch).
 ├── browse.py          # Streamlit "Browse configurations" view.
 ├── reverse.py         # Streamlit "Size from a cylinder" (reverse) view.
+├── sensitivity_panel.py # Shared in-app sensitivity panel (Designer + Browse + Reverse).
+├── cylinder_panel.py  # Shared bore & pressure sizing card (Designer + Browse).
+├── pdf_export.py      # Shared one-page PDF spec sheet (Designer + Browse + Reverse).
 ├── sensitivity.py     # Standalone: geometry sensitivity heatmap (PNG/HTML). See GUIDE.
 ├── .streamlit/config.toml   # Streamlit theme.
 ├── requirements.txt   # Streamlit deps (streamlit, numpy, plotly, scipy, pytest, kaleido).

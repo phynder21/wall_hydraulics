@@ -11,6 +11,8 @@ from optimize import optimize_actuator
 import lookup
 from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
                     _diagram_figure, _force_length_figures, _sb_linked, _sb_range)
+from sensitivity_panel import render_sensitivity_panel
+from pdf_export import render_pdf_export
 
 # Per-unit spec for each cylinder input: (label, lo, hi, default, step, fmt,
 # to_base) where to_base converts the shown value to the physics base unit —
@@ -186,6 +188,34 @@ def render_reverse():
     pf, pl = st.columns(2)
     pf.plotly_chart(ff, width="stretch")
     pl.plotly_chart(fl, width="stretch")
+
+    # Same sensitivity panel as the Designer, for the best-fit geometry. The
+    # output-geometry limits bound each row; the chosen a, b, d, f mark the dot.
+    render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl)
+
+    # One-page PDF sheet: the cylinder you entered + the geometry it sized. The
+    # cylinder is the input here (no bore-sizing card), so the mass shown is the
+    # SAFE max this cylinder can raise, and the cylinder window is noted.
+    render_pdf_export(
+        key="reverse", size_key=size, n_cyl=n_cyl, x_cg=x_cg, z_cg=z_cg,
+        mass=max_mass, stroke_ratio_max=stroke_ratio, roof_clearance=clearance,
+        a=a, b=b, d=d, f=f, peak_pc=peak / n_cyl,
+        L_min=float(res["L_min"][0]), L_max=float(res["L_max"][0]),
+        fig_geom=diag, fig_force=ff, fig_len=fl,
+        mass_label="Safe max wall mass", show_stroke_ratio_max=False,
+        extra_setup_rows=[
+            ("Cylinder push force", f"{force_n / 1000:.1f} kN ({force_n / 4448.22:.2f} klbf)"),
+            ("Safety factor", f"{safety:g}x"),
+            ("Cylinder length window",
+             f"{L_ret * len_fac:.1f}-{L_ext * len_fac:.1f} {len_u}"),
+        ],
+        extra_notes=["Mass shown is the SAFE max this cylinder can raise "
+                     "(cylinder push force / safety factor / peak force per kg, "
+                     "summed over all cylinders)."],
+        title="Container Wall Actuator - Cylinder Sizing Report",
+        file_name="wall_actuator_sizing.pdf",
+        caption="A one-page sheet: the cylinder you entered and the geometry it "
+                "sized, with forces and the curves. Click Generate to capture it.")
 
     # --- Refine to the exact optimum for this cylinder ---
     st.subheader("Get the exact optimum")

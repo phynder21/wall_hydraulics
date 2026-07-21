@@ -9,16 +9,16 @@ from wall import (
     compute_F_piston,
     compute_geometry,
     compute_cylinder_length,
-    force_profiles,
 )
 # Imported at top level (not lazily inside the button) so Streamlit's file
 # watcher tracks optimize.py and reloads it on edit, like wall.py.
 from optimize import optimize_actuator, STROKE_TOL
 from browse import render_browse
 from reverse import render_reverse
-from lookup import (force_bar, force_bar_html, BAR_NEUTRAL, cylinder_banner,
-                    force_color, required_bore_mm, next_standard_bore_mm,
-                    pressure_for_bore_bar)
+from lookup import force_bar, force_bar_html, BAR_NEUTRAL, cylinder_banner
+from sensitivity_panel import render_sensitivity_panel
+from cylinder_panel import render_cylinder_sizing
+from pdf_export import render_pdf_export
 
 # Human-readable build marker. Bump on notable changes so you can tell at a
 # glance whether a running/deployed page has the latest code (a stale process
@@ -621,53 +621,9 @@ with st.container(border=True):
                 unsafe_allow_html=True)
 
 # --- Cylinder sizing: turn the peak force into a bore + operating pressure ---
-with st.container(border=True):
-    st.markdown("**Cylinder sizing — bore & pressure**")
-    st.caption("Bore = the cylinder barrel's inner **diameter**.")
-    cs1, cs2 = st.columns([1, 1])
-    series = cs1.selectbox(
-        "Bore standard", ["ISO metric", "NFPA (inch)", "Exact (no rounding)"],
-        key="bore_series",
-        help="Round the required bore up to a real catalog size, or show the "
-             "exact number.")
-    if series == "NFPA (inch)":
-        st.session_state.setdefault("des_psi", 3000.0)
-        press_psi = cs2.number_input("Design pressure (psi)", 200.0, 10000.0,
-                                     step=50.0, key="des_psi")
-        pressure_bar = press_psi * 0.0689476
-        press_label = f"{press_psi:,.0f} psi"
-    else:
-        st.session_state.setdefault("des_bar", 210.0)
-        pressure_bar = cs2.number_input("Design pressure (bar)", 20.0, 700.0,
-                                        step=5.0, key="des_bar")
-        press_label = f"{pressure_bar:,.0f} bar"
-
-    if np.isfinite(peak_mag) and mass > 0 and pressure_bar > 0:
-        force_n = peak_pc * mass                        # per-cylinder peak push, N
-        force_lbl = f"{force_n / 1000:.1f} kN ({force_n / 4.44822:,.0f} lbf)"
-        bore_mm = required_bore_mm(force_n, pressure_bar)
-        bore_in = bore_mm / 25.4
-        if series == "Exact (no rounding)":
-            st.markdown(
-                f"Required bore diameter **{bore_mm:.1f} mm** ({bore_in:.2f} in) to "
-                f"make **{force_lbl}** at {press_label}.")
-        else:
-            std_mm, std_label = next_standard_bore_mm(bore_mm, series)
-            if std_mm is None:
-                st.warning(
-                    f"Required bore diameter **{bore_mm:.1f} mm** is bigger than the "
-                    f"largest standard size — raise the design pressure, or plan for "
-                    f"two cylinders sharing the load.")
-            else:
-                p_at_std = pressure_for_bore_bar(force_n, std_mm)
-                head = (1.0 - p_at_std / pressure_bar) * 100.0 if pressure_bar else 0.0
-                st.markdown(
-                    f"Required bore diameter **{bore_mm:.1f} mm** ({bore_in:.2f} in) → "
-                    f"next standard **{std_label}**, which needs **{p_at_std:.0f} bar** "
-                    f"({p_at_std * 14.5038:.0f} psi) to make {force_lbl} "
-                    f"— **{head:.0f}% below** your {press_label}.")
-    else:
-        st.caption("Set a valid geometry, wall mass, and pressure to size the bore.")
+# Shared with the Browse inspector via cylinder_panel; returns the design pressure
+# and bore standard so the PDF export below reports the same numbers.
+pressure_bar, series = render_cylinder_sizing(peak_pc, mass)
 
 # --- Side view large on top; force + length curves small below it. diag_area is
 # created first so its slot sits above the curve row, even though the diagram
@@ -857,186 +813,20 @@ if overlay:
         f"peak **{_peak_force(design_B):.2f} N/kg**.")
 
 # --- Sensitivity: which dimension moves the force most, and WHERE in its range ---
-@st.cache_data(show_spinner=False)
-def _sensitivity(a, b, d, f, x_cg, z_cg, bounds_items):
-    """Cached force-vs-value curves for each variable (the raw sensitivity data).
-    All args are hashable and part of the cache key (do NOT prefix with '_', which
-    would exclude them), so the chart updates when the design changes but animation
-    reruns (same geometry) hit the cache. bounds_items is ((var, (lo, hi)), ...)."""
-    return force_profiles(a, b, d, f, x_cg, z_cg, dict(bounds_items))
-
-
-with st.container(border=True):
-    st.markdown("**Sensitivity — which dimension moves the force most?**")
-    _bounds_items = tuple(sorted((k, tuple(v)) for k, v in USER_BOUNDS.items()))
-    _prof = _sensitivity(a, b, d, f, st.session_state["x_cg"],
-                         st.session_state["z_cg"], _bounds_items)
-    _cur = {"a": a, "b": b, "d": d, "f": f}
-    _labels = {"a": "a — base along floor", "b": "b — attach up wall",
-               "d": "d — bracket offset", "f": "f — base height"}
-
-    def _swing(v):
-        _F = _prof[v][1]
-        _F = _F[np.isfinite(_F)]
-        return float(_F.max() - _F.min()) / n_cyl if _F.size else 0.0
-
-    _ordered = sorted(("a", "b", "d", "f"), key=_swing)   # small→big (big on top)
-    _ys = [_labels[v] for v in _ordered]
-
-    # Top — tornado: total peak-force swing per variable (length + color = impact).
-    _xs = [_swing(v) for v in _ordered]
-    _mx = max(_xs) if any(_xs) else 1.0
-    _cols = [force_color(x, 0.0, _mx) or "#63be7b" for x in _xs]
-    fig_sens = go.Figure(go.Bar(
-        x=_xs, y=_ys, orientation="h", marker=dict(color=_cols),
-        text=[f"{x:.1f}" for x in _xs], textposition="outside", hoverinfo="skip"))
-    fig_sens.update_layout(
-        template=PLOT_TEMPLATE, font=PLOT_FONT, height=190,
-        xaxis_title=f"Total peak-force swing (N/kg{' per cyl' if n_cyl > 1 else ''})",
-        xaxis=dict(range=[0, _mx * 1.18]), margin=dict(l=10, r=10, t=6, b=30))
-    st.plotly_chart(fig_sens, width="stretch")
-
-    # Bottom — within-range strip. Color = the % the peak force changes for each
-    # step you move that variable (1 cm in metric, 1 in in imperial — follows the
-    # units toggle), i.e. |dForce/dx| x step, as a percent of the local force. Mass-
-    # and cylinder-count-independent (it's a ratio), and intuitive ("a 1 cm nudge
-    # here shifts the force ~2%"). Shared scale across variables so rows are
-    # comparable; the dot marks your current value.
-    _step_m, _step_lbl = (0.0254, "1 in") if inches else (0.01, "1 cm")
-    _pos = np.linspace(0.0, 1.0, _prof["a"][0].size)
-    _Z, _finite = [], []
-    for v in _ordered:
-        _vals, _F = _prof[v]
-        with np.errstate(invalid="ignore", divide="ignore"):
-            _pct = np.abs(np.gradient(_F, _vals)) * _step_m / _F * 100.0   # % per step
-        _pct = np.where(np.isfinite(_F) & (_F > 0.0), _pct, np.nan)
-        _Z.append(_pct)
-        _finite.append(_pct[np.isfinite(_pct)])
-    _all = np.concatenate([s for s in _finite if s.size]) if any(s.size for s in _finite) \
-        else np.array([1.0])
-    _zmax = float(np.nanpercentile(_all, 95)) or 1.0   # clip so a near-singular spike
-    _zmax = _zmax if _zmax > 0 else 1.0                #   doesn't wash out the rest
-    _curpos = [float(np.clip((_cur[v] - USER_BOUNDS[v][0]) /
-                             max(USER_BOUNDS[v][1] - USER_BOUNDS[v][0], 1e-9), 0.0, 1.0))
-               for v in _ordered]
-    fig_strip = go.Figure(go.Heatmap(
-        x=_pos, y=_ys, z=_Z, zmin=0.0, zmax=_zmax,
-        colorscale=[[0.0, "#f6f6f6"], [0.5, "#fca082"], [1.0, "#a50f15"]],
-        colorbar=dict(title=f"Force change<br>per {_step_lbl}", ticksuffix="%",
-                      thickness=10, len=0.9)))
-    fig_strip.add_trace(go.Scatter(
-        x=_curpos, y=_ys, mode="markers", hoverinfo="skip", showlegend=False,
-        marker=dict(color="white", size=10, line=dict(color="#111", width=1.6))))
-    fig_strip.update_layout(
-        template=PLOT_TEMPLATE, font=PLOT_FONT, height=210,
-        xaxis=dict(title="Position in each variable's range  (0 = min → 1 = max)",
-                   range=[0.0, 1.0]),
-        margin=dict(l=10, r=10, t=6, b=40))
-    st.plotly_chart(fig_strip, width="stretch")
-    st.caption(f"**Top:** each dimension's total impact (bar length + color). "
-               f"**Bottom:** color = **how much the peak force changes for each "
-               f"{_step_lbl}** you move that dimension, as a percent of the force (so "
-               f"2% means a {_step_lbl} nudge shifts the force about 2%). Redder = more "
-               f"sensitive there; blank = over-center. The **white dot** is your "
-               f"current value. Follows the m/in units toggle; reflects your cg and "
-               f"mounting limits.")
+# Shared with the Browse inspector via sensitivity_panel so the two stay identical.
+render_sensitivity_panel(a, b, d, f, st.session_state["x_cg"],
+                         st.session_state["z_cg"], USER_BOUNDS, n_cyl=n_cyl,
+                         inches=inches, template=PLOT_TEMPLATE, font=PLOT_FONT)
 
 # --- Export the current design as a one-page PDF spec sheet ---
-with st.expander("Export design (PDF)"):
-    st.caption("A one-page spec sheet for the current geometry — inputs, forces, "
-               "bore & pressure, the diagram, and the curves. Click Generate to "
-               "capture the design as it stands now.")
-    if st.button("Generate PDF"):
-        import datetime
-        import report
-        with st.spinner("Rendering the PDF…"):
-            # The PDF shows BOTH unit systems for every value (see report.dual_*),
-            # regardless of the app's display toggle.
-            _len, _force = report.dual_len, report.dual_force
-            _press, _bore = report.dual_pressure, report.dual_bore
-
-            # Per cylinder (n_cyl cylinders share the load).
-            force_n = peak_pc * mass if np.isfinite(peak_pc) else float("nan")
-            _pk = (f"{peak_pc:.2f} N/kg" if np.isfinite(peak_pc)
-                   else "n/a (singular geometry)")
-            _tot = _force(force_n) if np.isfinite(force_n) else "n/a"
-            cyl_rows = [("Peak force per cylinder", _pk),
-                        (f"Force per cylinder at {mass:,.0f} kg", _tot)]
-            if np.isfinite(peak_mag) and pressure_bar > 0:
-                bore = required_bore_mm(force_n, pressure_bar)
-                cyl_rows.append(("Design pressure", _press(pressure_bar)))
-                if series == "Exact (no rounding)":
-                    cyl_rows.append(("Required bore (diameter)", _bore(bore)))
-                else:
-                    std_mm, std_label = next_standard_bore_mm(bore, series)
-                    if std_mm:
-                        other = (f"{std_mm / 25.4:.2f} in" if series == "ISO metric"
-                                 else f"{std_mm:.1f} mm")
-                        cyl_rows.append(("Required bore (diameter)",
-                                         f"{_bore(bore)} -> standard {std_label} ({other})"))
-                        cyl_rows.append(("Pressure at that bore",
-                                         _press(pressure_for_bore_bar(force_n, std_mm))))
-                    else:
-                        cyl_rows.append(("Required bore (diameter)",
-                                         f"{_bore(bore)} (exceeds largest standard)"))
-            cyl_rows += [
-                ("Stroke (L_max - L_min)", _len(L_max - L_min)),
-                ("Retracted / extended", f"{_len(L_min)} / {_len(L_max)}"),
-                ("Stroke ratio", f"{L_ratio:.2f}" + ("" if stroke_ok else " (over limit)")),
-            ]
-            tables = [
-                ("Setup", [
-                    ("Container", size_key),
-                    ("Cylinders sharing the load", str(n_cyl)),
-                    ("Center of gravity x_cg", _len(x_cg)),
-                    ("Center of gravity z_cg", _len(z_cg)),
-                    ("Wall + load mass", report.dual_mass(mass)),
-                    ("Max stroke ratio", f"{stroke_ratio:g}x"),
-                    ("Roof clearance", _len(roof_clearance)),
-                ]),
-                ("Geometry (a, b, d, f)", [
-                    ("a - base along floor", _len(a)),
-                    ("b - attachment up wall", _len(b)),
-                    ("d - bracket offset", _len(d)),
-                    ("f - base height", _len(f)),
-                ]),
-                ("Cylinder", cyl_rows),
-            ]
-            if n_cyl <= 1:
-                cyl_note = ("All forces and the bore above are for ONE cylinder "
-                            "carrying the whole wall.")
-            else:
-                cyl_note = (f"All forces and the bore above are PER CYLINDER; the wall "
-                            f"load is shared across {n_cyl} cylinders (each carries "
-                            f"1/{n_cyl}).")
-            notes = [
-                cyl_note,
-                "Forces are static holding forces (no inertia, friction, wind, or flex).",
-                "Apply a factor of safety (>=1.5x is a common start).",
-                "Bore is the barrel inner diameter.",
-            ]
-            # Rendering figures to PNG needs an image backend (kaleido); if it is
-            # unavailable, still produce a numbers-only PDF rather than crash.
-            images = []
-            try:
-                images = [
-                    ("Side view", fig_geom.to_image(format="png", width=900, height=560, scale=2)),
-                    ("Piston force vs. wall angle",
-                     fig.to_image(format="png", width=900, height=380, scale=2)),
-                    ("Cylinder length vs. wall angle",
-                     fig_len.to_image(format="png", width=900, height=380, scale=2)),
-                ]
-            except Exception:
-                notes.append("Diagrams omitted (image rendering unavailable here).")
-            ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-            st.session_state["design_pdf"] = report.build_spec_pdf(
-                "Container Wall Actuator - Design Report",
-                f"{size_key} - {n_cyl} cylinder(s) - generated {ts}",
-                tables, images=images, notes=notes)
-    if st.session_state.get("design_pdf"):
-        st.download_button("Download PDF", st.session_state["design_pdf"],
-                           file_name="wall_actuator_design.pdf",
-                           mime="application/pdf")
+# Shared with Browse and Reverse via pdf_export so a spec sheet is available in
+# every view; pressure_bar/series (from the cylinder-sizing card) add the bore row.
+render_pdf_export(
+    key="design", size_key=size_key, n_cyl=n_cyl, x_cg=x_cg, z_cg=z_cg, mass=mass,
+    stroke_ratio_max=stroke_ratio, roof_clearance=roof_clearance,
+    a=a, b=b, d=d, f=f, peak_pc=peak_pc, L_min=L_min, L_max=L_max,
+    fig_geom=fig_geom, fig_force=fig, fig_len=fig_len,
+    pressure_bar=pressure_bar, series=series, stroke_tol=STROKE_TOL)
 
 # --- Animation driver -------------------------------------------------------
 # Streamlit has no background loop, so we animate by advancing the sweep angle

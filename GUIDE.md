@@ -59,7 +59,8 @@ usually dominates). **Bottom (strip):** *where within* each variable's range the
 force is most sensitive — redder = a small change there moves the force more,
 blank = over-center, and the **white dot** is your current value. So you see both
 *which* knob matters and whether you're sitting in a steep or a flat spot for it.
-Updates with your cg and mounting limits.
+Updates with your cg and mounting limits. The same panel appears in the Browse and
+Reverse inspectors, for whichever geometry you're looking at there.
 
 **Optimize to minimize — force or length.** In the Optimize tab you choose what
 to minimize:
@@ -107,7 +108,10 @@ instant results, no waiting.
      best few at each value and a wide spread of values instead.
 3. Click a row's **rank** to inspect it: its exact diagram (scrub the view angle),
    force curve, length curve, and — from the **Wall + load mass** slider — its
-   **total cylinder force** in kN.
+   **total cylinder force** in kN. The inspector carries the same tools as the
+   Designer: the **cylinder sizing (bore & pressure)** card, the **sensitivity**
+   panel (which dimension moves the force most, and where), and **Export design
+   (PDF)** for a one-page spec sheet of that configuration.
 4. The database is a grid, so its best row is only *near*-optimal. Press
    **Get the exact optimum** to run the optimizer once for your settings and get
    the true best geometry (and see how far the grid was off).
@@ -131,7 +135,11 @@ cylinder, and it finds the best geometry and the **biggest wall it can raise**.
    geometry** (a, b, d, f ranges) — e.g. keep the base height f low.
 5. It reports two mass numbers — the **safe max wall mass** (your force ÷ safety
    factor) and the **absolute cylinder max** (flat-out, no margin) — plus the
-   best-fitting geometry and the setup diagram + plots. Use the safe one.
+   best-fitting geometry and the setup diagram + plots. Use the safe one. Below the
+   plots it also shows the **sensitivity** panel for that geometry and an **Export
+   design (PDF)** — a one-page sizing sheet pairing the cylinder you entered with
+   the geometry it sized. (There's no bore-sizing card here: the cylinder is the
+   input, not an output.)
 
 Because the length window and geometry limits are hard constraints, **some
 cylinders simply won't fit any wall** — when that happens it says so and tells
@@ -148,7 +156,7 @@ stroke, a different retracted length, or a bigger container).
   both the Designer and Browse.
 - **Stroke / stroke ratio** — how much the cylinder extends; keep the ratio under
   your limit so a real cylinder can do it.
-- **Cylinder sizing — bore & pressure** (Designer) — turns the total force into an
+- **Cylinder sizing — bore & pressure** (Designer & Browse inspector) — turns the total force into an
   actual cylinder. Pick a **bore standard** (ISO metric, NFPA inch, or exact) and
   a **design pressure**; it shows the **required bore** — the barrel's inner
   diameter (`bore = √(4·force / π·pressure)`,

@@ -13,6 +13,9 @@ import streamlit as st
 from wall import (compute_F_piston, compute_cylinder_length,
                   compute_geometry, STROKE_RATIO_MAX)
 from optimize import CONTAINER_PRESETS, optimize_actuator
+from sensitivity_panel import render_sensitivity_panel
+from cylinder_panel import render_cylinder_sizing
+from pdf_export import render_pdf_export
 import lookup
 import lookup_build
 
@@ -307,6 +310,8 @@ def render_browse():
     st.caption(f"**Peak cylinder force at {mass:,.0f} kg:**")
     st.markdown(lookup.force_bar_html(bar_fill, lookup.BAR_NEUTRAL, f"{total_kn:.1f} kN"),
                 unsafe_allow_html=True)
+    # Same bore & pressure sizing card as the Designer, for the inspected force.
+    pressure_bar, series = render_cylinder_sizing(peak_pc, mass, key_prefix="lk_")
     # The setup diagram is the main thing to read — show it large, on top.
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
                            fig_height=560)
@@ -315,6 +320,20 @@ def render_browse():
     pf, pl = st.columns(2)
     pf.plotly_chart(ff, width="stretch")
     pl.plotly_chart(fl, width="stretch")
+
+    # Same sensitivity panel as the Designer, for the inspected geometry. The
+    # mounting-limit ranges bound each row; the inspected a, b, d, f mark the dot.
+    render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl)
+
+    # Same one-page PDF spec sheet as the Designer, for the inspected geometry.
+    render_pdf_export(
+        key="browse", size_key=size, n_cyl=n_cyl, x_cg=x_cg, z_cg=z_cg, mass=mass,
+        stroke_ratio_max=stroke_max, roof_clearance=clearance,
+        a=a, b=b, d=d, f=f, peak_pc=peak_pc,
+        L_min=float(res["L_min"][rank]), L_max=float(res["L_max"][rank]),
+        fig_geom=diag, fig_force=ff, fig_len=fl,
+        pressure_bar=pressure_bar, series=series,
+        file_name="wall_actuator_config.pdf")
 
     # --- Refine to the exact continuous optimum for this query ---
     st.subheader("Get the exact optimum")

@@ -322,3 +322,64 @@ def test_two_cylinder_mode_halves_designer_force():
     v1, v2 = float(one.split()[0]), float(two.split()[0])
     assert abs(v2 - v1 / 2) < 0.01
     assert any("per cylinder" in str(i.value) for i in at.info)
+
+
+def _all_markdown(at):
+    """Concatenate every markdown/caption string the run emitted."""
+    return " ".join(str(m.value) for m in at.markdown)
+
+
+def test_browse_inspector_has_shared_panels():
+    """The Browse inspector carries the Designer's cylinder-sizing and sensitivity
+    panels plus a PDF export, all wired through the shared helpers."""
+    import browse
+    browse.TABLE_RES = 12
+    at = AppTest.from_file(APP_PATH, default_timeout=120)
+    at.run()
+    at.session_state["view"] = "Browse configurations"
+    at.run()
+    assert not at.exception, at.exception
+    md = _all_markdown(at)
+    assert "Cylinder sizing" in md, "bore & pressure card missing from Browse"
+    assert "Sensitivity" in md, "sensitivity panel missing from Browse"
+    assert any(b.key == "browse_gen" for b in at.button), "Browse PDF export missing"
+
+
+def test_reverse_shows_sensitivity_and_pdf_when_feasible():
+    """For a feasible cylinder, the Reverse view renders the sensitivity panel and
+    a PDF export (which exercises the pressure_bar=None / no-stroke-cap branch)."""
+    import browse
+    browse.TABLE_RES = 12
+    at = AppTest.from_file(APP_PATH, default_timeout=120)
+    at.run()
+    at.session_state["view"] = "Size from a cylinder"
+    at.session_state["rv_units"] = "Metric"
+    at.session_state["rv_ret"] = 400.0        # wide window (0.4-2.9 m) so a
+    at.session_state["rv_stroke"] = 2500.0     #   geometry in the tiny grid fits
+    at.run()
+    assert not at.exception, at.exception
+    assert any(b.key == "reverse_gen" for b in at.button), "Reverse not feasible / no PDF"
+    assert "Sensitivity" in _all_markdown(at), "sensitivity panel missing from Reverse"
+
+
+@pytest.mark.parametrize("view,btn_key,pdf_key", [
+    ("Designer", "design_gen", "design_pdf"),
+    ("Browse configurations", "browse_gen", "browse_pdf"),
+])
+def test_pdf_export_generates_pdf_bytes(view, btn_key, pdf_key):
+    """Clicking Generate PDF routes through the shared pdf_export and produces real
+    PDF bytes (numbers-only if no image backend), in each view that offers it."""
+    import browse
+    browse.TABLE_RES = 12
+    at = AppTest.from_file(APP_PATH, default_timeout=120)
+    at.run()
+    if view != "Designer":
+        at.session_state["view"] = view
+        at.run()
+    assert not at.exception, at.exception
+    btn = next(b for b in at.button if b.key == btn_key)
+    btn.click().run()
+    assert not at.exception, at.exception
+    assert pdf_key in at.session_state, f"{view}: no PDF produced"
+    pdf = at.session_state[pdf_key]
+    assert pdf and bytes(pdf[:4]) == b"%PDF", f"{view}: not a PDF"
