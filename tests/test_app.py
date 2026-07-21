@@ -329,6 +329,28 @@ def _all_markdown(at):
     return " ".join(str(m.value) for m in at.markdown)
 
 
+def _pdf_text(pdf):
+    """Concatenate the text-show operators from a (compressed) fpdf2 PDF, so tests
+    can assert on the sheet's actual content."""
+    import re
+    import zlib
+    data = bytes(pdf)
+    shows = []
+    for m in re.finditer(rb"stream\r?\n(.*?)\r?\nendstream", data, re.DOTALL):
+        try:
+            txt = zlib.decompress(m.group(1)).decode("latin-1", "replace")
+            shows += re.findall(r"\((.*?)\)\s*Tj", txt)
+        except Exception:
+            pass
+    return " | ".join(shows)
+
+
+def _pdf_image_count(pdf):
+    """How many embedded images (the diagram + 2 curves) the PDF contains."""
+    import re
+    return len(re.findall(rb"/Subtype\s*/Image", bytes(pdf)))
+
+
 def test_browse_inspector_has_shared_panels():
     """The Browse inspector carries the Designer's cylinder-sizing and sensitivity
     panels plus a PDF export, all wired through the shared helpers."""
@@ -347,10 +369,12 @@ def test_browse_inspector_has_shared_panels():
 
 def test_reverse_shows_sensitivity_and_pdf_when_feasible():
     """For a feasible cylinder, the Reverse view renders the sensitivity panel and
-    a PDF export (which exercises the pressure_bar=None / no-stroke-cap branch)."""
+    a PDF export whose sheet is accurate: it reports BOTH the safe and absolute max
+    wall mass, is titled as a sizing report, and — since Reverse has no bore section
+    and no stroke-ratio cap — never says 'bore above' or '(over limit)'."""
     import browse
     browse.TABLE_RES = 12
-    at = AppTest.from_file(APP_PATH, default_timeout=120)
+    at = AppTest.from_file(APP_PATH, default_timeout=180)
     at.run()
     at.session_state["view"] = "Size from a cylinder"
     at.session_state["rv_units"] = "Metric"
@@ -358,8 +382,19 @@ def test_reverse_shows_sensitivity_and_pdf_when_feasible():
     at.session_state["rv_stroke"] = 2500.0     #   geometry in the tiny grid fits
     at.run()
     assert not at.exception, at.exception
-    assert any(b.key == "reverse_gen" for b in at.button), "Reverse not feasible / no PDF"
     assert "Sensitivity" in _all_markdown(at), "sensitivity panel missing from Reverse"
+    btn = next(b for b in at.button if b.key == "reverse_gen")
+    btn.click().run()
+    assert not at.exception, at.exception
+    pdf = at.session_state["reverse_pdf"]
+    assert bytes(pdf[:4]) == b"%PDF"
+    text = _pdf_text(pdf)
+    assert "Cylinder Sizing Report" in text
+    assert "Safe max wall mass" in text and "Absolute max wall mass" in text
+    assert "Cylinder push force" in text and "Cylinder length window" in text
+    assert "over limit" not in text, "Reverse has no stroke-ratio cap to be over"
+    assert "bore above" not in text, "Reverse has no bore section"
+    assert _pdf_image_count(pdf) == 3, "diagram + two curves should be embedded"
 
 
 @pytest.mark.parametrize("view,btn_key,pdf_key", [
@@ -368,7 +403,7 @@ def test_reverse_shows_sensitivity_and_pdf_when_feasible():
 ])
 def test_pdf_export_generates_pdf_bytes(view, btn_key, pdf_key):
     """Clicking Generate PDF routes through the shared pdf_export and produces real
-    PDF bytes (numbers-only if no image backend), in each view that offers it."""
+    PDF bytes with the three diagrams embedded, in each view that offers it."""
     import browse
     browse.TABLE_RES = 12
     at = AppTest.from_file(APP_PATH, default_timeout=120)
@@ -383,3 +418,4 @@ def test_pdf_export_generates_pdf_bytes(view, btn_key, pdf_key):
     assert pdf_key in at.session_state, f"{view}: no PDF produced"
     pdf = at.session_state[pdf_key]
     assert pdf and bytes(pdf[:4]) == b"%PDF", f"{view}: not a PDF"
+    assert _pdf_image_count(pdf) == 3, f"{view}: diagram + two curves should be embedded"

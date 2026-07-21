@@ -9,6 +9,7 @@ import streamlit as st
 
 from optimize import optimize_actuator
 import lookup
+import report
 from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
                     _diagram_figure, _force_length_figures, _sb_linked, _sb_range)
 from sensitivity_panel import render_sensitivity_panel
@@ -204,14 +205,15 @@ def render_reverse():
         fig_geom=diag, fig_force=ff, fig_len=fl,
         mass_label="Safe max wall mass", show_stroke_ratio_max=False,
         extra_setup_rows=[
-            ("Cylinder push force", f"{force_n / 1000:.1f} kN ({force_n / 4448.22:.2f} klbf)"),
+            ("Absolute max wall mass (no margin)", report.dual_mass(abs_mass)),
+            ("Cylinder push force", report.dual_force(force_n)),
             ("Safety factor", f"{safety:g}x"),
             ("Cylinder length window",
              f"{L_ret * len_fac:.1f}-{L_ext * len_fac:.1f} {len_u}"),
         ],
-        extra_notes=["Mass shown is the SAFE max this cylinder can raise "
-                     "(cylinder push force / safety factor / peak force per kg, "
-                     "summed over all cylinders)."],
+        extra_notes=["Safe max wall mass = cylinder push force / safety factor / "
+                     "peak force per kg, summed over all cylinders. The absolute "
+                     "max drops the safety factor — use the safe figure."],
         title="Container Wall Actuator - Cylinder Sizing Report",
         file_name="wall_actuator_sizing.pdf",
         caption="A one-page sheet: the cylinder you entered and the geometry it "

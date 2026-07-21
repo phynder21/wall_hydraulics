@@ -12,10 +12,72 @@ and the max-stroke-ratio row, and adds the cylinder it was sized from).
 import datetime
 
 import numpy as np
+import plotly.graph_objects as go
 import streamlit as st
 
 import report
 from lookup import (required_bore_mm, next_standard_bore_mm, pressure_for_bore_bar)
+
+# The on-screen figures use tiny margins (Streamlit gives them width); exported
+# standalone to PNG at a fixed size those margins clip the axis tick labels and
+# collide the axis titles. These helpers rebuild each figure for print — full
+# margins + automargin so nothing clips, centered titles, and (for the side view)
+# an equal-aspect canvas sized to the data so there's no wasted whitespace, plus a
+# legend naming each part since the sheet stands on its own.
+_PRINT_FONT = dict(family="sans-serif", size=15, color="#0F172A")
+_LEGEND_SKIP = {"post", "mounting post", ""}   # redundant support line, unnamed
+
+
+def _fig_bounds(fig):
+    """(x0, x1, y0, y1) data extent across every trace in the figure."""
+    xs, ys = [], []
+    for t in fig.data:
+        tx, ty = getattr(t, "x", None), getattr(t, "y", None)
+        if tx is not None:
+            xs += [v for v in tx if v is not None]
+        if ty is not None:
+            ys += [v for v in ty if v is not None]
+    if not xs or not ys:
+        return 0.0, 1.0, 0.0, 1.0
+    return min(xs), max(xs), min(ys), max(ys)
+
+
+def _prep_diagram(fig, base_w=1000):
+    """Equal-aspect side view for print. Returns (figure, width_px, height_px);
+    the height is sized to the data aspect so the drawing fills the canvas."""
+    f = go.Figure(fig)
+    for t in f.data:                                    # legend names each part
+        t.showlegend = (t.name or "") not in _LEGEND_SKIP
+    x0, x1, y0, y1 = _fig_bounds(f)
+    px = max((x1 - x0) * 0.06, 0.1)
+    py = max((y1 - y0) * 0.08, 0.1)
+    f.update_layout(
+        template="plotly_white", font=_PRINT_FONT, showlegend=True,
+        margin=dict(l=70, r=35, t=55, b=70),
+        title=dict(x=0.5, xanchor="center", font=dict(size=18)),
+        legend=dict(orientation="h", yanchor="top", y=-0.12, xanchor="center",
+                    x=0.5, font=dict(size=12)))
+    # x scales to y (equal aspect) with explicit padded ranges; clear any anchor
+    # the source figure set the other way so the two don't fight.
+    f.update_yaxes(scaleanchor=None, range=[y0 - py, y1 + py],
+                   title_standoff=12, ticks="outside", automargin=True)
+    f.update_xaxes(scaleanchor="y", scaleratio=1, range=[x0 - px, x1 + px],
+                   title_standoff=12, ticks="outside", automargin=True)
+    xspan, yspan = (x1 - x0 + 2 * px), (y1 - y0 + 2 * py)
+    height = int((base_w - 105) * (yspan / max(xspan, 1e-6))) + 170   # + margins/legend
+    return f, base_w, max(360, min(height, 900))
+
+
+def _prep_curve(fig, base_w=1000, height=430):
+    """A force/length curve for print: full margins (nothing clips), no legend."""
+    f = go.Figure(fig)
+    f.update_layout(
+        template="plotly_white", font=_PRINT_FONT, showlegend=False,
+        margin=dict(l=70, r=35, t=55, b=60),
+        title=dict(x=0.5, xanchor="center", font=dict(size=18)))
+    f.update_xaxes(title_standoff=12, ticks="outside", automargin=True)
+    f.update_yaxes(title_standoff=12, ticks="outside", automargin=True)
+    return f, base_w, height
 
 
 def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_max,
@@ -49,7 +111,8 @@ def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_ma
                 _tot = _force(force_n) if np.isfinite(force_n) else "n/a"
                 cyl_rows = [("Peak force per cylinder", _pk),
                             (f"Force per cylinder at {mass:,.0f} kg", _tot)]
-                if pressure_bar and np.isfinite(peak_pc) and pressure_bar > 0:
+                has_bore = bool(pressure_bar) and np.isfinite(peak_pc) and pressure_bar > 0
+                if has_bore:
                     bore = required_bore_mm(force_n, pressure_bar)
                     cyl_rows.append(("Design pressure", _press(pressure_bar)))
                     if series == "Exact (no rounding)":
@@ -66,10 +129,13 @@ def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_ma
                         else:
                             cyl_rows.append(("Required bore (diameter)",
                                              f"{_bore(bore)} (exceeds largest standard)"))
+                # Only flag "over limit" where there IS a stroke-ratio cap to be over
+                # (the Designer/Browse have one; Reverse is bounded by length instead).
+                over = " (over limit)" if (show_stroke_ratio_max and not stroke_ok) else ""
                 cyl_rows += [
                     ("Stroke (L_max - L_min)", _len(L_max - L_min)),
                     ("Retracted / extended", f"{_len(L_min)} / {_len(L_max)}"),
-                    ("Stroke ratio", f"{L_ratio:.2f}" + ("" if stroke_ok else " (over limit)")),
+                    ("Stroke ratio", f"{L_ratio:.2f}" + over),
                 ]
                 setup_rows = [
                     ("Container", size_key),
@@ -93,29 +159,33 @@ def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_ma
                     ]),
                     ("Cylinder", cyl_rows),
                 ]
+                # "the bore" only exists when the bore section was included.
+                what = "All forces and the bore above" if has_bore else "All forces above"
                 if n_cyl <= 1:
-                    cyl_note = ("All forces and the bore above are for ONE cylinder "
-                                "carrying the whole wall.")
+                    cyl_note = f"{what} are for ONE cylinder carrying the whole wall."
                 else:
-                    cyl_note = (f"All forces and the bore above are PER CYLINDER; the wall "
-                                f"load is shared across {n_cyl} cylinders (each carries "
-                                f"1/{n_cyl}).")
+                    cyl_note = (f"{what} are PER CYLINDER; the wall load is shared across "
+                                f"{n_cyl} cylinders (each carries 1/{n_cyl}).")
                 notes = [
                     cyl_note,
                     "Forces are static holding forces (no inertia, friction, wind, or flex).",
                     "Apply a factor of safety (>=1.5x is a common start).",
                     "Bore is the barrel inner diameter.",
                 ] + list(extra_notes)
-                # Rendering figures to PNG needs an image backend (kaleido); if it is
+                # Rebuild each figure for print (full margins, correct aspect) then
+                # render to PNG. Needs an image backend (kaleido); if it is
                 # unavailable, still produce a numbers-only PDF rather than crash.
                 images = []
                 try:
+                    dgeom, dw, dh = _prep_diagram(fig_geom)
+                    cforce, fw, fh = _prep_curve(fig_force)
+                    clen, lw, lh = _prep_curve(fig_len)
                     images = [
-                        ("Side view", fig_geom.to_image(format="png", width=900, height=560, scale=2)),
+                        ("Side view", dgeom.to_image(format="png", width=dw, height=dh, scale=2)),
                         ("Piston force vs. wall angle",
-                         fig_force.to_image(format="png", width=900, height=380, scale=2)),
+                         cforce.to_image(format="png", width=fw, height=fh, scale=2)),
                         ("Cylinder length vs. wall angle",
-                         fig_len.to_image(format="png", width=900, height=380, scale=2)),
+                         clen.to_image(format="png", width=lw, height=lh, scale=2)),
                     ]
                 except Exception:
                     notes.append("Diagrams omitted (image rendering unavailable here).")
