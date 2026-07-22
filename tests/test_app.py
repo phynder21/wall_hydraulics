@@ -393,6 +393,36 @@ def test_sensitivity_strip_paints_over_center_black():
     assert np.isfinite(black).any(), "impossible cells should be marked for the black layer"
 
 
+def test_peak_force_feasible_flags_rule_violations():
+    """peak_force_feasible reports (peak, feasible): a buildable geometry with no
+    rules is feasible; a too-tight stroke ratio makes it infeasible; over-center is
+    (NaN, False)."""
+    import numpy as np
+    from wall import peak_force_feasible
+    peak, feas = peak_force_feasible(0.6, 1.8, 0.1, 0.4, 1.2, 0.55)
+    assert np.isfinite(peak) and feas
+    _, tight = peak_force_feasible(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, stroke_max=1.05)
+    assert not tight, "stroke ratio 1.63 must fail a 1.05 cap"
+    p3, feas3 = peak_force_feasible(0.05, 0.1, 0.9, 2.5, 1.2, 0.55)
+    assert np.isnan(p3) and not feas3
+
+
+def test_sensitivity_strip_blacks_out_rule_violations():
+    """Passing the optimizer's rules (stroke ratio, roof, container) blacks out MORE
+    of the strip than over-center alone — the extra cells are the rule-breaking spots
+    that otherwise showed as misleading blue at the optimum."""
+    import numpy as np
+    import sensitivity_panel as sp
+    bounds = {"a": (0.05, 1.219), "b": (0.05, 2.9), "d": (0.0, 1.0), "f": (0.0, 2.9)}
+    _b1, s_norule, _c1 = sp.build_sensitivity_figures(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds)
+    _b2, s_rule, _c2 = sp.build_sensitivity_figures(
+        0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds,
+        stroke_max=1.2, roof_clearance=0.0, width=2.44, height=2.59)
+    black_no = int(np.isfinite(np.array(s_norule.data[1].z, dtype=float)).sum())
+    black_yes = int(np.isfinite(np.array(s_rule.data[1].z, dtype=float)).sum())
+    assert black_yes > black_no, "stroke/roof rules should black out extra cells"
+
+
 def test_browse_inspector_has_shared_panels():
     """The Browse inspector carries the Designer's cylinder-sizing and sensitivity
     panels plus a PDF export, all wired through the shared helpers."""

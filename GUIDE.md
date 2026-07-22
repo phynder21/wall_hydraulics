@@ -59,10 +59,13 @@ sweeps its allowed range (others fixed) — longer / redder = more impact overal
 to any position and the color is the peak force *there* as a **percent of your
 current force** — so **200% means double, 50% means half**. **White (100%) = same
 as now** (the **white dot** is your current value), **red = higher (worse)**,
-**blue = lower (better)**, **black = the cylinder goes over-center there (an
-impossible geometry)**. So you read straight off it *which* knob matters and
-exactly *how much* you'd gain or lose by moving it — e.g. "sliding `f` to the top
-takes the force to ~50% of now." It's a *local, one-at-a-time* read — each variable
+**blue = lower (better)**, **black = a spot the optimizer would reject** (over-center,
+over your stroke ratio, through the roof, or — in Reverse — outside the cylinder's
+length window). Because the black includes every rule-breaking spot, **after you
+optimize there is no blue left**: nothing feasible beats where you are. So you read
+straight off it *which* knob matters and exactly *how much* you'd gain or lose by
+moving it — e.g. "sliding `f` to the top takes the force to ~50% of now." It's a
+*local, one-at-a-time* read — each variable
 swept with the others fixed at your current values (so it doesn't capture
 interactions), which is why it updates as you move. Reflects your cg and mounting
 limits. The same panel appears in the Browse and Reverse inspectors, for whichever

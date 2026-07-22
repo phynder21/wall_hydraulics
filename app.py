@@ -816,7 +816,9 @@ if overlay:
 # Shared with the Browse inspector via sensitivity_panel so the two stay identical.
 sens_bar, sens_strip = render_sensitivity_panel(
     a, b, d, f, st.session_state["x_cg"], st.session_state["z_cg"], USER_BOUNDS,
-    n_cyl=n_cyl, template=PLOT_TEMPLATE, font=PLOT_FONT)
+    n_cyl=n_cyl, template=PLOT_TEMPLATE, font=PLOT_FONT,
+    stroke_max=stroke_ratio, roof_clearance=roof_clearance,
+    width=container_width, height=container_height)
 
 # --- Export the current design as a one-page PDF spec sheet ---
 # Shared with Browse and Reverse via pdf_export so a spec sheet is available in

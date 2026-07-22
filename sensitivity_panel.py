@@ -15,7 +15,7 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-from wall import force_profiles, peak_force
+from wall import force_feasibility_profiles, peak_force
 from lookup import force_color
 
 _LABELS = {"a": "a — base along floor", "b": "b — attach up wall",
@@ -28,28 +28,36 @@ SAMPLES = 81
 
 
 @st.cache_data(show_spinner=False)
-def _profiles(a, b, d, f, x_cg, z_cg, bounds_items, samples):
-    """Cached force-vs-value curves for each variable (the raw sensitivity data).
-    All args are hashable and part of the cache key (do NOT prefix with '_', which
-    st.cache_data EXCLUDES from the key), so the charts update when the design
-    changes but repeat reruns hit the cache. bounds_items is ((var, (lo, hi)), ...).
-    """
-    return force_profiles(a, b, d, f, x_cg, z_cg, dict(bounds_items), n=samples)
+def _profiles(a, b, d, f, x_cg, z_cg, bounds_items, samples, feas):
+    """Cached force-and-feasibility curves for each variable (the raw sensitivity
+    data). All args are hashable and part of the cache key (do NOT prefix with '_',
+    which st.cache_data EXCLUDES), so the charts update when the design OR its rules
+    change but repeat reruns hit the cache. bounds_items is ((var, (lo, hi)), ...);
+    feas is ((name, value), ...) of the optimizer rules (stroke_max, roof_clearance,
+    width, height, length_window)."""
+    return force_feasibility_profiles(a, b, d, f, x_cg, z_cg, dict(bounds_items),
+                                      n=samples, **dict(feas))
 
 
 def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
-                              template="plotly_white", font=None, samples=SAMPLES):
+                              template="plotly_white", font=None, samples=SAMPLES,
+                              stroke_max=None, roof_clearance=0.0, width=None,
+                              height=None, length_window=None):
     """Build the (tornado bar, within-range strip) figures and the caption text for
     one geometry. Shared by the on-screen panel and the PDF export so both show the
     identical charts. `bounds` maps each of a, b, d, f to its (min, max) range; the
-    current a, b, d, f mark the white dot. Returns (fig_bar, fig_strip, caption)."""
+    current a, b, d, f mark the white dot. The optimizer rules (stroke_max,
+    roof_clearance, width/height, length_window) black out geometries that would be
+    rejected. Returns (fig_bar, fig_strip, caption)."""
     bounds_items = tuple(sorted((k, tuple(bounds[k])) for k in ("a", "b", "d", "f")))
-    prof = _profiles(a, b, d, f, x_cg, z_cg, bounds_items, samples)
+    feas = (("stroke_max", stroke_max), ("roof_clearance", roof_clearance),
+            ("width", width), ("height", height), ("length_window", length_window))
+    prof = _profiles(a, b, d, f, x_cg, z_cg, bounds_items, samples, feas)
     cur = {"a": a, "b": b, "d": d, "f": f}
 
     def swing(v):
-        F = prof[v][1]
-        F = F[np.isfinite(F)]
+        _vals, F, _ok = prof[v]
+        F = F[np.isfinite(F)]           # raw leverage over the buildable range
         return float(F.max() - F.min()) / n_cyl if F.size else 0.0
 
     ordered = sorted(("a", "b", "d", "f"), key=swing)   # small→big (big on top)
@@ -70,25 +78,27 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
     # Bottom — within-range strip. Color = the peak force AT each position as a
     # percent of your CURRENT design's force, so you can read "move this variable
     # there and the force becomes 150% of what it is now." 100% (white) = same as
-    # now; red = higher (worse), blue = lower (better); black = over-center
-    # (impossible). It's a ratio, so it's mass- and cylinder-count-independent and
-    # each variable's range is normalized to 0->1 (one shared position axis).
+    # now; red = higher (worse), blue = lower (better). Any spot the OPTIMIZER would
+    # reject — over-center, over the stroke ratio, through the roof, or outside the
+    # cylinder length window — is painted black and left out of the color scale, so
+    # after optimizing there is no "better" (blue) spot the design isn't already
+    # using. It's a ratio, so it's mass- and cylinder-count-independent and each
+    # variable's range is normalized to 0->1 (one shared position axis).
     f0 = peak_force(a, b, d, f, x_cg, z_cg)              # current design's peak force
     if not (np.isfinite(f0) and f0 > 0):                 # current geometry impossible:
-        allF = [prof[v][1][np.isfinite(prof[v][1])] for v in ordered]
+        allF = [prof[v][1][prof[v][2] & np.isfinite(prof[v][1])] for v in ordered]
         allF = np.concatenate([s for s in allF if s.size]) if any(s.size for s in allF) \
             else np.array([1.0])
         f0 = float(np.nanmin(allF)) if allF.size else 1.0   # fall back to best in view
     pos = np.linspace(0.0, 1.0, prof["a"][0].size)
     Z, black, finite = [], [], []
     for v in ordered:
-        _vals, F = prof[v]
-        ratio = F / f0 * 100.0                           # % of the current force
+        _vals, F, ok = prof[v]
+        ratio = np.where(ok, F / f0 * 100.0, np.nan)     # colour only feasible spots
         Z.append(ratio)
         finite.append(ratio[np.isfinite(ratio)])
-        # Over-center / impossible samples: peak_force is NaN there. Mark them so
-        # the strip paints them black instead of leaving a misleading gap.
-        black.append(np.where(np.isfinite(F), np.nan, 1.0))
+        # Everything the optimizer rejects (over-center OR a broken rule) -> black.
+        black.append(np.where(ok, np.nan, 1.0))
     allr = np.concatenate([s for s in finite if s.size]) if any(s.size for s in finite) \
         else np.array([100.0])
     zmin = min(float(np.nanmin(allr)), 100.0)            # keep 100% (white) in range
@@ -103,7 +113,7 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
         colorscale=[[0.0, "#2166ac"], [0.5, "#f7f7f7"], [1.0, "#b2182b"]],
         colorbar=dict(title="Force vs.<br>current", ticksuffix="%",
                       thickness=10, len=0.9)))
-    # Over-center (impossible) cells on top of the diverging layer, in black.
+    # Rejected cells (over-center or rule-breaking) on top of the color layer, black.
     fig_strip.add_trace(go.Heatmap(
         x=pos, y=ys, z=black, zmin=0.0, zmax=1.0, showscale=False, hoverinfo="skip",
         colorscale=[[0.0, "#111111"], [1.0, "#111111"]]))
@@ -120,20 +130,25 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
                f"force if you moved *that* dimension to *that* position, as a **percent "
                f"of your current force** (so 200% = double, 50% = half). **White (100%) "
                f"= same as now**; **red = higher (worse)**, **blue = lower (better)**; "
-               f"**black = the cylinder goes over-center there (impossible)**. The "
+               f"**black = a spot the optimizer would reject** — over-center, over the "
+               f"stroke ratio, through the roof, or outside the cylinder's length. The "
                f"**white dot** is your current design (100%). Reflects your cg and "
                f"mounting limits.")
     return fig_bar, fig_strip, caption
 
 
 def render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
-                             template="plotly_white", font=None, samples=SAMPLES):
+                             template="plotly_white", font=None, samples=SAMPLES,
+                             stroke_max=None, roof_clearance=0.0, width=None,
+                             height=None, length_window=None):
     """Render the two-chart sensitivity panel for one geometry inside a bordered
     container (uses build_sensitivity_figures so the on-screen charts match the PDF).
     Returns (fig_bar, fig_strip) so the caller can embed the same charts in the PDF."""
     fig_bar, fig_strip, caption = build_sensitivity_figures(
         a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl,
-        template=template, font=font, samples=samples)
+        template=template, font=font, samples=samples, stroke_max=stroke_max,
+        roof_clearance=roof_clearance, width=width, height=height,
+        length_window=length_window)
     with st.container(border=True):
         st.markdown("**Sensitivity — which dimension moves the force most?**")
         st.plotly_chart(fig_bar, width="stretch")

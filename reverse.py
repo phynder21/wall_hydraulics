@@ -192,8 +192,10 @@ def render_reverse():
 
     # Same sensitivity panel as the Designer, for the best-fit geometry. The
     # output-geometry limits bound each row; the chosen a, b, d, f mark the dot.
-    sens_bar, sens_strip = render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds,
-                                                    n_cyl=n_cyl)
+    sens_bar, sens_strip = render_sensitivity_panel(
+        a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl,
+        roof_clearance=clearance, width=width, height=height,
+        length_window=(L_ret, L_ext))
 
     # One-page PDF sheet: the cylinder you entered + the geometry it sized. The
     # cylinder is the input here (no bore-sizing card), so the mass shown is the

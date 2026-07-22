@@ -323,8 +323,9 @@ def render_browse():
 
     # Same sensitivity panel as the Designer, for the inspected geometry. The
     # mounting-limit ranges bound each row; the inspected a, b, d, f mark the dot.
-    sens_bar, sens_strip = render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds,
-                                                    n_cyl=n_cyl)
+    sens_bar, sens_strip = render_sensitivity_panel(
+        a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl,
+        stroke_max=stroke_max, roof_clearance=clearance, width=width, height=height)
 
     # Same one-page PDF spec sheet as the Designer, for the inspected geometry.
     render_pdf_export(
