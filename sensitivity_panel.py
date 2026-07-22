@@ -106,11 +106,21 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
     curpos = [float(np.clip((cur[v] - bounds[v][0]) /
                             max(bounds[v][1] - bounds[v][0], 1e-9), 0.0, 1.0))
               for v in ordered]
+    # Colour scale spans exactly the data range [zmin, zmax] (so the key never shows
+    # a phantom blue band below the data). Put white exactly at 100% by placing it at
+    # its fractional position; blue only appears for spots below 100% (better) and
+    # red only above (worse). At an optimum zmin == 100, so the key is white -> red.
+    wpos = min(max((100.0 - zmin) / (zmax - zmin), 0.0), 1.0) if zmax > zmin else 0.0
+    if wpos <= 1e-3:                                     # nothing feasible beats current
+        strip_cs = [[0.0, "#f7f7f7"], [1.0, "#b2182b"]]          # white -> red
+    elif wpos >= 1.0 - 1e-3:                             # nothing feasible is worse
+        strip_cs = [[0.0, "#2166ac"], [1.0, "#f7f7f7"]]          # blue -> white
+    else:
+        strip_cs = [[0.0, "#2166ac"], [wpos, "#f7f7f7"], [1.0, "#b2182b"]]
     fig_strip = go.Figure(go.Heatmap(
-        x=pos, y=ys, z=Z, zmin=zmin, zmax=zmax, zmid=100.0,
-        # diverging, colorblind-safe, centered on 100% (your current force):
-        # blue = lower (better), white = same, red = higher (worse).
-        colorscale=[[0.0, "#2166ac"], [0.5, "#f7f7f7"], [1.0, "#b2182b"]],
+        x=pos, y=ys, z=Z, zmin=zmin, zmax=zmax,
+        # blue = lower (better), white = 100% (same), red = higher (worse).
+        colorscale=strip_cs,
         colorbar=dict(title="Force vs.<br>current", ticksuffix="%",
                       thickness=10, len=0.9)))
     # Rejected cells (over-center or rule-breaking) on top of the color layer, black.

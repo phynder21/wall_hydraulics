@@ -361,8 +361,14 @@ def test_sensitivity_strip_shows_force_relative_to_current():
     a, b, d, f = 0.6, 1.8, 0.1, 0.4
     _bar, strip, caption = sp.build_sensitivity_figures(a, b, d, f, 1.2, 0.55, bounds)
     heat = strip.data[0]                       # the diverging Heatmap trace
-    assert heat.zmid == pytest.approx(100.0), "scale must be centered on the current force"
     assert heat.zmin <= 100.0 <= heat.zmax, "100% (current) must be within the color range"
+    # White (#f7f7f7) sits exactly at the 100% fraction of [zmin, zmax], so blue is
+    # strictly below 100% and red strictly above — the key can't show phantom blue.
+    wpos = (100.0 - heat.zmin) / (heat.zmax - heat.zmin)
+    white = [c for pos_, c in heat.colorscale if c.lower() == "#f7f7f7"]
+    white_pos = [pos_ for pos_, c in heat.colorscale if c.lower() == "#f7f7f7"]
+    assert white, "the scale must have a white (100%) point"
+    assert min(abs(p - wpos) for p in white_pos) < 1e-2, "white must sit at the 100% mark"
     z = np.array(heat.z, dtype=float)
     finite = z[np.isfinite(z)]
     # This design is not optimal, so some spots are better (<100%) and some worse.
