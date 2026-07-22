@@ -192,7 +192,8 @@ def render_reverse():
 
     # Same sensitivity panel as the Designer, for the best-fit geometry. The
     # output-geometry limits bound each row; the chosen a, b, d, f mark the dot.
-    render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl)
+    sens_bar, sens_strip = render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds,
+                                                    n_cyl=n_cyl)
 
     # One-page PDF sheet: the cylinder you entered + the geometry it sized. The
     # cylinder is the input here (no bore-sizing card), so the mass shown is the
@@ -203,6 +204,7 @@ def render_reverse():
         a=a, b=b, d=d, f=f, peak_pc=peak / n_cyl,
         L_min=float(res["L_min"][0]), L_max=float(res["L_max"][0]),
         fig_geom=diag, fig_force=ff, fig_len=fl,
+        fig_sens_bar=sens_bar, fig_sens_strip=sens_strip,
         mass_label="Safe max wall mass", show_stroke_ratio_max=False,
         extra_setup_rows=[
             ("Absolute max wall mass (no margin)", report.dual_mass(abs_mass)),

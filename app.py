@@ -814,18 +814,20 @@ if overlay:
 
 # --- Sensitivity: which dimension moves the force most, and WHERE in its range ---
 # Shared with the Browse inspector via sensitivity_panel so the two stay identical.
-render_sensitivity_panel(a, b, d, f, st.session_state["x_cg"],
-                         st.session_state["z_cg"], USER_BOUNDS, n_cyl=n_cyl,
-                         inches=inches, template=PLOT_TEMPLATE, font=PLOT_FONT)
+sens_bar, sens_strip = render_sensitivity_panel(
+    a, b, d, f, st.session_state["x_cg"], st.session_state["z_cg"], USER_BOUNDS,
+    n_cyl=n_cyl, inches=inches, template=PLOT_TEMPLATE, font=PLOT_FONT)
 
 # --- Export the current design as a one-page PDF spec sheet ---
 # Shared with Browse and Reverse via pdf_export so a spec sheet is available in
-# every view; pressure_bar/series (from the cylinder-sizing card) add the bore row.
+# every view; pressure_bar/series (from the cylinder-sizing card) add the bore row,
+# and the sensitivity charts above are embedded too.
 render_pdf_export(
     key="design", size_key=size_key, n_cyl=n_cyl, x_cg=x_cg, z_cg=z_cg, mass=mass,
     stroke_ratio_max=stroke_ratio, roof_clearance=roof_clearance,
     a=a, b=b, d=d, f=f, peak_pc=peak_pc, L_min=L_min, L_max=L_max,
     fig_geom=fig_geom, fig_force=fig, fig_len=fig_len,
+    fig_sens_bar=sens_bar, fig_sens_strip=sens_strip,
     pressure_bar=pressure_bar, series=series, stroke_tol=STROKE_TOL)
 
 # --- Animation driver -------------------------------------------------------

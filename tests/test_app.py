@@ -394,7 +394,9 @@ def test_reverse_shows_sensitivity_and_pdf_when_feasible():
     assert "Cylinder push force" in text and "Cylinder length window" in text
     assert "over limit" not in text, "Reverse has no stroke-ratio cap to be over"
     assert "bore above" not in text, "Reverse has no bore section"
-    assert _pdf_image_count(pdf) == 3, "diagram + two curves should be embedded"
+    assert "Sensitivity" in text, "sensitivity charts missing from the Reverse PDF"
+    # Side view + force + length curves + the two sensitivity charts.
+    assert _pdf_image_count(pdf) == 5, "diagram, two curves and two sensitivity charts"
 
 
 @pytest.mark.parametrize("view,btn_key,pdf_key", [
@@ -418,4 +420,5 @@ def test_pdf_export_generates_pdf_bytes(view, btn_key, pdf_key):
     assert pdf_key in at.session_state, f"{view}: no PDF produced"
     pdf = at.session_state[pdf_key]
     assert pdf and bytes(pdf[:4]) == b"%PDF", f"{view}: not a PDF"
-    assert _pdf_image_count(pdf) == 3, f"{view}: diagram + two curves should be embedded"
+    # Side view + force + length curves + the two sensitivity charts.
+    assert _pdf_image_count(pdf) == 5, f"{view}: five figures should be embedded"

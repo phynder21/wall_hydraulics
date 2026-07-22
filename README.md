@@ -159,8 +159,9 @@ The **Export design (PDF)** panel downloads a one-page spec sheet for the curren
 configuration — setup (container, cg, mass, constraints), the `a, b, d, f`
 geometry, the cylinder spec (peak/total force, required bore, standard size and
 its pressure, stroke, retracted/extended length, stroke ratio), the side-view
-diagram and both curves, and the standard sizing caveats. Click **Generate PDF**
-to capture the design as it stands, then **Download PDF**.
+diagram, both curves, the two **sensitivity** charts (tornado + within-range
+strip), and the standard sizing caveats. Click **Generate PDF** to capture the
+design as it stands, then **Download PDF**.
 
 The same export lives in the **Browse** inspector (for the configuration you're
 viewing) and in **Reverse** (a cylinder-sizing sheet: the cylinder you entered

@@ -323,7 +323,8 @@ def render_browse():
 
     # Same sensitivity panel as the Designer, for the inspected geometry. The
     # mounting-limit ranges bound each row; the inspected a, b, d, f mark the dot.
-    render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl)
+    sens_bar, sens_strip = render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds,
+                                                    n_cyl=n_cyl)
 
     # Same one-page PDF spec sheet as the Designer, for the inspected geometry.
     render_pdf_export(
@@ -332,6 +333,7 @@ def render_browse():
         a=a, b=b, d=d, f=f, peak_pc=peak_pc,
         L_min=float(res["L_min"][rank]), L_max=float(res["L_max"][rank]),
         fig_geom=diag, fig_force=ff, fig_len=fl,
+        fig_sens_bar=sens_bar, fig_sens_strip=sens_strip,
         pressure_bar=pressure_bar, series=series,
         file_name="wall_actuator_config.pdf")
 

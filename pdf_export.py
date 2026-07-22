@@ -80,9 +80,22 @@ def _prep_curve(fig, base_w=1000, height=430):
     return f, base_w, height
 
 
+def _prep_panel(fig, base_w=1000, height=340):
+    """A sensitivity chart (tornado bar / within-range strip) for print: full
+    margins + automargin so the long y-labels and colorbar aren't clipped."""
+    f = go.Figure(fig)
+    f.update_layout(template="plotly_white", font=_PRINT_FONT,
+                    margin=dict(l=75, r=40, t=20, b=60))
+    f.update_xaxes(title_standoff=12, ticks="outside", automargin=True)
+    f.update_yaxes(ticks="outside", automargin=True)
+    return f, base_w, height
+
+
 def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_max,
                       roof_clearance, a, b, d, f, peak_pc, L_min, L_max,
-                      fig_geom, fig_force, fig_len, pressure_bar=None, series=None,
+                      fig_geom, fig_force, fig_len,
+                      fig_sens_bar=None, fig_sens_strip=None,
+                      pressure_bar=None, series=None,
                       mass_label="Wall + load mass", extra_setup_rows=(),
                       extra_notes=(), stroke_tol=1e-9, show_stroke_ratio_max=True,
                       title="Container Wall Actuator - Design Report",
@@ -187,6 +200,16 @@ def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_ma
                         ("Cylinder length vs. wall angle",
                          clen.to_image(format="png", width=lw, height=lh, scale=2)),
                     ]
+                    # Sensitivity charts (tornado + within-range strip), if provided.
+                    if fig_sens_bar is not None and fig_sens_strip is not None:
+                        sb, sw, sh = _prep_panel(fig_sens_bar, height=300)
+                        ss, ssw, ssh = _prep_panel(fig_sens_strip, height=360)
+                        images += [
+                            ("Sensitivity - each dimension's total impact on peak force",
+                             sb.to_image(format="png", width=sw, height=sh, scale=2)),
+                            ("Sensitivity - where in each range the force is most sensitive",
+                             ss.to_image(format="png", width=ssw, height=ssh, scale=2)),
+                        ]
                 except Exception:
                     notes.append("Diagrams omitted (image rendering unavailable here).")
                 ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
