@@ -51,23 +51,22 @@ total force.
 4. Press **Optimize** and the tool finds the a, b, d, f that minimize peak force
    for your setup, and lists a few near-optimal alternatives you can click to load.
 
-**Sensitivity — which dimension moves the force most, where, and which way.** Two
-aligned charts below the plots, for your *current* design. **Top (tornado bars):**
-how much the peak force swings as each of `a, b, d, f` sweeps its allowed range
-(others fixed) — longer / redder = more impact overall (e.g. base height `f`
-usually dominates). **Bottom (strip):** the **signed** local slope — the % the
-force changes per **+1 cm** (or +1 in) you *increase* that dimension. **Blue =
-increasing it lowers the force** (nudge it up to cut force); **red = increasing it
-raises the force** (nudge it down); deeper = faster; white = flat; **black = the
-cylinder goes over-center there (an impossible geometry)**; the **white dot** is
-your current value. So you see *which* knob matters, whether you're in a steep or
-flat spot, and **which way to move** to reduce the force. (After you optimize,
-any remaining blue points toward a mounting limit the design is already pinned
-against — the force would keep dropping if that limit let it.)
-It's a *local, one-at-a-time* read — each variable swept with the others fixed at
-your current values (so it doesn't capture interactions), which is why it updates
-as you move. Reflects your cg and mounting limits. The same panel appears in the
-Browse and Reverse inspectors, for whichever geometry you're looking at there.
+**Sensitivity — which dimension moves the force most, and how much better or worse
+each spot is.** Two aligned charts below the plots, for your *current* design.
+**Top (tornado bars):** how much the peak force swings as each of `a, b, d, f`
+sweeps its allowed range (others fixed) — longer / redder = more impact overall
+(e.g. base height `f` usually dominates). **Bottom (strip):** move that dimension
+to any position and the color is the peak force *there* as a **percent of your
+current force** — so **200% means double, 50% means half**. **White (100%) = same
+as now** (the **white dot** is your current value), **red = higher (worse)**,
+**blue = lower (better)**, **black = the cylinder goes over-center there (an
+impossible geometry)**. So you read straight off it *which* knob matters and
+exactly *how much* you'd gain or lose by moving it — e.g. "sliding `f` to the top
+takes the force to ~50% of now." It's a *local, one-at-a-time* read — each variable
+swept with the others fixed at your current values (so it doesn't capture
+interactions), which is why it updates as you move. Reflects your cg and mounting
+limits. The same panel appears in the Browse and Reverse inspectors, for whichever
+geometry you're looking at there.
 
 **Optimize to minimize — force or length.** In the Optimize tab you choose what
 to minimize:

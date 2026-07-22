@@ -351,21 +351,23 @@ def _pdf_image_count(pdf):
     return len(re.findall(rb"/Subtype\s*/Image", bytes(pdf)))
 
 
-def test_sensitivity_strip_is_signed_and_directional():
-    """The within-range strip carries the SIGNED local slope (direction), on a
-    symmetric diverging scale, so blue/red says which way to move to cut the force
-    — not just the magnitude."""
+def test_sensitivity_strip_shows_force_relative_to_current():
+    """The within-range strip colors each spot by the peak force THERE as a percent
+    of the current design's force: centered on 100% (white dot = current), with
+    higher-force (worse) spots >100% and lower-force (better) spots <100%."""
     import numpy as np
     import sensitivity_panel as sp
     bounds = {"a": (0.05, 1.2), "b": (0.05, 2.5), "d": (0.0, 1.0), "f": (0.0, 2.5)}
-    _bar, strip, caption = sp.build_sensitivity_figures(
-        0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds)
+    a, b, d, f = 0.6, 1.8, 0.1, 0.4
+    _bar, strip, caption = sp.build_sensitivity_figures(a, b, d, f, 1.2, 0.55, bounds)
     heat = strip.data[0]                       # the diverging Heatmap trace
+    assert heat.zmid == pytest.approx(100.0), "scale must be centered on the current force"
+    assert heat.zmin <= 100.0 <= heat.zmax, "100% (current) must be within the color range"
     z = np.array(heat.z, dtype=float)
     finite = z[np.isfinite(z)]
-    assert (finite < 0).any() and (finite > 0).any(), "strip must show both directions"
-    assert heat.zmin == -heat.zmax and heat.zmax > 0, "scale must be symmetric about 0"
-    assert "increasing it lowers the force" in caption
+    # This design is not optimal, so some spots are better (<100%) and some worse.
+    assert (finite < 100).any() and (finite > 100).any()
+    assert "percent of your current force" in caption and "200%" in caption
 
 
 def test_peak_force_flags_over_center_as_impossible():

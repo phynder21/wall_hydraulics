@@ -15,7 +15,7 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-from wall import force_profiles
+from wall import force_profiles, peak_force
 from lookup import force_color
 
 _LABELS = {"a": "a — base along floor", "b": "b — attach up wall",
@@ -38,8 +38,7 @@ def _profiles(a, b, d, f, x_cg, z_cg, bounds_items, samples):
 
 
 def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
-                              inches=False, template="plotly_white", font=None,
-                              samples=SAMPLES):
+                              template="plotly_white", font=None, samples=SAMPLES):
     """Build the (tornado bar, within-range strip) figures and the caption text for
     one geometry. Shared by the on-screen panel and the PDF export so both show the
     identical charts. `bounds` maps each of a, b, d, f to its (min, max) range; the
@@ -68,38 +67,41 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
         xaxis_title=f"Total peak-force swing (N/kg{' per cyl' if n_cyl > 1 else ''})",
         xaxis=dict(range=[0, mx * 1.18]), margin=dict(l=10, r=10, t=6, b=30))
 
-    # Bottom — within-range strip. Color = the SIGNED % the peak force changes per
-    # +1 step (1 cm metric / 1 in imperial) you INCREASE that variable, i.e.
-    # (dForce/dx) x step / force x 100. The sign is the direction: blue = increasing
-    # the dimension lowers the force (nudge it up to cut force), red = increasing it
-    # raises the force (nudge it down). Intensity = how fast. Mass- and cylinder-
-    # count-independent (a ratio); symmetric scale so rows and directions compare.
-    step_m, step_lbl = (0.0254, "1 in") if inches else (0.01, "1 cm")
+    # Bottom — within-range strip. Color = the peak force AT each position as a
+    # percent of your CURRENT design's force, so you can read "move this variable
+    # there and the force becomes 150% of what it is now." 100% (white) = same as
+    # now; red = higher (worse), blue = lower (better); black = over-center
+    # (impossible). It's a ratio, so it's mass- and cylinder-count-independent and
+    # each variable's range is normalized to 0->1 (one shared position axis).
+    f0 = peak_force(a, b, d, f, x_cg, z_cg)              # current design's peak force
+    if not (np.isfinite(f0) and f0 > 0):                 # current geometry impossible:
+        allF = [prof[v][1][np.isfinite(prof[v][1])] for v in ordered]
+        allF = np.concatenate([s for s in allF if s.size]) if any(s.size for s in allF) \
+            else np.array([1.0])
+        f0 = float(np.nanmin(allF)) if allF.size else 1.0   # fall back to best in view
     pos = np.linspace(0.0, 1.0, prof["a"][0].size)
-    Z, mags, black = [], [], []
+    Z, black, finite = [], [], []
     for v in ordered:
-        vals, F = prof[v]
-        with np.errstate(invalid="ignore", divide="ignore"):
-            pct = np.gradient(F, vals) * step_m / F * 100.0   # SIGNED % per +step
-        pct = np.where(np.isfinite(F) & (F > 0.0), pct, np.nan)
-        Z.append(pct)
-        mags.append(np.abs(pct[np.isfinite(pct)]))
+        _vals, F = prof[v]
+        ratio = F / f0 * 100.0                           # % of the current force
+        Z.append(ratio)
+        finite.append(ratio[np.isfinite(ratio)])
         # Over-center / impossible samples: peak_force is NaN there. Mark them so
         # the strip paints them black instead of leaving a misleading gap.
         black.append(np.where(np.isfinite(F), np.nan, 1.0))
-    allmag = np.concatenate([s for s in mags if s.size]) if any(s.size for s in mags) \
-        else np.array([1.0])
-    zlim = float(np.nanpercentile(allmag, 95)) or 1.0   # symmetric clip so a near-
-    zlim = zlim if zlim > 0 else 1.0                    #   singular spike doesn't wash out
+    allr = np.concatenate([s for s in finite if s.size]) if any(s.size for s in finite) \
+        else np.array([100.0])
+    zmin = min(float(np.nanmin(allr)), 100.0)            # keep 100% (white) in range
+    zmax = max(float(np.nanpercentile(allr, 95)), 101.0)  # clip a near-singular red spike
     curpos = [float(np.clip((cur[v] - bounds[v][0]) /
                             max(bounds[v][1] - bounds[v][0], 1e-9), 0.0, 1.0))
               for v in ordered]
     fig_strip = go.Figure(go.Heatmap(
-        x=pos, y=ys, z=Z, zmin=-zlim, zmax=zlim,
-        # diverging, colorblind-safe: blue = force drops (good to increase),
-        # white = flat, red = force rises (good to decrease).
+        x=pos, y=ys, z=Z, zmin=zmin, zmax=zmax, zmid=100.0,
+        # diverging, colorblind-safe, centered on 100% (your current force):
+        # blue = lower (better), white = same, red = higher (worse).
         colorscale=[[0.0, "#2166ac"], [0.5, "#f7f7f7"], [1.0, "#b2182b"]],
-        colorbar=dict(title=f"Force change<br>per +{step_lbl}", ticksuffix="%",
+        colorbar=dict(title="Force vs.<br>current", ticksuffix="%",
                       thickness=10, len=0.9)))
     # Over-center (impossible) cells on top of the diverging layer, in black.
     fig_strip.add_trace(go.Heatmap(
@@ -114,24 +116,23 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
                    range=[0.0, 1.0]),
         margin=dict(l=10, r=10, t=6, b=40))
     caption = (f"**Top:** each dimension's total impact (bar length + color). "
-               f"**Bottom — which way to move.** Color = the **signed** % the peak "
-               f"force changes per **+{step_lbl}** you *increase* that dimension. "
-               f"**Blue = increasing it lowers the force** (nudge it up to cut force); "
-               f"**red = increasing it raises the force** (nudge it down). Deeper = "
-               f"faster; white = flat; **black = the cylinder goes over-center there "
-               f"(impossible)**. The **white dot** is your current value. Follows the "
-               f"m/in units toggle; reflects your cg and mounting limits.")
+               f"**Bottom — how much better or worse each spot is.** Color = the peak "
+               f"force if you moved *that* dimension to *that* position, as a **percent "
+               f"of your current force** (so 200% = double, 50% = half). **White (100%) "
+               f"= same as now**; **red = higher (worse)**, **blue = lower (better)**; "
+               f"**black = the cylinder goes over-center there (impossible)**. The "
+               f"**white dot** is your current design (100%). Reflects your cg and "
+               f"mounting limits.")
     return fig_bar, fig_strip, caption
 
 
 def render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
-                             inches=False, template="plotly_white", font=None,
-                             samples=SAMPLES):
+                             template="plotly_white", font=None, samples=SAMPLES):
     """Render the two-chart sensitivity panel for one geometry inside a bordered
     container (uses build_sensitivity_figures so the on-screen charts match the PDF).
     Returns (fig_bar, fig_strip) so the caller can embed the same charts in the PDF."""
     fig_bar, fig_strip, caption = build_sensitivity_figures(
-        a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl, inches=inches,
+        a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl,
         template=template, font=font, samples=samples)
     with st.container(border=True):
         st.markdown("**Sensitivity — which dimension moves the force most?**")

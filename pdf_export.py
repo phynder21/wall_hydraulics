@@ -207,7 +207,7 @@ def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_ma
                         images += [
                             ("Sensitivity - each dimension's total impact on peak force",
                              sb.to_image(format="png", width=sw, height=sh, scale=2)),
-                            ("Sensitivity - where in each range the force is most sensitive",
+                            ("Sensitivity - force at each position as a % of the current design",
                              ss.to_image(format="png", width=ssw, height=ssh, scale=2)),
                         ]
                 except Exception:
