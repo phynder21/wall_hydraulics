@@ -117,12 +117,18 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
         strip_cs = [[0.0, "#2166ac"], [1.0, "#f7f7f7"]]          # blue -> white
     else:
         strip_cs = [[0.0, "#2166ac"], [wpos, "#f7f7f7"], [1.0, "#b2182b"]]
+    # A larger key with ticks anchored on 100% (the current design) so the reference
+    # is always labelled; the step keeps the tick count readable across any range.
+    dtick = next((s for s in (10, 20, 25, 50, 100, 200, 500)
+                  if (zmax - zmin) / s <= 6), 1000)
     fig_strip = go.Figure(go.Heatmap(
         x=pos, y=ys, z=Z, zmin=zmin, zmax=zmax,
         # blue = lower (better), white = 100% (same), red = higher (worse).
         colorscale=strip_cs,
-        colorbar=dict(title="Force vs.<br>current", ticksuffix="%",
-                      thickness=10, len=0.9)))
+        colorbar=dict(title=dict(text="Force vs.<br>current", side="top"),
+                      ticksuffix="%", tick0=100.0, dtick=dtick,
+                      ticks="outside", ticklen=6, tickwidth=1.2,
+                      thickness=20, len=1.0, outlinewidth=1, outlinecolor="#888")))
     # Rejected cells (over-center or rule-breaking) on top of the color layer, black.
     fig_strip.add_trace(go.Heatmap(
         x=pos, y=ys, z=black, zmin=0.0, zmax=1.0, showscale=False, hoverinfo="skip",
