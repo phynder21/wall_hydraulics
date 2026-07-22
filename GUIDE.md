@@ -58,9 +58,12 @@ how much the peak force swings as each of `a, b, d, f` sweeps its allowed range
 usually dominates). **Bottom (strip):** the **signed** local slope — the % the
 force changes per **+1 cm** (or +1 in) you *increase* that dimension. **Blue =
 increasing it lowers the force** (nudge it up to cut force); **red = increasing it
-raises the force** (nudge it down); deeper = faster; white = flat or over-center;
-the **white dot** is your current value. So you see *which* knob matters, whether
-you're in a steep or flat spot, and **which way to move** to reduce the force.
+raises the force** (nudge it down); deeper = faster; white = flat; **black = the
+cylinder goes over-center there (an impossible geometry)**; the **white dot** is
+your current value. So you see *which* knob matters, whether you're in a steep or
+flat spot, and **which way to move** to reduce the force. (After you optimize,
+any remaining blue points toward a mounting limit the design is already pinned
+against — the force would keep dropping if that limit let it.)
 It's a *local, one-at-a-time* read — each variable swept with the others fixed at
 your current values (so it doesn't capture interactions), which is why it updates
 as you move. Reflects your cg and mounting limits. The same panel appears in the

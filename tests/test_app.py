@@ -360,12 +360,35 @@ def test_sensitivity_strip_is_signed_and_directional():
     bounds = {"a": (0.05, 1.2), "b": (0.05, 2.5), "d": (0.0, 1.0), "f": (0.0, 2.5)}
     _bar, strip, caption = sp.build_sensitivity_figures(
         0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds)
-    heat = strip.data[0]                       # the Heatmap trace
+    heat = strip.data[0]                       # the diverging Heatmap trace
     z = np.array(heat.z, dtype=float)
     finite = z[np.isfinite(z)]
     assert (finite < 0).any() and (finite > 0).any(), "strip must show both directions"
     assert heat.zmin == -heat.zmax and heat.zmax > 0, "scale must be symmetric about 0"
     assert "increasing it lowers the force" in caption
+
+
+def test_peak_force_flags_over_center_as_impossible():
+    """Over-center geometries (the cylinder line crosses the hinge, force diverges)
+    return NaN, not a masked finite value; buildable ones stay finite and clipped."""
+    import numpy as np
+    from wall import peak_force
+    assert np.isnan(peak_force(0.05, 0.1, 0.9, 2.5, 1.2, 0.55)), "over-center must be NaN"
+    assert np.isfinite(peak_force(0.6, 1.8, 0.1, 0.4, 1.2, 0.55)), "buildable stays finite"
+
+
+def test_sensitivity_strip_paints_over_center_black():
+    """When a variable's range contains over-center geometries, the strip carries a
+    black-mask heatmap (data[1]) with cells there — so impossible spots read as
+    black, not as a misleading low-force (blue) gap."""
+    import numpy as np
+    import sensitivity_panel as sp
+    # Wide ranges so each variable's sweep passes through an over-center region.
+    bounds = {"a": (0.05, 1.219), "b": (0.05, 2.9), "d": (0.0, 1.0), "f": (0.0, 2.9)}
+    _bar, strip, _cap = sp.build_sensitivity_figures(
+        0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds)
+    black = np.array(strip.data[1].z, dtype=float)     # the black-mask heatmap
+    assert np.isfinite(black).any(), "impossible cells should be marked for the black layer"
 
 
 def test_browse_inspector_has_shared_panels():

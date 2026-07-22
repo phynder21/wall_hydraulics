@@ -76,7 +76,7 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
     # count-independent (a ratio); symmetric scale so rows and directions compare.
     step_m, step_lbl = (0.0254, "1 in") if inches else (0.01, "1 cm")
     pos = np.linspace(0.0, 1.0, prof["a"][0].size)
-    Z, mags = [], []
+    Z, mags, black = [], [], []
     for v in ordered:
         vals, F = prof[v]
         with np.errstate(invalid="ignore", divide="ignore"):
@@ -84,6 +84,9 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
         pct = np.where(np.isfinite(F) & (F > 0.0), pct, np.nan)
         Z.append(pct)
         mags.append(np.abs(pct[np.isfinite(pct)]))
+        # Over-center / impossible samples: peak_force is NaN there. Mark them so
+        # the strip paints them black instead of leaving a misleading gap.
+        black.append(np.where(np.isfinite(F), np.nan, 1.0))
     allmag = np.concatenate([s for s in mags if s.size]) if any(s.size for s in mags) \
         else np.array([1.0])
     zlim = float(np.nanpercentile(allmag, 95)) or 1.0   # symmetric clip so a near-
@@ -98,6 +101,10 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
         colorscale=[[0.0, "#2166ac"], [0.5, "#f7f7f7"], [1.0, "#b2182b"]],
         colorbar=dict(title=f"Force change<br>per +{step_lbl}", ticksuffix="%",
                       thickness=10, len=0.9)))
+    # Over-center (impossible) cells on top of the diverging layer, in black.
+    fig_strip.add_trace(go.Heatmap(
+        x=pos, y=ys, z=black, zmin=0.0, zmax=1.0, showscale=False, hoverinfo="skip",
+        colorscale=[[0.0, "#111111"], [1.0, "#111111"]]))
     fig_strip.add_trace(go.Scatter(
         x=curpos, y=ys, mode="markers", hoverinfo="skip", showlegend=False,
         marker=dict(color="white", size=10, line=dict(color="#111", width=1.6))))
@@ -111,9 +118,9 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
                f"force changes per **+{step_lbl}** you *increase* that dimension. "
                f"**Blue = increasing it lowers the force** (nudge it up to cut force); "
                f"**red = increasing it raises the force** (nudge it down). Deeper = "
-               f"faster; white = flat or over-center. The **white dot** is your current "
-               f"value. Follows the m/in units toggle; reflects your cg and mounting "
-               f"limits.")
+               f"faster; white = flat; **black = the cylinder goes over-center there "
+               f"(impossible)**. The **white dot** is your current value. Follows the "
+               f"m/in units toggle; reflects your cg and mounting limits.")
     return fig_bar, fig_strip, caption
 
 

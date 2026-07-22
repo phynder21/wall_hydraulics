@@ -66,14 +66,27 @@ def compute_F_piston(theta, a=0.5, b=1.0, d=0.1, f=0.5,
 
 
 def peak_force(a, b, d, f, x_cg=1.2, z_cg=0.55, n_theta=200, cap=50.0):
-    """Peak |piston force| (N/kg) over the 0-90 deg swing, ignoring near-singular
-    samples above `cap` (the same rule the app uses for its Peak-force metric).
-    Returns NaN if the geometry is singular across the whole swing."""
+    """Peak |piston force| (N/kg) over the 0-90 deg swing for a BUILDABLE geometry.
+
+    Returns NaN when the cylinder goes **over-center** anywhere in the swing — its
+    line of action crosses the hinge, sin(beta - phi) changes sign, and the required
+    force diverges. Such a geometry is physically impossible, so it must not report a
+    finite force (the same over-center test the optimizer uses, see optimize.py).
+
+    For a buildable geometry the force stays bounded; each sample is *clipped* to
+    `cap` (not dropped) so a near-over-center spike can't dominate, yet moving toward
+    the boundary still reads as the force RISING rather than a spurious dip."""
     theta = np.linspace(0.0, np.pi / 2, n_theta)
+    c, s = np.cos(theta), np.sin(theta)
+    x_att = b * c - d * s
+    z_att = b * s + d * c
+    m_arm = np.sin(np.arctan2(z_att, x_att) - np.arctan2(z_att - f, x_att + a))
+    if m_arm.min() < 0.0 < m_arm.max():          # sign flip -> over-center -> impossible
+        return float("nan")
     with np.errstate(divide="ignore", invalid="ignore"):
-        F = compute_F_piston(theta, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
-    F = F[np.isfinite(F) & (np.abs(F) <= cap)]
-    return float(np.max(np.abs(F))) if F.size else float("nan")
+        F = np.abs(compute_F_piston(theta, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg))
+    F = F[np.isfinite(F)]
+    return float(np.minimum(F, cap).max()) if F.size else float("nan")
 
 
 def force_profiles(a, b, d, f, x_cg, z_cg, bounds, n=41):
