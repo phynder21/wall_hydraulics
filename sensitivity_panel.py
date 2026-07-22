@@ -68,32 +68,35 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
         xaxis_title=f"Total peak-force swing (N/kg{' per cyl' if n_cyl > 1 else ''})",
         xaxis=dict(range=[0, mx * 1.18]), margin=dict(l=10, r=10, t=6, b=30))
 
-    # Bottom — within-range strip. Color = the % the peak force changes for each
-    # step you move that variable (1 cm in metric, 1 in in imperial — follows the
-    # units toggle), i.e. |dForce/dx| x step, as a percent of the local force.
-    # Mass- and cylinder-count-independent (it's a ratio). Shared scale across
-    # variables so rows are comparable; the dot marks the current value.
+    # Bottom — within-range strip. Color = the SIGNED % the peak force changes per
+    # +1 step (1 cm metric / 1 in imperial) you INCREASE that variable, i.e.
+    # (dForce/dx) x step / force x 100. The sign is the direction: blue = increasing
+    # the dimension lowers the force (nudge it up to cut force), red = increasing it
+    # raises the force (nudge it down). Intensity = how fast. Mass- and cylinder-
+    # count-independent (a ratio); symmetric scale so rows and directions compare.
     step_m, step_lbl = (0.0254, "1 in") if inches else (0.01, "1 cm")
     pos = np.linspace(0.0, 1.0, prof["a"][0].size)
-    Z, finite = [], []
+    Z, mags = [], []
     for v in ordered:
         vals, F = prof[v]
         with np.errstate(invalid="ignore", divide="ignore"):
-            pct = np.abs(np.gradient(F, vals)) * step_m / F * 100.0   # % per step
+            pct = np.gradient(F, vals) * step_m / F * 100.0   # SIGNED % per +step
         pct = np.where(np.isfinite(F) & (F > 0.0), pct, np.nan)
         Z.append(pct)
-        finite.append(pct[np.isfinite(pct)])
-    allv = np.concatenate([s for s in finite if s.size]) if any(s.size for s in finite) \
+        mags.append(np.abs(pct[np.isfinite(pct)]))
+    allmag = np.concatenate([s for s in mags if s.size]) if any(s.size for s in mags) \
         else np.array([1.0])
-    zmax = float(np.nanpercentile(allv, 95)) or 1.0   # clip so a near-singular spike
-    zmax = zmax if zmax > 0 else 1.0                  #   doesn't wash out the rest
+    zlim = float(np.nanpercentile(allmag, 95)) or 1.0   # symmetric clip so a near-
+    zlim = zlim if zlim > 0 else 1.0                    #   singular spike doesn't wash out
     curpos = [float(np.clip((cur[v] - bounds[v][0]) /
                             max(bounds[v][1] - bounds[v][0], 1e-9), 0.0, 1.0))
               for v in ordered]
     fig_strip = go.Figure(go.Heatmap(
-        x=pos, y=ys, z=Z, zmin=0.0, zmax=zmax,
-        colorscale=[[0.0, "#f6f6f6"], [0.5, "#fca082"], [1.0, "#a50f15"]],
-        colorbar=dict(title=f"Force change<br>per {step_lbl}", ticksuffix="%",
+        x=pos, y=ys, z=Z, zmin=-zlim, zmax=zlim,
+        # diverging, colorblind-safe: blue = force drops (good to increase),
+        # white = flat, red = force rises (good to decrease).
+        colorscale=[[0.0, "#2166ac"], [0.5, "#f7f7f7"], [1.0, "#b2182b"]],
+        colorbar=dict(title=f"Force change<br>per +{step_lbl}", ticksuffix="%",
                       thickness=10, len=0.9)))
     fig_strip.add_trace(go.Scatter(
         x=curpos, y=ys, mode="markers", hoverinfo="skip", showlegend=False,
@@ -104,12 +107,13 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
                    range=[0.0, 1.0]),
         margin=dict(l=10, r=10, t=6, b=40))
     caption = (f"**Top:** each dimension's total impact (bar length + color). "
-               f"**Bottom:** color = **how much the peak force changes for each "
-               f"{step_lbl}** you move that dimension, as a percent of the force (so "
-               f"2% means a {step_lbl} nudge shifts the force about 2%). Redder = more "
-               f"sensitive there; blank = over-center. The **white dot** is your "
-               f"current value. Follows the m/in units toggle; reflects your cg and "
-               f"mounting limits.")
+               f"**Bottom — which way to move.** Color = the **signed** % the peak "
+               f"force changes per **+{step_lbl}** you *increase* that dimension. "
+               f"**Blue = increasing it lowers the force** (nudge it up to cut force); "
+               f"**red = increasing it raises the force** (nudge it down). Deeper = "
+               f"faster; white = flat or over-center. The **white dot** is your current "
+               f"value. Follows the m/in units toggle; reflects your cg and mounting "
+               f"limits.")
     return fig_bar, fig_strip, caption
 
 

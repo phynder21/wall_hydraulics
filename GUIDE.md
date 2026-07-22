@@ -51,16 +51,20 @@ total force.
 4. Press **Optimize** and the tool finds the a, b, d, f that minimize peak force
    for your setup, and lists a few near-optimal alternatives you can click to load.
 
-**Sensitivity — which dimension moves the force most, and where.** Two aligned
-charts below the plots, for your *current* design. **Top (tornado bars):** how
-much the peak force swings as each of `a, b, d, f` sweeps its allowed range
+**Sensitivity — which dimension moves the force most, where, and which way.** Two
+aligned charts below the plots, for your *current* design. **Top (tornado bars):**
+how much the peak force swings as each of `a, b, d, f` sweeps its allowed range
 (others fixed) — longer / redder = more impact overall (e.g. base height `f`
-usually dominates). **Bottom (strip):** *where within* each variable's range the
-force is most sensitive — redder = a small change there moves the force more,
-blank = over-center, and the **white dot** is your current value. So you see both
-*which* knob matters and whether you're sitting in a steep or a flat spot for it.
-Updates with your cg and mounting limits. The same panel appears in the Browse and
-Reverse inspectors, for whichever geometry you're looking at there.
+usually dominates). **Bottom (strip):** the **signed** local slope — the % the
+force changes per **+1 cm** (or +1 in) you *increase* that dimension. **Blue =
+increasing it lowers the force** (nudge it up to cut force); **red = increasing it
+raises the force** (nudge it down); deeper = faster; white = flat or over-center;
+the **white dot** is your current value. So you see *which* knob matters, whether
+you're in a steep or flat spot, and **which way to move** to reduce the force.
+It's a *local, one-at-a-time* read — each variable swept with the others fixed at
+your current values (so it doesn't capture interactions), which is why it updates
+as you move. Reflects your cg and mounting limits. The same panel appears in the
+Browse and Reverse inspectors, for whichever geometry you're looking at there.
 
 **Optimize to minimize — force or length.** In the Optimize tab you choose what
 to minimize:

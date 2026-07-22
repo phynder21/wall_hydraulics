@@ -351,6 +351,23 @@ def _pdf_image_count(pdf):
     return len(re.findall(rb"/Subtype\s*/Image", bytes(pdf)))
 
 
+def test_sensitivity_strip_is_signed_and_directional():
+    """The within-range strip carries the SIGNED local slope (direction), on a
+    symmetric diverging scale, so blue/red says which way to move to cut the force
+    — not just the magnitude."""
+    import numpy as np
+    import sensitivity_panel as sp
+    bounds = {"a": (0.05, 1.2), "b": (0.05, 2.5), "d": (0.0, 1.0), "f": (0.0, 2.5)}
+    _bar, strip, caption = sp.build_sensitivity_figures(
+        0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds)
+    heat = strip.data[0]                       # the Heatmap trace
+    z = np.array(heat.z, dtype=float)
+    finite = z[np.isfinite(z)]
+    assert (finite < 0).any() and (finite > 0).any(), "strip must show both directions"
+    assert heat.zmin == -heat.zmax and heat.zmax > 0, "scale must be symmetric about 0"
+    assert "increasing it lowers the force" in caption
+
+
 def test_browse_inspector_has_shared_panels():
     """The Browse inspector carries the Designer's cylinder-sizing and sensitivity
     panels plus a PDF export, all wired through the shared helpers."""
