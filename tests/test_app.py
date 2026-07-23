@@ -447,6 +447,27 @@ def test_pair_grid_shapes_and_feasibility():
     assert ok2.sum() <= ok.sum(), "a tighter stroke cap can't add feasible cells"
 
 
+def test_interaction_map_snaps_current_to_a_feasible_cell():
+    """The 2-D grid snaps a sample onto the EXACT current value of each swept
+    variable, so the dot's own cell is the real design — feasible when the design is,
+    even if it sits right on a constraint boundary (else the dot lands on a black
+    cell whose center is a neighbouring grid value that just breaks a rule)."""
+    import numpy as np
+    from sensitivity_panel import _pair_grid
+    from wall import peak_force_feasible
+    a, b, d, f = 1.219, 1.063, 0.205, 2.591          # optimum: right on the 1.8 stroke cap
+    rules = dict(stroke_max=1.8, roof_clearance=0.0, width=2.438, height=2.591)
+    assert peak_force_feasible(a, b, d, f, 1.2, 0.55, **rules)[1], "design must be feasible"
+    feas = (("stroke_max", 1.8), ("roof_clearance", 0.0), ("width", 2.438),
+            ("height", 2.591), ("length_window", None))
+    vals1, vals2, _peak, okg = _pair_grid("a", "b", a, b, d, f, 1.2, 0.55,
+                                          (0.05, 1.219), (0.05, 2.591), 51, feas)
+    i1 = int(np.argmin(np.abs(vals1 - a)))
+    i2 = int(np.argmin(np.abs(vals2 - b)))
+    assert vals1[i1] == a and vals2[i2] == b, "a sample must land exactly on the current value"
+    assert okg[i2, i1], "the dot's own cell must be feasible for a feasible design"
+
+
 def test_designer_interaction_map_renders():
     """The Designer's 2-D interaction map has two letter dropdowns; picking the SAME
     variable in both shows a hint (no error), and two different ones render the map."""

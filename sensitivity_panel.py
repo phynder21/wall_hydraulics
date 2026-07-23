@@ -193,6 +193,13 @@ def _pair_grid(v1, v2, a, b, d, f, x_cg, z_cg, r1, r2, res, feas):
     fk = dict(feas)
     vals1 = np.linspace(r1[0], r1[1], res)
     vals2 = np.linspace(r2[0], r2[1], res)
+    # Snap the nearest sample to the current value of each swept variable, so the cell
+    # under the white dot is evaluated at your EXACT design. Without this the dot can
+    # land in a cell whose center is a neighbouring grid value that falls just over a
+    # limit (e.g. stroke ratio), painting the dot's own cell black even though your
+    # design is feasible.
+    vals1[int(np.argmin(np.abs(vals1 - base[v1])))] = base[v1]
+    vals2[int(np.argmin(np.abs(vals2 - base[v2])))] = base[v2]
     peak = np.full((res, res), np.nan)
     ok = np.zeros((res, res), dtype=bool)
     for i, yv in enumerate(vals2):
