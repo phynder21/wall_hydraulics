@@ -429,6 +429,34 @@ def test_sensitivity_strip_blacks_out_rule_violations():
     assert black_yes > black_no, "stroke/roof rules should black out extra cells"
 
 
+def test_pair_grid_shapes_and_feasibility():
+    """The 2-D interaction grid sweeps two variables (others fixed) and returns a
+    res x res peak/feasible grid; a tighter stroke cap rejects at least as many cells."""
+    import numpy as np
+    from sensitivity_panel import _pair_grid
+    feas = (("stroke_max", 1.8), ("roof_clearance", 0.0), ("width", 2.44),
+            ("height", 2.59), ("length_window", None))
+    v1, v2, peak, ok = _pair_grid("b", "d", 0.6, 1.8, 0.1, 0.4, 1.2, 0.55,
+                                  (0.05, 2.5), (0.0, 1.0), 21, feas)
+    assert v1.shape == (21,) and v2.shape == (21,)
+    assert peak.shape == (21, 21) and ok.shape == (21, 21)
+    assert ok.any() and not ok.all(), "some (b,d) cells feasible, some rejected"
+    tight = (("stroke_max", 1.2),) + feas[1:]
+    _, _, _, ok2 = _pair_grid("b", "d", 0.6, 1.8, 0.1, 0.4, 1.2, 0.55,
+                              (0.05, 2.5), (0.0, 1.0), 21, tight)
+    assert ok2.sum() <= ok.sum(), "a tighter stroke cap can't add feasible cells"
+
+
+def test_designer_interaction_map_renders():
+    """The Designer shows the 2-D interaction map with a pair dropdown, and picking a
+    different pair re-runs cleanly."""
+    at = fresh_app()
+    sb = [s for s in at.selectbox if s.key == "interact_pair"]
+    assert sb, "interaction-map pair dropdown missing from the Designer"
+    sb[0].select(sb[0].options[3]).run()      # switch to a different variable pair
+    assert not at.exception, at.exception
+
+
 def test_browse_inspector_has_shared_panels():
     """The Browse inspector carries the Designer's cylinder-sizing and sensitivity
     panels plus a PDF export, all wired through the shared helpers."""

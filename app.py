@@ -16,7 +16,7 @@ from optimize import optimize_actuator, STROKE_TOL
 from browse import render_browse
 from reverse import render_reverse
 from lookup import force_bar, force_bar_html, BAR_NEUTRAL, cylinder_banner
-from sensitivity_panel import render_sensitivity_panel
+from sensitivity_panel import render_sensitivity_panel, render_interaction_map
 from cylinder_panel import render_cylinder_sizing
 from pdf_export import render_pdf_export
 
@@ -819,6 +819,12 @@ sens_bar, sens_strip = render_sensitivity_panel(
     n_cyl=n_cyl, template=PLOT_TEMPLATE, font=PLOT_FONT,
     stroke_max=stroke_ratio, roof_clearance=roof_clearance,
     width=container_width, height=container_height)
+
+# --- 2-D interaction map: pick two dimensions to vary together (Designer only) ---
+render_interaction_map(
+    a, b, d, f, st.session_state["x_cg"], st.session_state["z_cg"], USER_BOUNDS,
+    template=PLOT_TEMPLATE, font=PLOT_FONT, stroke_max=stroke_ratio,
+    roof_clearance=roof_clearance, width=container_width, height=container_height)
 
 # --- Export the current design as a one-page PDF spec sheet ---
 # Shared with Browse and Reverse via pdf_export so a spec sheet is available in

@@ -15,7 +15,7 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-from wall import force_feasibility_profiles, peak_force
+from wall import force_feasibility_profiles, peak_force, peak_force_feasible
 from lookup import force_color
 
 _LABELS = {"a": "a — base along floor", "b": "b — attach up wall",
@@ -37,6 +37,36 @@ def _profiles(a, b, d, f, x_cg, z_cg, bounds_items, samples, feas):
     width, height, length_window)."""
     return force_feasibility_profiles(a, b, d, f, x_cg, z_cg, dict(bounds_items),
                                       n=samples, **dict(feas))
+
+
+def _ratio_colorscale(finite):
+    """Shared 'force vs. current %' colouring. Given the finite % ratios, return
+    (zmin, zmax, colorscale, dtick): the key spans the real data range with white
+    placed exactly at 100%, blue below (better), red above (worse) — so the legend
+    never shows a phantom blue band and 100% is always a labelled tick."""
+    finite = np.asarray(finite, dtype=float)
+    finite = finite[np.isfinite(finite)]
+    allr = finite if finite.size else np.array([100.0])
+    zmin = min(float(np.nanmin(allr)), 100.0)
+    zmax = max(float(np.nanpercentile(allr, 95)), 101.0)
+    wpos = min(max((100.0 - zmin) / (zmax - zmin), 0.0), 1.0) if zmax > zmin else 0.0
+    if wpos <= 1e-3:                                     # nothing feasible beats current
+        cs = [[0.0, "#f7f7f7"], [1.0, "#b2182b"]]        # white -> red
+    elif wpos >= 1.0 - 1e-3:                             # nothing feasible is worse
+        cs = [[0.0, "#2166ac"], [1.0, "#f7f7f7"]]        # blue -> white
+    else:
+        cs = [[0.0, "#2166ac"], [wpos, "#f7f7f7"], [1.0, "#b2182b"]]
+    dtick = next((s for s in (10, 20, 25, 50, 100, 200, 500)
+                  if (zmax - zmin) / s <= 6), 1000)
+    return zmin, zmax, cs, dtick
+
+
+def _ratio_colorbar(dtick):
+    """The larger, tick-labelled key shared by the strip and the interaction map."""
+    return dict(title=dict(text="Force vs.<br>current", side="top"),
+                ticksuffix="%", tick0=100.0, dtick=dtick, ticks="outside",
+                ticklen=6, tickwidth=1.2, thickness=20, len=1.0,
+                outlinewidth=1, outlinecolor="#888")
 
 
 def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
@@ -101,34 +131,14 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
         black.append(np.where(ok, np.nan, 1.0))
     allr = np.concatenate([s for s in finite if s.size]) if any(s.size for s in finite) \
         else np.array([100.0])
-    zmin = min(float(np.nanmin(allr)), 100.0)            # keep 100% (white) in range
-    zmax = max(float(np.nanpercentile(allr, 95)), 101.0)  # clip a near-singular red spike
+    zmin, zmax, strip_cs, dtick = _ratio_colorscale(allr)
     curpos = [float(np.clip((cur[v] - bounds[v][0]) /
                             max(bounds[v][1] - bounds[v][0], 1e-9), 0.0, 1.0))
               for v in ordered]
-    # Colour scale spans exactly the data range [zmin, zmax] (so the key never shows
-    # a phantom blue band below the data). Put white exactly at 100% by placing it at
-    # its fractional position; blue only appears for spots below 100% (better) and
-    # red only above (worse). At an optimum zmin == 100, so the key is white -> red.
-    wpos = min(max((100.0 - zmin) / (zmax - zmin), 0.0), 1.0) if zmax > zmin else 0.0
-    if wpos <= 1e-3:                                     # nothing feasible beats current
-        strip_cs = [[0.0, "#f7f7f7"], [1.0, "#b2182b"]]          # white -> red
-    elif wpos >= 1.0 - 1e-3:                             # nothing feasible is worse
-        strip_cs = [[0.0, "#2166ac"], [1.0, "#f7f7f7"]]          # blue -> white
-    else:
-        strip_cs = [[0.0, "#2166ac"], [wpos, "#f7f7f7"], [1.0, "#b2182b"]]
-    # A larger key with ticks anchored on 100% (the current design) so the reference
-    # is always labelled; the step keeps the tick count readable across any range.
-    dtick = next((s for s in (10, 20, 25, 50, 100, 200, 500)
-                  if (zmax - zmin) / s <= 6), 1000)
     fig_strip = go.Figure(go.Heatmap(
         x=pos, y=ys, z=Z, zmin=zmin, zmax=zmax,
         # blue = lower (better), white = 100% (same), red = higher (worse).
-        colorscale=strip_cs,
-        colorbar=dict(title=dict(text="Force vs.<br>current", side="top"),
-                      ticksuffix="%", tick0=100.0, dtick=dtick,
-                      ticks="outside", ticklen=6, tickwidth=1.2,
-                      thickness=20, len=1.0, outlinewidth=1, outlinecolor="#888")))
+        colorscale=strip_cs, colorbar=_ratio_colorbar(dtick)))
     # Rejected cells (over-center or rule-breaking) on top of the color layer, black.
     fig_strip.add_trace(go.Heatmap(
         x=pos, y=ys, z=black, zmin=0.0, zmax=1.0, showscale=False, hoverinfo="skip",
@@ -171,3 +181,78 @@ def render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
         st.plotly_chart(fig_strip, width="stretch")
         st.caption(caption)
     return fig_bar, fig_strip
+
+
+# --- 2-D interaction map: lock two variables, sweep the other two -------------
+_PAIRS = (("a", "b"), ("a", "d"), ("a", "f"), ("b", "d"), ("b", "f"), ("d", "f"))
+
+
+@st.cache_data(show_spinner=False)
+def _pair_grid(v1, v2, a, b, d, f, x_cg, z_cg, r1, r2, res, feas):
+    """2-D (peak, feasible) grid: sweep v1 across r1=(lo,hi) (columns) and v2 across
+    r2 (rows) with the other two variables fixed at (a, b, d, f). feas is
+    ((name, value), ...) of the optimizer rules. All args hashable -> cached."""
+    base = dict(a=a, b=b, d=d, f=f)
+    fk = dict(feas)
+    vals1 = np.linspace(r1[0], r1[1], res)
+    vals2 = np.linspace(r2[0], r2[1], res)
+    peak = np.full((res, res), np.nan)
+    ok = np.zeros((res, res), dtype=bool)
+    for i, yv in enumerate(vals2):
+        for j, xv in enumerate(vals1):
+            p, fe = peak_force_feasible(**{**base, v1: float(xv), v2: float(yv)},
+                                        x_cg=x_cg, z_cg=z_cg, **fk)
+            peak[i, j] = p
+            ok[i, j] = bool(fe)
+    return vals1, vals2, peak, ok
+
+
+def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, template="plotly_white",
+                           font=None, res=51, stroke_max=None, roof_clearance=0.0,
+                           width=None, height=None, length_window=None):
+    """A 2-D 'vary two dimensions at once' heatmap. Pick two of a, b, d, f from the
+    dropdown; the other two stay at the current design. Same colour language as the
+    strip (% of the current force; black = a spot the optimizer would reject), so it
+    exposes the interactions the one-at-a-time strip can't see (combined moves)."""
+    with st.container(border=True):
+        st.markdown("**Interaction map — vary two dimensions at once**")
+        opts = {f"{_LABELS[u]}   &   {_LABELS[v]}": (u, v) for u, v in _PAIRS}
+        v1, v2 = opts[st.selectbox(
+            "Vary these two (the other two stay at your current design)",
+            list(opts), key="interact_pair")]
+        feas = (("stroke_max", stroke_max), ("roof_clearance", roof_clearance),
+                ("width", width), ("height", height), ("length_window", length_window))
+        vals1, vals2, peak, ok = _pair_grid(
+            v1, v2, a, b, d, f, x_cg, z_cg,
+            tuple(bounds[v1]), tuple(bounds[v2]), res, feas)
+        f0 = peak_force(a, b, d, f, x_cg, z_cg)          # current design's peak force
+        if not (np.isfinite(f0) and f0 > 0):             # current impossible: best in view
+            fin = peak[ok & np.isfinite(peak)]
+            f0 = float(np.nanmin(fin)) if fin.size else 1.0
+        ratio = np.where(ok, peak / f0 * 100.0, np.nan)
+        black = np.where(ok, np.nan, 1.0)
+        zmin, zmax, cs, dtick = _ratio_colorscale(ratio[np.isfinite(ratio)])
+        cur = {"a": a, "b": b, "d": d, "f": f}
+        fig = go.Figure(go.Heatmap(
+            x=vals1, y=vals2, z=ratio, zmin=zmin, zmax=zmax, colorscale=cs,
+            colorbar=_ratio_colorbar(dtick)))
+        fig.add_trace(go.Heatmap(                        # rejected cells -> black
+            x=vals1, y=vals2, z=black, zmin=0.0, zmax=1.0, showscale=False,
+            hoverinfo="skip", colorscale=[[0.0, "#111111"], [1.0, "#111111"]]))
+        fig.add_trace(go.Scatter(                        # current design
+            x=[cur[v1]], y=[cur[v2]], mode="markers", hoverinfo="skip",
+            showlegend=False,
+            marker=dict(color="white", size=12, line=dict(color="#111", width=1.8))))
+        fig.update_layout(
+            template=template, font=font, height=430,
+            xaxis_title=f"{_LABELS[v1]}  (m)", yaxis_title=f"{_LABELS[v2]}  (m)",
+            margin=dict(l=10, r=10, t=6, b=40))
+        st.plotly_chart(fig, width="stretch")
+        st.caption(
+            f"Color = the peak force at that (**{v1}**, **{v2}**) combination as a "
+            f"**percent of your current force** (the other two dimensions stay put). "
+            f"**White (100%) = same as now** (the **white dot**), **red = worse**, "
+            f"**blue = better**, **black = a spot the optimizer would reject**. Unlike "
+            f"the strip above, this moves *two* dimensions together, so it shows their "
+            f"**interaction** — a diagonal blue pocket is an improvement the one-at-a-"
+            f"time view can't reach.")
