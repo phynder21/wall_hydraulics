@@ -184,9 +184,6 @@ def render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
 
 
 # --- 2-D interaction map: lock two variables, sweep the other two -------------
-_PAIRS = (("a", "b"), ("a", "d"), ("a", "f"), ("b", "d"), ("b", "f"), ("d", "f"))
-
-
 @st.cache_data(show_spinner=False)
 def _pair_grid(v1, v2, a, b, d, f, x_cg, z_cg, r1, r2, res, feas):
     """2-D (peak, feasible) grid: sweep v1 across r1=(lo,hi) (columns) and v2 across
@@ -216,10 +213,17 @@ def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, template="plotly_whit
     exposes the interactions the one-at-a-time strip can't see (combined moves)."""
     with st.container(border=True):
         st.markdown("**Interaction map — vary two dimensions at once**")
-        opts = {f"{_LABELS[u]}   &   {_LABELS[v]}": (u, v) for u, v in _PAIRS}
-        v1, v2 = opts[st.selectbox(
-            "Vary these two (the other two stay at your current design)",
-            list(opts), key="interact_pair")]
+        st.caption("Pick two dimensions to vary; the other two stay at your current "
+                   "design. (a = base along floor, b = attach up wall, "
+                   "d = bracket offset, f = base height.)")
+        cc1, cc2 = st.columns(2)
+        v1 = cc1.selectbox("Horizontal axis", ["a", "b", "d", "f"], index=0,
+                           key="interact_v1")
+        v2 = cc2.selectbox("Vertical axis", ["a", "b", "d", "f"], index=1,
+                           key="interact_v2")
+        if v1 == v2:
+            st.info("Choose two **different** dimensions to see how they interact.")
+            return
         feas = (("stroke_max", stroke_max), ("roof_clearance", roof_clearance),
                 ("width", width), ("height", height), ("length_window", length_window))
         vals1, vals2, peak, ok = _pair_grid(

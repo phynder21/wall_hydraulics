@@ -448,12 +448,20 @@ def test_pair_grid_shapes_and_feasibility():
 
 
 def test_designer_interaction_map_renders():
-    """The Designer shows the 2-D interaction map with a pair dropdown, and picking a
-    different pair re-runs cleanly."""
+    """The Designer's 2-D interaction map has two letter dropdowns; picking the SAME
+    variable in both shows a hint (no error), and two different ones render the map."""
     at = fresh_app()
-    sb = [s for s in at.selectbox if s.key == "interact_pair"]
-    assert sb, "interaction-map pair dropdown missing from the Designer"
-    sb[0].select(sb[0].options[3]).run()      # switch to a different variable pair
+    keys = {s.key for s in at.selectbox}
+    assert "interact_v1" in keys and "interact_v2" in keys, "two dropdowns expected"
+    # same variable in both must not error
+    at.session_state["interact_v1"] = "b"
+    at.session_state["interact_v2"] = "b"
+    at.run()
+    assert not at.exception, at.exception
+    assert any("different" in str(i.value) for i in at.info), "expected a 'pick two different' hint"
+    # two different variables -> the map renders cleanly
+    at.session_state["interact_v2"] = "d"
+    at.run()
     assert not at.exception, at.exception
 
 
