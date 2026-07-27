@@ -56,9 +56,12 @@ def render_reverse():
     with st.spinner("Building the configuration database (first time only, ~15 s)…"):
         table = _get_table(TABLE_RES)
 
-    # --- Units switch: converts the stored values in place when you flip it. ---
-    units = st.sidebar.radio("Units", ["Imperial", "Metric"], key="rv_units",
-                             horizontal=True)
+    # Sidebar tabs (like the Designer): the Cylinder you enter, and the Wall it lifts.
+    tab_cyl, tab_wall = st.sidebar.tabs(["Cylinder", "Wall"])
+
+    # --- Units switch (top of the Cylinder tab): converts stored values on flip ---
+    units = tab_cyl.radio("Units", ["Imperial", "Metric"], key="rv_units",
+                          horizontal=True)
     cfg = _CYL[units]
     prev = st.session_state.get("rv_units_prev")
     if prev is not None and prev != units:
@@ -79,45 +82,44 @@ def render_reverse():
                          help=_HELP[k], ctx=ctx)
         return val, val * mult
 
-    # --- Cylinder force ---
-    force_exp = st.sidebar.expander("Cylinder — force", expanded=True)
-    mode = force_exp.radio("Give force as", ["Bore + pressure", "Rated force"],
-                           key="rv_fmode", horizontal=True)
+    # --- Cylinder force (Cylinder tab) ---
+    tab_cyl.markdown("**Force**")
+    mode = tab_cyl.radio("Give force as", ["Bore + pressure", "Rated force"],
+                         key="rv_fmode", horizontal=True)
     if mode == "Bore + pressure":
-        _, bore_mm = _cyl("bore", force_exp)
-        _, rod_mm = _cyl("rod", force_exp)
-        _, press_bar = _cyl("press", force_exp)
+        _, bore_mm = _cyl("bore", tab_cyl)
+        _, rod_mm = _cyl("rod", tab_cyl)
+        _, press_bar = _cyl("press", tab_cyl)
         push, pull = lookup.cylinder_force(bore_mm, min(rod_mm, bore_mm - 0.1), press_bar)
-        force_exp.caption(f"Push **{push / 1000:.1f} kN** · Pull {pull / 1000:.1f} kN. "
-                          "Raising the wall extends the cylinder, so push is used.")
+        tab_cyl.caption(f"Push **{push / 1000:.1f} kN** · Pull {pull / 1000:.1f} kN. "
+                        "Raising the wall extends the cylinder, so push is used.")
         force_n = push
     else:
-        _, force_n = _cyl("frated", force_exp)
+        _, force_n = _cyl("frated", tab_cyl)
     safety = _sb_linked("Safety factor", "rv_sf", 1.0, 3.0, 1.5, 0.1, fmt="%.1f",
                         help="Divide the cylinder force by this before sizing the "
-                        "wall.", ctx=force_exp)
+                        "wall.", ctx=tab_cyl)
     force_use = force_n / safety
 
-    # --- Cylinder length window ---
-    len_exp = st.sidebar.expander("Cylinder — length", expanded=True)
-    _, L_ret = _cyl("ret", len_exp)
-    _, stroke_m = _cyl("stroke", len_exp)
+    # --- Cylinder length window (Cylinder tab) ---
+    tab_cyl.markdown("**Length**")
+    _, L_ret = _cyl("ret", tab_cyl)
+    _, stroke_m = _cyl("stroke", tab_cyl)
     L_ext = L_ret + stroke_m
-    len_exp.caption(f"Extended length **{L_ext * len_fac:.0f} {len_u}** "
+    tab_cyl.caption(f"Extended length **{L_ext * len_fac:.0f} {len_u}** "
                     f"(length ratio {L_ext / L_ret:.2f}).")
 
-    # --- Wall / problem (metric: the container and geometry are metric) ---
-    wall_exp = st.sidebar.expander("Wall", expanded=True)
-    size = wall_exp.selectbox("Container", list(CONTAINERS), key="rv_size")
+    # --- Wall / problem (Wall tab; the container and geometry are metric) ---
+    size = tab_wall.selectbox("Container", list(CONTAINERS), key="rv_size")
     width, height = CONTAINERS[size]
     x_cg = _sb_linked("x_cg — along wall from hinge (m)", "rv_xcg", 0.0, HEIGHT_MAX,
-                      1.20, 0.01, ctx=wall_exp)
+                      1.20, 0.01, ctx=tab_wall)
     z_cg = _sb_linked("z_cg — off the wall (m)", "rv_zcg", 0.0, 1.5, 0.55, 0.01,
-                      ctx=wall_exp)
+                      ctx=tab_wall)
     clearance = _sb_linked("Roof clearance (m)", "rv_clear", 0.0, 0.5, 0.0, 0.01,
-                           ctx=wall_exp)
+                           ctx=tab_wall)
 
-    # --- Constrain the OUTCOME geometry (mounting limits on a, b, d, f) ---
+    # --- Constrain the OUTCOME geometry (advanced; expander inside the Wall tab) ---
     ranges = {
         "a": (0.05, WIDTH / 2, "a — base along floor (m)"),
         "b": (0.05, HEIGHT_MAX, "b — attachment along wall (m)"),
@@ -125,8 +127,7 @@ def render_reverse():
         "f": (0.0, HEIGHT_MAX, "f — base height (m)"),
     }
     bounds = {}
-    with st.sidebar.expander("Restrict the output geometry (a, b, d, f)",
-                             expanded=False):
+    with tab_wall.expander("Restrict the output geometry (a, b, d, f)", expanded=False):
         for v, (lo, hi, label) in ranges.items():
             bounds[v] = _sb_range(label, f"rv_rng_{v}", lo, hi)
 
