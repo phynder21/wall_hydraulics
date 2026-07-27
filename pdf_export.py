@@ -94,7 +94,7 @@ def _prep_panel(fig, base_w=1000, height=340):
 def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_max,
                       roof_clearance, a, b, d, f, peak_pc, L_min, L_max,
                       fig_geom, fig_force, fig_len,
-                      fig_sens_bar=None, fig_sens_strip=None,
+                      fig_sens_bar=None, fig_sens_strip=None, fig_interactions=None,
                       pressure_bar=None, series=None,
                       mass_label="Wall + load mass", extra_setup_rows=(),
                       extra_notes=(), stroke_tol=1e-9, show_stroke_ratio_max=True,
@@ -210,6 +210,14 @@ def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_ma
                             ("Sensitivity - force at each position as a % of the current design",
                              ss.to_image(format="png", width=ssw, height=ssh, scale=2)),
                         ]
+                    # Interaction matrix (all six variable pairs). Passed as a callable
+                    # so the (heavier) grid is built only now, on Generate, not live.
+                    if fig_interactions is not None:
+                        fig_i = fig_interactions() if callable(fig_interactions) else fig_interactions
+                        if fig_i is not None:
+                            images.append((
+                                "Interaction maps - vary two dimensions at once (force vs. current)",
+                                fig_i.to_image(format="png", width=1000, height=760, scale=2)))
                 except Exception:
                     notes.append("Diagrams omitted (image rendering unavailable here).")
                 ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")

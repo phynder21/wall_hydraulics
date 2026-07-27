@@ -100,8 +100,11 @@ Extras: switch **units** (m / in), turn on **Fine precision** for smaller steps,
 **lock** any value so Optimize holds it fixed, and use **Compare** to save two
 designs (A/B) and overlay them on the plots. **Export design (PDF)** downloads a
 one-page spec sheet for the current design — inputs, geometry, forces, bore &
-pressure, the diagram, the curves, and the two sensitivity charts. The Designer's
-URL captures your setup, so you can copy the link to share an exact configuration.
+pressure, the diagram, the curves, the two sensitivity charts, and (Designer only)
+the full **interaction matrix** — all six variable pairs at once, so the sheet is
+self-contained rather than tied to whichever pair was selected on screen. The
+Designer's URL captures your setup, so you can copy the link to share an exact
+configuration.
 
 ---
 

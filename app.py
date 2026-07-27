@@ -16,7 +16,8 @@ from optimize import optimize_actuator, STROKE_TOL
 from browse import render_browse
 from reverse import render_reverse
 from lookup import force_bar, force_bar_html, BAR_NEUTRAL, cylinder_banner
-from sensitivity_panel import render_sensitivity_panel, render_interaction_map
+from sensitivity_panel import (render_sensitivity_panel, render_interaction_map,
+                               build_interaction_matrix)
 from cylinder_panel import render_cylinder_sizing
 from pdf_export import render_pdf_export
 
@@ -836,6 +837,11 @@ render_pdf_export(
     a=a, b=b, d=d, f=f, peak_pc=peak_pc, L_min=L_min, L_max=L_max,
     fig_geom=fig_geom, fig_force=fig, fig_len=fig_len,
     fig_sens_bar=sens_bar, fig_sens_strip=sens_strip,
+    # All six interaction maps, built lazily (only when Generate is clicked).
+    fig_interactions=lambda: build_interaction_matrix(
+        a, b, d, f, st.session_state["x_cg"], st.session_state["z_cg"], USER_BOUNDS,
+        stroke_max=stroke_ratio, roof_clearance=roof_clearance,
+        width=container_width, height=container_height, template=PLOT_TEMPLATE),
     pressure_bar=pressure_bar, series=series, stroke_tol=STROKE_TOL)
 
 # --- Animation driver -------------------------------------------------------

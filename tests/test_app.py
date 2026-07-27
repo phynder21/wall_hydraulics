@@ -413,6 +413,21 @@ def test_peak_force_feasible_flags_rule_violations():
     assert np.isnan(p3) and not feas3
 
 
+def test_interaction_matrix_has_all_six_pairs():
+    """The PDF interaction matrix is a 2x3 of all six variable pairs: 6 force
+    heatmaps + 6 black-mask heatmaps + 6 current-design dots, on one shared scale."""
+    from sensitivity_panel import build_interaction_matrix
+    bounds = {"a": (0.05, 1.219), "b": (0.05, 2.59), "d": (0.0, 1.0), "f": (0.0, 2.59)}
+    fig = build_interaction_matrix(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds, res=15,
+                                   stroke_max=1.8, roof_clearance=0.0,
+                                   width=2.44, height=2.59)
+    heatmaps = [t for t in fig.data if t.type == "heatmap"]
+    scatters = [t for t in fig.data if t.type == "scatter"]
+    assert len(heatmaps) == 12, "6 force + 6 black-mask heatmaps"
+    assert len(scatters) == 6, "one current-design dot per pair"
+    assert fig.layout.coloraxis.cmin is not None, "one shared colour scale"
+
+
 def test_sensitivity_strip_blacks_out_rule_violations():
     """Passing the optimizer's rules (stroke ratio, roof, container) blacks out MORE
     of the strip than over-center alone — the extra cells are the rule-breaking spots
@@ -534,13 +549,14 @@ def test_reverse_shows_sensitivity_and_pdf_when_feasible():
     assert _pdf_image_count(pdf) == 5, "diagram, two curves and two sensitivity charts"
 
 
-@pytest.mark.parametrize("view,btn_key,pdf_key", [
-    ("Designer", "design_gen", "design_pdf"),
-    ("Browse configurations", "browse_gen", "browse_pdf"),
+@pytest.mark.parametrize("view,btn_key,pdf_key,n_imgs", [
+    # Designer adds the 6-pair interaction matrix (6 figures); Browse doesn't (5).
+    ("Designer", "design_gen", "design_pdf", 6),
+    ("Browse configurations", "browse_gen", "browse_pdf", 5),
 ])
-def test_pdf_export_generates_pdf_bytes(view, btn_key, pdf_key):
+def test_pdf_export_generates_pdf_bytes(view, btn_key, pdf_key, n_imgs):
     """Clicking Generate PDF routes through the shared pdf_export and produces real
-    PDF bytes with the three diagrams embedded, in each view that offers it."""
+    PDF bytes with the diagrams embedded, in each view that offers it."""
     import browse
     browse.TABLE_RES = 12
     at = AppTest.from_file(APP_PATH, default_timeout=120)
@@ -555,5 +571,6 @@ def test_pdf_export_generates_pdf_bytes(view, btn_key, pdf_key):
     assert pdf_key in at.session_state, f"{view}: no PDF produced"
     pdf = at.session_state[pdf_key]
     assert pdf and bytes(pdf[:4]) == b"%PDF", f"{view}: not a PDF"
-    # Side view + force + length curves + the two sensitivity charts.
-    assert _pdf_image_count(pdf) == 5, f"{view}: five figures should be embedded"
+    # Side view + force + length curves + two sensitivity charts (+ interaction matrix
+    # in the Designer).
+    assert _pdf_image_count(pdf) == n_imgs, f"{view}: expected {n_imgs} figures"

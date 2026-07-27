@@ -13,6 +13,7 @@ charts can be shown on screen and embedded in the PDF export.
 """
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 from wall import force_feasibility_profiles, peak_force, peak_force_feasible
@@ -267,3 +268,57 @@ def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, template="plotly_whit
             f"the strip above, this moves *two* dimensions together, so it shows their "
             f"**interaction** — a diagonal blue pocket is an improvement the one-at-a-"
             f"time view can't reach.")
+
+
+_ALL_PAIRS = (("a", "b"), ("a", "d"), ("a", "f"), ("b", "d"), ("b", "f"), ("d", "f"))
+
+
+def build_interaction_matrix(a, b, d, f, x_cg, z_cg, bounds, res=41, stroke_max=None,
+                             roof_clearance=0.0, width=None, height=None,
+                             length_window=None, template="plotly_white"):
+    """A 2x3 small-multiples matrix of ALL six 2-D interaction maps (every pair of
+    a, b, d, f), on ONE shared 'force vs. current %' scale so the panels compare.
+    Built on demand (for the PDF), not live. Returns a print-ready figure. Uses the
+    cached _pair_grid per pair, so any pair already shown on screen is reused."""
+    feas = (("stroke_max", stroke_max), ("roof_clearance", roof_clearance),
+            ("width", width), ("height", height), ("length_window", length_window))
+    cur = {"a": a, "b": b, "d": d, "f": f}
+    grids, all_feas = [], []
+    for v1, v2 in _ALL_PAIRS:
+        vals1, vals2, peak, ok = _pair_grid(
+            v1, v2, a, b, d, f, x_cg, z_cg, tuple(bounds[v1]), tuple(bounds[v2]), res, feas)
+        grids.append((v1, v2, vals1, vals2, peak, ok))
+        r = peak[ok & np.isfinite(peak)]
+        if r.size:
+            all_feas.append(r.ravel())
+    f0 = peak_force(a, b, d, f, x_cg, z_cg)              # shared reference = current force
+    if not (np.isfinite(f0) and f0 > 0):
+        f0 = float(np.nanmin(np.concatenate(all_feas))) if all_feas else 1.0
+    allr = (np.concatenate(all_feas) / f0 * 100.0) if all_feas else np.array([100.0])
+    zmin, zmax, cs, dtick = _ratio_colorscale(allr)     # one scale for all six panels
+    fig = make_subplots(rows=2, cols=3,
+                        subplot_titles=[f"{v1} x {v2}" for v1, v2, *_ in grids],
+                        horizontal_spacing=0.09, vertical_spacing=0.14)
+    for k, (v1, v2, vals1, vals2, peak, ok) in enumerate(grids):
+        rr, cc = k // 3 + 1, k % 3 + 1
+        ratio = np.where(ok, peak / f0 * 100.0, np.nan)
+        black = np.where(ok, np.nan, 1.0)
+        fig.add_trace(go.Heatmap(x=vals1, y=vals2, z=ratio, coloraxis="coloraxis",
+                                 hoverinfo="skip"), row=rr, col=cc)
+        fig.add_trace(go.Heatmap(x=vals1, y=vals2, z=black, zmin=0.0, zmax=1.0,
+                                 showscale=False, hoverinfo="skip",
+                                 colorscale=[[0.0, "#111111"], [1.0, "#111111"]]),
+                      row=rr, col=cc)
+        fig.add_trace(go.Scatter(x=[cur[v1]], y=[cur[v2]], mode="markers",
+                                 hoverinfo="skip", showlegend=False,
+                                 marker=dict(color="white", size=8,
+                                             line=dict(color="#111", width=1.3))),
+                      row=rr, col=cc)
+        fig.update_xaxes(title_text=v1, title_standoff=3, row=rr, col=cc)
+        fig.update_yaxes(title_text=v2, title_standoff=3, row=rr, col=cc)
+    fig.update_layout(
+        template=template, font=dict(family="sans-serif", size=12, color="#0F172A"),
+        showlegend=False, margin=dict(l=55, r=40, t=45, b=45),
+        coloraxis=dict(colorscale=cs, cmin=zmin, cmax=zmax,
+                       colorbar=_ratio_colorbar(dtick)))
+    return fig
