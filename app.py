@@ -45,6 +45,24 @@ st.sidebar.caption(f"build: {BUILD}")
 # Top-of-page view switch, as tab-like buttons. (Real st.tabs would render every
 # view's body — and every view's sidebar — on each run, since it just hides the
 # inactive ones; a segmented control lets us render ONLY the selected view below.)
+# CSS makes it centered, larger, and popped out (the widget has no such options).
+st.markdown("""
+<style>
+div[data-testid="stButtonGroup"] {
+    display: flex; justify-content: center; width: 100%;
+    margin: 0.3rem 0 1.3rem 0;
+}
+button[data-testid="stBaseButton-segmented_control"],
+button[data-testid="stBaseButton-segmented_controlActive"] {
+    font-size: 1.25rem !important; font-weight: 600 !important;
+    padding: 0.62rem 1.9rem !important;
+}
+button[data-testid="stBaseButton-segmented_controlActive"] {
+    font-weight: 700 !important;
+    box-shadow: 0 3px 14px rgba(15, 23, 42, 0.22);
+}
+</style>
+""", unsafe_allow_html=True)
 _view = st.segmented_control(
     "View", ["Designer", "Browse configurations", "Size from a cylinder"],
     key="view", label_visibility="collapsed", default="Designer") or "Designer"
