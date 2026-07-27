@@ -34,17 +34,20 @@ PLOT_FONT = dict(family="sans-serif", size=13, color="#0F172A")
 
 st.set_page_config(page_title="Container Wall Actuator", layout="wide")
 
-# Left rail: view switch + a build marker, above the tabbed control panel.
+# Left rail: a build marker + the cylinder count, beside the tabbed control panel.
 st.sidebar.markdown("### Wall actuator")
-_view = st.sidebar.radio(
-    "View", ["Designer", "Browse configurations", "Size from a cylinder"],
-    key="view", label_visibility="collapsed")
 n_cyl = st.sidebar.radio(
     "Cylinders sharing the load", [1, 2], key="n_cyl", horizontal=True,
     help="How many cylinders share the wall load equally. With 2, each carries "
          "half — so every force and bore size shown is PER CYLINDER. The geometry "
          "is the same either way.")
 st.sidebar.caption(f"build: {BUILD}")
+# Top-of-page view switch, as tab-like buttons. (Real st.tabs would render every
+# view's body — and every view's sidebar — on each run, since it just hides the
+# inactive ones; a segmented control lets us render ONLY the selected view below.)
+_view = st.segmented_control(
+    "View", ["Designer", "Browse configurations", "Size from a cylinder"],
+    key="view", label_visibility="collapsed", default="Designer") or "Designer"
 if _view == "Browse configurations":
     render_browse()
     st.stop()
