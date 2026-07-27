@@ -191,25 +191,25 @@ def render_browse():
     # Slider ranges are FIXED (High-Cube extents), never container-dependent, so
     # switching containers doesn't reset any value. The container only filters the
     # results (b, f must fit under its height).
-    # Sidebar tabs (like the Designer): the search Problem, and the mounting Limits.
-    tab_problem, tab_limits = st.sidebar.tabs(["Problem", "Mounting limits"])
-    size = tab_problem.selectbox("Container", list(CONTAINERS), key="lk_size")
+    # Browse's controls are few enough to sit in one section (not tabs); the optional
+    # mounting limits stay in a collapsible expander below.
+    st.sidebar.header("Problem")
+    size = st.sidebar.selectbox("Container", list(CONTAINERS), key="lk_size")
     width, height = CONTAINERS[size]
     x_cg = _sb_linked("x_cg — along wall from hinge (m)", "lk_xcg",
-                      0.0, HEIGHT_MAX, 1.20, 0.01, ctx=tab_problem)
-    z_cg = _sb_linked("z_cg — off the wall (m)", "lk_zcg", 0.0, 1.5, 0.55, 0.01,
-                      ctx=tab_problem)
+                      0.0, HEIGHT_MAX, 1.20, 0.01)
+    z_cg = _sb_linked("z_cg — off the wall (m)", "lk_zcg", 0.0, 1.5, 0.55, 0.01)
     stroke_max = _sb_linked(
         "Max stroke ratio", "lk_stroke", 1.0, 3.0, float(STROKE_RATIO_MAX), 0.05,
         help="Hard cap: only designs with L_max/L_min at or below this appear. "
-             "Real hydraulic cylinders are typically ~1.8–2×.", ctx=tab_problem)
+             "Real hydraulic cylinders are typically ~1.8–2×.")
     clearance = _sb_linked(
         "Roof clearance (m)", "lk_clear", 0.0, 0.5, 0.0, 0.01,
-        help="Keep the piston attachment this far below the roof.", ctx=tab_problem)
+        help="Keep the piston attachment this far below the roof.")
     mass = _sb_linked("Wall + load mass (kg)", "lk_mass", 50.0, 20000.0, 500.0, 10.0,
                       fmt="%.0f",
                       help="Converts the per-kg peak force into the real cylinder "
-                           "force (shown for the inspected design).", ctx=tab_problem)
+                           "force (shown for the inspected design).")
 
     ranges = {
         "a": (0.05, WIDTH / 2, "a — base along floor (m)"),
@@ -218,7 +218,7 @@ def render_browse():
         "f": (0.0, HEIGHT_MAX, "f — base height (m)"),
     }
     bounds = {}
-    with tab_limits:
+    with st.sidebar.expander("Mounting limits", expanded=False):
         for v, (lo, hi, label) in ranges.items():
             bounds[v] = _sb_range(label, f"lk_rng_{v}", lo, hi)
 
