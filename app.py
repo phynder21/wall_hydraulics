@@ -45,21 +45,24 @@ st.sidebar.caption(f"build: {BUILD}")
 # Top-of-page view switch, as tab-like buttons. (Real st.tabs would render every
 # view's body — and every view's sidebar — on each run, since it just hides the
 # inactive ones; a segmented control lets us render ONLY the selected view below.)
-# CSS makes it centered, larger, and popped out (the widget has no such options).
-# st.html is the reliable raw-CSS injector; selectors are the real Streamlit DOM
-# (stButtonGroup wrapper; stBaseButton-segmented_control[Active] on the buttons).
+# Center/enlarge/pop the switcher (the widget has no such options). st.html keeps
+# <style> (st.markdown strips it); target the confirmed group id and ANY button
+# inside it, so it can't miss the exact button test-id. stButtonGroup is only used
+# by this view switch on the page.
 st.html("""
 <style>
-div[data-testid="stButtonGroup"] {
-    display: flex !important; justify-content: center !important;
-    width: 100% !important; margin: 0.3rem 0 1.4rem 0 !important;
+[data-testid="stButtonGroup"] {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+    margin: 0.4rem 0 1.4rem 0 !important;
 }
-button[data-testid="stBaseButton-segmented_control"],
-button[data-testid="stBaseButton-segmented_controlActive"] {
-    font-size: 1.3rem !important; font-weight: 600 !important;
+[data-testid="stButtonGroup"] button {
+    font-size: 1.3rem !important;
+    font-weight: 600 !important;
     padding: 0.7rem 2rem !important;
 }
-button[data-testid="stBaseButton-segmented_controlActive"] {
+[data-testid="stButtonGroup"] button[aria-checked="true"] {
     font-weight: 800 !important;
     box-shadow: 0 4px 16px rgba(15, 23, 42, 0.25) !important;
 }
