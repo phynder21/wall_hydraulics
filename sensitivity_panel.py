@@ -122,7 +122,7 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
             else np.array([1.0])
         f0 = float(np.nanmin(allF)) if allF.size else 1.0   # fall back to best in view
     pos = np.linspace(0.0, 1.0, prof["a"][0].size)
-    Z, black, finite = [], [], []
+    Z, black, finite, cdata = [], [], [], []
     for v in ordered:
         _vals, F, ok = prof[v]
         ratio = np.where(ok, F / f0 * 100.0, np.nan)     # colour only feasible spots
@@ -130,6 +130,8 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
         finite.append(ratio[np.isfinite(ratio)])
         # Everything the optimizer rejects (over-center OR a broken rule) -> black.
         black.append(np.where(ok, np.nan, 1.0))
+        # Hover shows the actual value + peak force (per cylinder), not the %.
+        cdata.append(np.stack([_vals, F / n_cyl], axis=-1))
     allr = np.concatenate([s for s in finite if s.size]) if any(s.size for s in finite) \
         else np.array([100.0])
     zmin, zmax, strip_cs, dtick = _ratio_colorscale(allr)
@@ -137,7 +139,9 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
                             max(bounds[v][1] - bounds[v][0], 1e-9), 0.0, 1.0))
               for v in ordered]
     fig_strip = go.Figure(go.Heatmap(
-        x=pos, y=ys, z=Z, zmin=zmin, zmax=zmax,
+        x=pos, y=ys, z=Z, zmin=zmin, zmax=zmax, customdata=np.array(cdata),
+        hovertemplate="%{y}<br>value = %{customdata[0]:.3f} m<br>"
+                      "peak force = %{customdata[1]:.1f} N/kg<extra></extra>",
         # blue = lower (better), white = 100% (same), red = higher (worse).
         colorscale=strip_cs, colorbar=_ratio_colorbar(dtick)))
     # Rejected cells (over-center or rule-breaking) on top of the color layer, black.
@@ -212,9 +216,10 @@ def _pair_grid(v1, v2, a, b, d, f, x_cg, z_cg, r1, r2, res, feas):
     return vals1, vals2, peak, ok
 
 
-def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, template="plotly_white",
-                           font=None, res=51, stroke_max=None, roof_clearance=0.0,
-                           width=None, height=None, length_window=None):
+def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
+                           template="plotly_white", font=None, res=51, stroke_max=None,
+                           roof_clearance=0.0, width=None, height=None,
+                           length_window=None):
     """A 2-D 'vary two dimensions at once' heatmap. Pick two of a, b, d, f from the
     dropdown; the other two stay at the current design. Same colour language as the
     strip (% of the current force; black = a spot the optimizer would reject), so it
@@ -247,6 +252,9 @@ def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, template="plotly_whit
         cur = {"a": a, "b": b, "d": d, "f": f}
         fig = go.Figure(go.Heatmap(
             x=vals1, y=vals2, z=ratio, zmin=zmin, zmax=zmax, colorscale=cs,
+            customdata=peak / n_cyl,                      # hover shows force, not %
+            hovertemplate=(f"{v1} = %{{x:.3f}} m<br>{v2} = %{{y:.3f}} m<br>"
+                           "peak force = %{customdata:.1f} N/kg<extra></extra>"),
             colorbar=_ratio_colorbar(dtick)))
         fig.add_trace(go.Heatmap(                        # rejected cells -> black
             x=vals1, y=vals2, z=black, zmin=0.0, zmax=1.0, showscale=False,

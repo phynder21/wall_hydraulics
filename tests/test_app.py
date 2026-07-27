@@ -413,6 +413,25 @@ def test_peak_force_feasible_flags_rule_violations():
     assert np.isnan(p3) and not feas3
 
 
+def test_sensitivity_hover_shows_force_not_percent():
+    """Hovering the strip reports the actual peak force (N/kg, per cylinder) via
+    customdata, not the % used for the color."""
+    import numpy as np
+    import sensitivity_panel as sp
+    bounds = {"a": (0.05, 1.2), "b": (0.05, 2.5), "d": (0.0, 1.0), "f": (0.0, 2.5)}
+    _bar, strip, _c = sp.build_sensitivity_figures(0.6, 1.8, 0.1, 0.4, 1.2, 0.55,
+                                                   bounds, n_cyl=2)
+    hm = strip.data[0]
+    assert "N/kg" in hm.hovertemplate and "customdata[1]" in hm.hovertemplate
+    cd2 = np.array(hm.customdata)
+    assert cd2.shape[-1] == 2, "customdata carries [value, force]"
+    # force is per cylinder: half the whole-wall force at n_cyl=2
+    _b1, s1, _c1 = sp.build_sensitivity_figures(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, bounds)
+    cd1 = np.array(s1.data[0].customdata)
+    fin = np.isfinite(cd1[..., 1]) & np.isfinite(cd2[..., 1])
+    assert np.allclose(cd2[..., 1][fin], cd1[..., 1][fin] / 2, rtol=1e-6)
+
+
 def test_interaction_matrix_has_all_six_pairs():
     """The PDF interaction matrix is a 2x3 of all six variable pairs: 6 force
     heatmaps + 6 black-mask heatmaps + 6 current-design dots, on one shared scale."""

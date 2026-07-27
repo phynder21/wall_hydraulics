@@ -824,7 +824,7 @@ sens_bar, sens_strip = render_sensitivity_panel(
 # --- 2-D interaction map: pick two dimensions to vary together (Designer only) ---
 render_interaction_map(
     a, b, d, f, st.session_state["x_cg"], st.session_state["z_cg"], USER_BOUNDS,
-    template=PLOT_TEMPLATE, font=PLOT_FONT, stroke_max=stroke_ratio,
+    n_cyl=n_cyl, template=PLOT_TEMPLATE, font=PLOT_FONT, stroke_max=stroke_ratio,
     roof_clearance=roof_clearance, width=container_width, height=container_height)
 
 # --- Export the current design as a one-page PDF spec sheet ---
