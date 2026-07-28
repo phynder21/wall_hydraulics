@@ -45,51 +45,15 @@ st.sidebar.caption(f"build: {BUILD}")
 # Top-of-page view switch, as tab-like buttons. (Real st.tabs would render every
 # view's body — and every view's sidebar — on each run, since it just hides the
 # inactive ones; a segmented control lets us render ONLY the selected view below.)
-# Center/enlarge/pop the switcher. Injected <style> gets sanitized and internal
-# test-ids move between Streamlit versions, so do it the version-proof way: from a
-# 0-height helper iframe (which is allowed same-origin access to the page), find the
-# three view buttons BY THEIR TEXT and style them + center their group directly. A
-# MutationObserver re-applies it after Streamlit re-renders.
-import streamlit.components.v1 as components
-components.html("""
-<script>
-(function () {
-  try {
-    var doc = window.parent.document;
-    var NAMES = ["Designer", "Browse configurations", "Size from a cylinder"];
-    function ancestor(nodes) {
-      var a = nodes[0];
-      while (a && !nodes.every(function (n) { return a.contains(n); })) a = a.parentElement;
-      return a;
-    }
-    function apply() {
-      var btns = Array.prototype.slice.call(doc.querySelectorAll("button"))
-        .filter(function (b) { return NAMES.indexOf((b.textContent || "").trim()) !== -1; });
-      if (btns.length < 3) return;
-      btns.forEach(function (b) {
-        b.style.setProperty("font-size", "1.35rem", "important");
-        b.style.setProperty("font-weight", "600", "important");
-        b.style.setProperty("padding", "0.7rem 2rem", "important");
-        b.style.setProperty("min-height", "0", "important");
-      });
-      var g = ancestor(btns);
-      if (g) {
-        g.style.setProperty("display", "flex", "important");
-        g.style.setProperty("justify-content", "center", "important");
-        g.style.setProperty("width", "100%", "important");
-        g.style.setProperty("margin", "0.4rem 0 1.4rem 0", "important");
-      }
-    }
-    apply();
-    new MutationObserver(apply).observe(doc.body, { childList: true, subtree: true });
-    [120, 350, 800, 1600].forEach(function (t) { setTimeout(apply, t); });
-  } catch (e) {}
-})();
-</script>
-""", height=0)
-_view = st.segmented_control(
-    "View", ["Designer", "Browse configurations", "Size from a cylinder"],
-    key="view", label_visibility="collapsed", default="Designer") or "Designer"
+# Top-of-page view switch, put in a bordered container so it reads as a distinct
+# header bar separated from the content below. (Styling the segmented control itself
+# via CSS/JS wouldn't take on the deployment, so this uses only native Streamlit
+# elements, which always render.) A divider underlines the separation.
+with st.container(border=True):
+    _view = st.segmented_control(
+        "View", ["Designer", "Browse configurations", "Size from a cylinder"],
+        key="view", label_visibility="collapsed", default="Designer") or "Designer"
+st.divider()
 if _view == "Browse configurations":
     render_browse()
     st.stop()
