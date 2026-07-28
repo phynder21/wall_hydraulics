@@ -533,6 +533,8 @@ def test_browse_inspector_has_shared_panels():
     md = _all_markdown(at)
     assert "Cylinder sizing" in md, "bore & pressure card missing from Browse"
     assert "Sensitivity" in md, "sensitivity panel missing from Browse"
+    assert "Interaction map" in md, "2-D interaction map missing from Browse"
+    assert any(s.key == "interact_v1" for s in at.selectbox), "interaction dropdowns missing"
     assert any(b.key == "browse_gen" for b in at.button), "Browse PDF export missing"
 
 
@@ -551,7 +553,10 @@ def test_reverse_shows_sensitivity_and_pdf_when_feasible():
     at.session_state["rv_stroke"] = 2500.0     #   geometry in the tiny grid fits
     at.run()
     assert not at.exception, at.exception
-    assert "Sensitivity" in _all_markdown(at), "sensitivity panel missing from Reverse"
+    md = _all_markdown(at)
+    assert "Sensitivity" in md, "sensitivity panel missing from Reverse"
+    assert "Interaction map" in md, "2-D interaction map missing from Reverse"
+    assert any(s.key == "interact_v1" for s in at.selectbox), "interaction dropdowns missing"
     btn = next(b for b in at.button if b.key == "reverse_gen")
     btn.click().run()
     assert not at.exception, at.exception

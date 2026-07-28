@@ -71,13 +71,17 @@ interactions), which is why it updates as you move. Reflects your cg and mountin
 limits. The same panel appears in the Browse and Reverse inspectors, for whichever
 geometry you're looking at there.
 
-**Interaction map — vary two dimensions at once (Designer).** Below the strip, a
-dropdown lets you pick *two* of `a, b, d, f` to sweep together (the other two stay
-at your current design), drawn as a 2-D heatmap in the same colours — % of your
-current force, **black = a spot the optimizer would reject**, white dot = now.
-Because it moves two knobs together it shows their **interaction**: a diagonal blue
-pocket is a combined move that lowers the force in a way the one-at-a-time strip
-can't see (e.g. raising `b` and `d` together).
+**Interaction map — vary two dimensions at once.** Below the strip, two dropdowns
+let you pick *two* of `a, b, d, f` to sweep together (the other two stay at your
+current design), drawn as a 2-D heatmap in the same colours — % of your current
+force, **black = a spot the optimizer would reject**, white dot = now. Because it
+moves two knobs together it shows their **interaction**: a diagonal blue pocket is
+a combined move that lowers the force in a way the one-at-a-time strip can't see
+(e.g. raising `b` and `d` together). It appears in all three views, each with that
+view's rules: in **Reverse** the black region is where the cylinder length falls
+outside the one you entered, so the coloured band is the "ring" of geometries that
+cylinder can actually drive (the length constraint is a distance, so it reads as
+arcs rather than boxes).
 
 **Optimize to minimize — force or length.** In the Optimize tab you choose what
 to minimize:

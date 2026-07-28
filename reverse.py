@@ -12,7 +12,7 @@ import lookup
 import report
 from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
                     _diagram_figure, _force_length_figures, _sb_linked, _sb_range)
-from sensitivity_panel import render_sensitivity_panel
+from sensitivity_panel import render_sensitivity_panel, render_interaction_map
 from pdf_export import render_pdf_export
 
 # Per-unit spec for each cylinder input: (label, lo, hi, default, step, fmt,
@@ -194,6 +194,15 @@ def render_reverse():
     # Same sensitivity panel as the Designer, for the best-fit geometry. The
     # output-geometry limits bound each row; the chosen a, b, d, f mark the dot.
     sens_bar, sens_strip = render_sensitivity_panel(
+        a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl,
+        roof_clearance=clearance, width=width, height=height,
+        length_window=(L_ret, L_ext))
+
+    # Same 2-D interaction map: vary two of a, b, d, f (others fixed at the best fit).
+    # Here "black" = a geometry whose cylinder length falls outside the cylinder you
+    # entered, so the colored (feasible) region is the ring of designs THIS cylinder
+    # can drive — lower force (blue) = more wall mass it can raise.
+    render_interaction_map(
         a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl,
         roof_clearance=clearance, width=width, height=height,
         length_window=(L_ret, L_ext))

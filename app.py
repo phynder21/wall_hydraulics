@@ -836,7 +836,7 @@ sens_bar, sens_strip = render_sensitivity_panel(
     stroke_max=stroke_ratio, roof_clearance=roof_clearance,
     width=container_width, height=container_height)
 
-# --- 2-D interaction map: pick two dimensions to vary together (Designer only) ---
+# --- 2-D interaction map: pick two dimensions to vary together (also in Browse/Reverse) ---
 render_interaction_map(
     a, b, d, f, st.session_state["x_cg"], st.session_state["z_cg"], USER_BOUNDS,
     n_cyl=n_cyl, template=PLOT_TEMPLATE, font=PLOT_FONT, stroke_max=stroke_ratio,
