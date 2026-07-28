@@ -13,7 +13,7 @@ import streamlit as st
 from wall import (compute_F_piston, compute_cylinder_length,
                   compute_geometry, STROKE_RATIO_MAX)
 from optimize import CONTAINER_PRESETS, optimize_actuator
-from sensitivity_panel import render_sensitivity_panel
+from sensitivity_panel import render_sensitivity_panel, render_interaction_map
 from cylinder_panel import render_cylinder_sizing
 from pdf_export import render_pdf_export
 import lookup
@@ -326,6 +326,12 @@ def render_browse():
     # Same sensitivity panel as the Designer, for the inspected geometry. The
     # mounting-limit ranges bound each row; the inspected a, b, d, f mark the dot.
     sens_bar, sens_strip = render_sensitivity_panel(
+        a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl,
+        stroke_max=stroke_max, roof_clearance=clearance, width=width, height=height)
+
+    # Same 2-D interaction map as the Designer: vary two of a, b, d, f (others fixed
+    # at the inspected row), same rules (stroke ratio, roof, over-center).
+    render_interaction_map(
         a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl,
         stroke_max=stroke_max, roof_clearance=clearance, width=width, height=height)
 
