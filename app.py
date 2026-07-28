@@ -45,14 +45,20 @@ st.sidebar.caption(f"build: {BUILD}")
 # Top-of-page view switch, as tab-like buttons. (Real st.tabs would render every
 # view's body — and every view's sidebar — on each run, since it just hides the
 # inactive ones; a segmented control lets us render ONLY the selected view below.)
-# Top-of-page view switch, put in a bordered container so it reads as a distinct
-# header bar separated from the content below. (Styling the segmented control itself
-# via CSS/JS wouldn't take on the deployment, so this uses only native Streamlit
-# elements, which always render.) A divider underlines the separation.
+# Top-of-page view switch as a header bar: full-width buttons (large), the active
+# view coloured as a primary button, the rest secondary. Built from native buttons
+# (not the segmented control) because CSS styling doesn't take on the deployment;
+# these always render, and `type="primary"` colours the active tab.
+_VIEWS = ["Designer", "Browse configurations", "Size from a cylinder"]
+st.session_state.setdefault("view", "Designer")
 with st.container(border=True):
-    _view = st.segmented_control(
-        "View", ["Designer", "Browse configurations", "Size from a cylinder"],
-        key="view", label_visibility="collapsed", default="Designer") or "Designer"
+    _cols = st.columns(len(_VIEWS))
+    for _col, _name in zip(_cols, _VIEWS):
+        if _col.button(_name, key=f"viewbtn_{_name}", use_container_width=True,
+                       type="primary" if st.session_state["view"] == _name else "secondary"):
+            st.session_state["view"] = _name
+            st.rerun()
+_view = st.session_state["view"]
 st.divider()
 if _view == "Browse configurations":
     render_browse()
