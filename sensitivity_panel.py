@@ -298,8 +298,9 @@ def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
             f"**white = same**, **red = worse**, **blue = better**; the **white dot** "
             f"is your design. "
             f"{_blackout_sentence(stroke_max, width, height, length_window)} "
-            f"Because it moves **both** dimensions together, a blue area here can be a "
-            f"lower-force design you'd miss by changing just one at a time (the strip)."
+            f"Sometimes the force only drops when you change **both** dimensions "
+            f"together — those designs show up as blue here, but the one-at-a-time "
+            f"strip above can't find them."
             f"{_capacity_note(length_window)}")
 
 
