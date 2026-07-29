@@ -80,9 +80,21 @@ def _blackout_sentence(stroke_max, width, height, length_window):
     if width is not None and height is not None:
         why.append("the attachment rises through the roof")
     if length_window is not None:
-        why.append("the cylinder is longer or shorter than the one you entered")
+        why.append("somewhere in the swing the geometry needs the cylinder longer "
+                   "than its extended length or shorter than its closed length")
     joined = why[0] if len(why) == 1 else ", ".join(why[:-1]) + ", or " + why[-1]
     return f"**Black = a geometry you can't use** — where {joined}."
+
+
+def _capacity_note(length_window):
+    """A Reverse-only clause: since the cylinder is fixed, lower force = more wall
+    mass it can raise, and the coloured region is the geometries it can actually
+    drive. Empty for the Designer/Browse views."""
+    if length_window is None:
+        return ""
+    return (" You're sizing from a fixed cylinder here, so the coloured region is the "
+            "set of geometries **that cylinder can actually drive**, and within it "
+            "**lower force (blue) = more wall mass it can raise**.")
 
 
 def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
@@ -176,7 +188,8 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
                f"force there as a **% of now** (200% = double, 50% = half) — "
                f"**white = same**, **red = worse**, **blue = better**. "
                f"{_blackout_sentence(stroke_max, width, height, length_window)} "
-               f"The **white dot** is your current design.")
+               f"The **white dot** is your current design."
+               f"{_capacity_note(length_window)}")
     return fig_bar, fig_strip, caption
 
 
@@ -229,7 +242,7 @@ def _pair_grid(v1, v2, a, b, d, f, x_cg, z_cg, r1, r2, res, feas):
 
 
 def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
-                           template="plotly_white", font=None, res=51, stroke_max=None,
+                           template="plotly_white", font=None, res=71, stroke_max=None,
                            roof_clearance=0.0, width=None, height=None,
                            length_window=None):
     """A 2-D 'vary two dimensions at once' heatmap. Pick two of a, b, d, f from the
@@ -286,7 +299,8 @@ def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
             f"is your design. "
             f"{_blackout_sentence(stroke_max, width, height, length_window)} "
             f"Moving *two* dimensions at once shows their **interaction** — a diagonal "
-            f"blue pocket is a gain the strip can't see.")
+            f"blue pocket is a gain the strip can't see."
+            f"{_capacity_note(length_window)}")
 
 
 _ALL_PAIRS = (("a", "b"), ("a", "d"), ("a", "f"), ("b", "d"), ("b", "f"), ("d", "f"))

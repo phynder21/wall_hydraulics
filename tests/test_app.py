@@ -381,13 +381,17 @@ def test_blackout_sentence_is_view_specific():
     """The 'why is it black' sentence lists only the rules that apply in each view:
     stroke ratio for Designer/Browse, the cylinder-length window for Reverse; roof and
     over-center in both."""
-    from sensitivity_panel import _blackout_sentence
+    from sensitivity_panel import _blackout_sentence, _capacity_note
     designer = _blackout_sentence(1.8, 2.44, 2.59, None)
     assert "over-center" in designer and "roof" in designer
-    assert "stroke ratio" in designer and "entered" not in designer
+    assert "stroke ratio" in designer and "cylinder longer" not in designer
     reverse = _blackout_sentence(None, 2.44, 2.59, (1.4, 2.0))
     assert "over-center" in reverse and "roof" in reverse
-    assert "entered" in reverse and "stroke ratio" not in reverse
+    # Reverse says the geometry needs a length the cylinder can't reach, not "stroke ratio".
+    assert "extended length" in reverse and "closed length" in reverse
+    assert "stroke ratio" not in reverse
+    # The capacity note (lower force = more mass) is Reverse-only.
+    assert "wall mass" in _capacity_note((1.4, 2.0)) and _capacity_note(None) == ""
 
 
 def test_peak_force_flags_over_center_as_impossible():
