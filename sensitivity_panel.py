@@ -70,6 +70,21 @@ def _ratio_colorbar(dtick):
                 outlinewidth=1, outlinecolor="#888")
 
 
+def _blackout_sentence(stroke_max, width, height, length_window):
+    """Explicit 'why a spot is black' text, listing only the rules that apply in this
+    view: over-center and the roof always, plus the stroke-ratio cap (Designer/Browse)
+    or the cylinder-length window (Reverse), whichever the view uses."""
+    why = ["the cylinder goes over-center"]
+    if stroke_max is not None:
+        why.append("the stroke ratio exceeds your limit")
+    if width is not None and height is not None:
+        why.append("the attachment rises through the roof")
+    if length_window is not None:
+        why.append("the cylinder is longer or shorter than the one you entered")
+    joined = why[0] if len(why) == 1 else ", ".join(why[:-1]) + ", or " + why[-1]
+    return f"**Black = a geometry you can't use** — where {joined}."
+
+
 def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
                               template="plotly_white", font=None, samples=SAMPLES,
                               stroke_max=None, roof_clearance=0.0, width=None,
@@ -156,15 +171,12 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
         xaxis=dict(title="Position in each variable's range  (0 = min → 1 = max)",
                    range=[0.0, 1.0]),
         margin=dict(l=10, r=10, t=6, b=40))
-    caption = (f"**Top:** each dimension's total impact (bar length + color). "
-               f"**Bottom — how much better or worse each spot is.** Color = the peak "
-               f"force if you moved *that* dimension to *that* position, as a **percent "
-               f"of your current force** (so 200% = double, 50% = half). **White (100%) "
-               f"= same as now**; **red = higher (worse)**, **blue = lower (better)**; "
-               f"**black = a spot the optimizer would reject** — over-center, over the "
-               f"stroke ratio, through the roof, or outside the cylinder's length. The "
-               f"**white dot** is your current design (100%). Reflects your cg and "
-               f"mounting limits.")
+    caption = (f"**Top:** each dimension's overall impact on the force. "
+               f"**Bottom:** move a dimension to any spot and the color is the peak "
+               f"force there as a **% of now** (200% = double, 50% = half) — "
+               f"**white = same**, **red = worse**, **blue = better**. "
+               f"{_blackout_sentence(stroke_max, width, height, length_window)} "
+               f"The **white dot** is your current design.")
     return fig_bar, fig_strip, caption
 
 
@@ -269,13 +281,12 @@ def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
             margin=dict(l=10, r=10, t=6, b=40))
         st.plotly_chart(fig, width="stretch")
         st.caption(
-            f"Color = the peak force at that (**{v1}**, **{v2}**) combination as a "
-            f"**percent of your current force** (the other two dimensions stay put). "
-            f"**White (100%) = same as now** (the **white dot**), **red = worse**, "
-            f"**blue = better**, **black = a spot the optimizer would reject**. Unlike "
-            f"the strip above, this moves *two* dimensions together, so it shows their "
-            f"**interaction** — a diagonal blue pocket is an improvement the one-at-a-"
-            f"time view can't reach.")
+            f"Color = the peak force at each (**{v1}**, **{v2}**) as a **% of now** — "
+            f"**white = same**, **red = worse**, **blue = better**; the **white dot** "
+            f"is your design. "
+            f"{_blackout_sentence(stroke_max, width, height, length_window)} "
+            f"Moving *two* dimensions at once shows their **interaction** — a diagonal "
+            f"blue pocket is a gain the strip can't see.")
 
 
 _ALL_PAIRS = (("a", "b"), ("a", "d"), ("a", "f"), ("b", "d"), ("b", "f"), ("d", "f"))
