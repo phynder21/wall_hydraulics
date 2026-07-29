@@ -41,7 +41,7 @@ def _profiles(a, b, d, f, x_cg, z_cg, bounds_items, samples, feas):
 
 
 def _ratio_colorscale(finite):
-    """Shared 'force vs. current %' colouring. Given the finite % ratios, return
+    """Shared 'force vs. current %' coloring. Given the finite % ratios, return
     (zmin, zmax, colorscale, dtick): the key spans the real data range with white
     placed exactly at 100%, blue below (better), red above (worse) — so the legend
     never shows a phantom blue band and 100% is always a labelled tick."""
@@ -88,11 +88,11 @@ def _blackout_sentence(stroke_max, width, height, length_window):
 
 def _capacity_note(length_window):
     """A Reverse-only clause: since the cylinder is fixed, lower force = more wall
-    mass it can raise, and the coloured region is the geometries it can actually
+    mass it can raise, and the colored region is the geometries it can actually
     drive. Empty for the Designer/Browse views."""
     if length_window is None:
         return ""
-    return (" You're sizing from a fixed cylinder here, so the coloured region is the "
+    return (" You're sizing from a fixed cylinder here, so the colored region is the "
             "set of geometries **that cylinder can actually drive**, and within it "
             "**lower force (blue) = more wall mass it can raise**.")
 
@@ -152,7 +152,7 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
     Z, black, finite, cdata = [], [], [], []
     for v in ordered:
         _vals, F, ok = prof[v]
-        ratio = np.where(ok, F / f0 * 100.0, np.nan)     # colour only feasible spots
+        ratio = np.where(ok, F / f0 * 100.0, np.nan)     # color only feasible spots
         Z.append(ratio)
         finite.append(ratio[np.isfinite(ratio)])
         # Everything the optimizer rejects (over-center OR a broken rule) -> black.
@@ -242,11 +242,11 @@ def _pair_grid(v1, v2, a, b, d, f, x_cg, z_cg, r1, r2, res, feas):
 
 
 def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
-                           template="plotly_white", font=None, res=71, stroke_max=None,
+                           template="plotly_white", font=None, res=91, stroke_max=None,
                            roof_clearance=0.0, width=None, height=None,
                            length_window=None):
     """A 2-D 'vary two dimensions at once' heatmap. Pick two of a, b, d, f from the
-    dropdown; the other two stay at the current design. Same colour language as the
+    dropdown; the other two stay at the current design. Same color language as the
     strip (% of the current force; black = a spot the optimizer would reject), so it
     exposes the interactions the one-at-a-time strip can't see (combined moves)."""
     with st.container(border=True):
@@ -298,8 +298,8 @@ def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
             f"**white = same**, **red = worse**, **blue = better**; the **white dot** "
             f"is your design. "
             f"{_blackout_sentence(stroke_max, width, height, length_window)} "
-            f"Moving *two* dimensions at once shows their **interaction** — a diagonal "
-            f"blue pocket is a gain the strip can't see."
+            f"Because it moves **both** dimensions together, a blue area here can be a "
+            f"lower-force design you'd miss by changing just one at a time (the strip)."
             f"{_capacity_note(length_window)}")
 
 

@@ -42,13 +42,10 @@ n_cyl = st.sidebar.radio(
          "half — so every force and bore size shown is PER CYLINDER. The geometry "
          "is the same either way.")
 st.sidebar.caption(f"build: {BUILD}")
-# Top-of-page view switch, as tab-like buttons. (Real st.tabs would render every
-# view's body — and every view's sidebar — on each run, since it just hides the
-# inactive ones; a segmented control lets us render ONLY the selected view below.)
 # Top-of-page view switch as a header bar: full-width buttons (large), the active
-# view coloured as a primary button, the rest secondary. Built from native buttons
-# (not the segmented control) because CSS styling doesn't take on the deployment;
-# these always render, and `type="primary"` colours the active tab.
+# view colored as a primary button, the rest secondary. Native buttons render
+# reliably (CSS styling of the segmented control didn't take on the deployment),
+# and `type="primary"` colors the active tab; st.stop renders only the chosen view.
 _VIEWS = ["Designer", "Browse configurations", "Size from a cylinder"]
 st.session_state.setdefault("view", "Designer")
 with st.container(border=True):
