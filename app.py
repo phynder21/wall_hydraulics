@@ -102,7 +102,7 @@ def _guide_diagram():
     base, attachment and cg, with a and f dimensioned in Cartesian, and b (along the
     wall) and d (perpendicular off it) dimensioned in the wall frame. Illustrative
     values (a bigger d than typical) so every dimension reads clearly."""
-    a, b, d, f, xcg, zcg = 0.6, 1.4, 0.35, 0.4, 1.15, 0.5
+    a, b, d, f, xcg, zcg = 0.6, 1.55, 0.5, 0.4, 1.0, 0.42
     W, H = 2.438, 2.591
     th = np.radians(52)
     c, s = np.cos(th), np.sin(th)
@@ -157,15 +157,20 @@ def _guide_diagram():
     lab = (p0 + p1) / 2 + 0.17 * (-perp)
     fig.add_annotation(x=lab[0], y=lab[1], text="<b>b</b> — up the wall", showarrow=False,
                        textangle=-(90 - np.degrees(th)), font=dict(size=13, color="#0f172a"))
-    # d: the bracket sticks off the wall at a right angle; mark the right angle.
-    ra = 0.11
+    # d: the bracket itself IS the dimension. End ticks (parallel to the wall) at both
+    # ends turn it into a measured distance, and a right-angle mark shows it leaves the
+    # wall square; the label sits in open space with the arrow pointing at the bracket.
+    tk = 0.06 * wall
+    line(footb - tk, footb + tk, "#475569", 1)     # tick at the wall end
+    line(att - tk, att + tk, "#475569", 1)         # tick at the attachment end
+    ra = 0.12
     line(footb + ra * wall, footb + ra * wall + ra * perp, "#475569", 1)
     line(footb + ra * wall + ra * perp, footb + ra * perp, "#475569", 1)
     mid = (footb + att) / 2
-    fig.add_annotation(x=mid[0], y=mid[1], ax=mid[0] + 0.62, ay=mid[1] - 0.08,
-                       axref="x", ayref="y", text="<b>d</b> — sticks off the wall",
-                       showarrow=True, arrowhead=3, arrowwidth=1.3, arrowcolor="#475569",
-                       font=dict(size=13, color="#0f172a"), bgcolor="rgba(255,255,255,0.85)")
+    fig.add_annotation(x=mid[0], y=mid[1], ax=0.42, ay=1.82, axref="x", ayref="y",
+                       text="<b>d</b> — sticks off the wall", showarrow=True, arrowhead=3,
+                       arrowwidth=1.3, arrowcolor="#475569", font=dict(size=13, color="#0f172a"),
+                       bgcolor="rgba(255,255,255,0.85)")
     fig.add_annotation(x=cg[0], y=cg[1], ax=cg[0] - 0.8, ay=cg[1] + 0.5, axref="x", ayref="y",
                        text="<b>cg</b> — weight acts here", showarrow=True, arrowhead=3,
                        arrowwidth=1.3, arrowcolor="#475569", font=dict(size=12, color="#0f172a"),
