@@ -190,6 +190,15 @@ def test_control_tabs_present():
         assert name in labels, f"missing control tab: {name}"
 
 
+def test_quick_guide_link_opens():
+    """A quick-guide link sits under the view tabs and opens its modal without error."""
+    at = fresh_app()
+    btn = [b for b in at.button if b.key == "guide_btn"]
+    assert btn, "quick-guide link missing under the view tabs"
+    btn[0].click().run()
+    assert not at.exception, at.exception
+
+
 def test_summary_metrics_render():
     """The four glance metrics render with the expected labels and units."""
     at = fresh_app()

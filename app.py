@@ -42,6 +42,61 @@ n_cyl = st.sidebar.radio(
          "half — so every force and bore size shown is PER CYLINDER. The geometry "
          "is the same either way.")
 st.sidebar.caption(f"build: {BUILD}")
+# --- Quick-start guide, opened as a page-like modal from a link under the tabs ---
+APP_GUIDE = """
+### What this tool is for
+
+It sizes the **hydraulic cylinder that raises a hinged shipping-container sidewall**
+— or, going the other way, finds the geometry a cylinder you already have can drive.
+The aim is a design that needs the **least force**, so you can use a smaller, cheaper
+cylinder.
+
+The wall pivots on a hinge and swings from flat (0°) to upright (90°) while the
+cylinder pushes it up. Four numbers place the cylinder:
+
+- **a** — base position along the floor
+- **b** — attachment point up the wall
+- **d** — how far the bracket sticks off the wall
+- **f** — height of the base above the floor
+
+### The three tabs
+
+- **Designer** — set your wall (container size, weight) and **optimize** a, b, d, f to
+  the smallest force. It also reports the cylinder you'd need: bore, pressure, stroke,
+  and closed/extended length.
+- **Browse configurations** — an instant search of pre-computed geometries; a faster
+  way to explore than waiting on the optimizer.
+- **Size from a cylinder** — enter a **real cylinder** you can buy; it finds the best
+  geometry that cylinder can drive and the heaviest wall it can raise.
+
+### How to use it
+
+1. **Designer** — dial in your wall and optimize. Read off the **cylinder spec** it
+   needs (force, stroke, closed/extended length). This tells you *what to buy*.
+2. **Shop** for a real cylinder as close to that spec as you can find.
+3. **Size from a cylinder** — plug that real cylinder in. It gives the **final
+   a, b, d, f** to build and the max wall mass it can raise. This tells you *how to
+   mount what you bought*.
+
+The geometry in step 3 won't exactly match step 1 — that's expected: the real
+cylinder's length range re-shapes the best layout. Just check that its **max wall
+mass is at least your actual wall + load** (with your safety factor).
+
+### Reading the diagrams
+
+Under each result, the **sensitivity** charts show which dimension moves the force
+most and which way to nudge it, and the **interaction map** shows two dimensions at
+once. Everywhere: **blue = lower force (better)**, **red = higher (worse)**,
+**black = a geometry that breaks a rule** (e.g. over-center, over the stroke ratio,
+or — in Reverse — outside your cylinder's length).
+"""
+
+
+@st.dialog("How this tool works", width="large")
+def _show_guide():
+    st.markdown(APP_GUIDE)
+
+
 # Top-of-page view switch as a header bar: full-width buttons (large), the active
 # view colored as a primary button, the rest secondary. Native buttons render
 # reliably (CSS styling of the segmented control didn't take on the deployment),
@@ -56,6 +111,9 @@ with st.container(border=True):
             st.session_state["view"] = _name
             st.rerun()
 _view = st.session_state["view"]
+st.caption("New here? What this tool is for and how to use it —")
+if st.button("Open the quick guide", type="tertiary", key="guide_btn"):
+    _show_guide()
 st.divider()
 if _view == "Browse configurations":
     render_browse()
