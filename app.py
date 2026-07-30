@@ -43,7 +43,7 @@ n_cyl = st.sidebar.radio(
          "is the same either way.")
 st.sidebar.caption(f"build: {BUILD}")
 # --- Quick-start guide, opened as a page-like modal from a link under the tabs ---
-APP_GUIDE = """
+_GUIDE_INTRO = """
 ### What this tool is for
 
 It sizes the **hydraulic cylinder that raises a hinged shipping-container sidewall**
@@ -52,13 +52,16 @@ The aim is a design that needs the **least force**, so you can use a smaller, ch
 cylinder.
 
 The wall pivots on a hinge and swings from flat (0°) to upright (90°) while the
-cylinder pushes it up. Four numbers place the cylinder:
+cylinder pushes it up. Four numbers place the cylinder (see the diagram below):
 
 - **a** — base position along the floor
 - **b** — attachment point up the wall
 - **d** — how far the bracket sticks off the wall
 - **f** — height of the base above the floor
+- **x_cg, z_cg** — where the wall's weight acts (along the wall, and off it)
+"""
 
+_GUIDE_REST = """
 ### The three tabs
 
 - **Designer** — set your wall (container size, weight) and **optimize** a, b, d, f to
@@ -92,9 +95,77 @@ or — in Reverse — outside your cylinder's length).
 """
 
 
+def _guide_diagram():
+    """A labelled schematic of the geometry for the guide: hinge, wall, cylinder,
+    base, attachment and cg, with a, b, d, f dimensioned."""
+    a, b, d, f, xcg, zcg = 0.6, 1.8, 0.1, 0.4, 1.2, 0.55
+    W, H = 2.438, 2.591
+    th = np.radians(52)
+    c, s = np.cos(th), np.sin(th)
+    base = (-a, f)
+    tip = (2.30 * c, 2.30 * s)
+    footb = (b * c, b * s)                         # wall-axis point at distance b
+    att = (b * c - d * s, b * s + d * c)           # attachment (b up, d off)
+    cg = (xcg * c - zcg * s, xcg * s + zcg * c)
+    fig = go.Figure()
+
+    def line(p, q, color, w):
+        fig.add_trace(go.Scatter(x=[p[0], q[0]], y=[p[1], q[1]], mode="lines",
+                                 hoverinfo="skip", showlegend=False,
+                                 line=dict(color=color, width=w)))
+    fig.add_trace(go.Scatter(x=[0, -W, -W, 0], y=[0, 0, H, H], mode="lines",
+                             line=dict(color="#cbd5e1", width=2), hoverinfo="skip",
+                             showlegend=False))
+    fig.add_hline(y=0, line=dict(color="#cbd5e1", dash="dot"))
+    line((0, 0), tip, "#111827", 7)                # wall
+    line(base, (base[0], 0), "#94a3b8", 3)         # base post
+    line(footb, att, "#94a3b8", 3)                 # bracket
+    line(base, att, "#dc2626", 4)                  # cylinder
+
+    def dot(p, color, name, sym="circle", size=11):
+        fig.add_trace(go.Scatter(x=[p[0]], y=[p[1]], mode="markers", name=name,
+                                 marker=dict(size=size, color=color, symbol=sym),
+                                 hoverinfo="skip"))
+    dot((0, 0), "#111827", "hinge")
+    dot(base, "#dc2626", "cylinder base", "square")
+    dot(att, "#2563eb", "piston attachment")
+    dot(cg, "#16a34a", "center of gravity", "cross", 13)
+    # a (floor bracket) and f (height) dimensions
+    fig.add_shape(type="line", x0=0, y0=-0.16, x1=-a, y1=-0.16, line=dict(color="#475569", width=1))
+    for xx in (0, -a):
+        fig.add_shape(type="line", x0=xx, y0=-0.10, x1=xx, y1=-0.22, line=dict(color="#475569", width=1))
+    fig.add_annotation(x=-a / 2, y=-0.34, text="<b>a</b> — base along the floor",
+                       showarrow=False, font=dict(size=13, color="#0f172a"))
+    fig.add_shape(type="line", x0=-a - 0.16, y0=0, x1=-a - 0.16, y1=f, line=dict(color="#475569", width=1))
+    for yy in (0, f):
+        fig.add_shape(type="line", x0=-a - 0.10, y0=yy, x1=-a - 0.22, y1=yy, line=dict(color="#475569", width=1))
+    fig.add_annotation(x=-a - 0.5, y=f / 2, text="<b>f</b> — base height",
+                       showarrow=False, font=dict(size=13, color="#0f172a"), textangle=-90)
+
+    def arrow(text, x, y, ax, ay, size=13):
+        fig.add_annotation(x=x, y=y, ax=ax, ay=ay, axref="x", ayref="y", text=text,
+                           showarrow=True, arrowhead=3, arrowwidth=1.3,
+                           arrowcolor="#475569", font=dict(size=size, color="#0f172a"),
+                           bgcolor="rgba(255,255,255,0.85)")
+    arrow("<b>b</b> — up the wall", footb[0], footb[1], footb[0] + 0.55, footb[1] - 0.4)
+    arrow("<b>d</b> — bracket offset", att[0], att[1], att[0] + 0.75, att[1] + 0.2)
+    arrow("<b>cg</b> — weight acts here<br>(x_cg up the wall, z_cg off it)",
+          cg[0], cg[1], cg[0] - 0.75, cg[1] + 0.45, size=12)
+    fig.add_annotation(x=tip[0], y=tip[1], text="wall (swings 0–90°)", showarrow=False,
+                       font=dict(size=12, color="#374151"), yshift=14, xshift=30)
+    fig.update_layout(template=PLOT_TEMPLATE, font=PLOT_FONT, height=520,
+                      legend=dict(orientation="h", y=-0.1, x=0.5, xanchor="center"),
+                      margin=dict(l=55, r=25, t=10, b=70),
+                      xaxis_title="x (m)", yaxis_title="z (m)")
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    return fig
+
+
 @st.dialog("How this tool works", width="large")
 def _show_guide():
-    st.markdown(APP_GUIDE)
+    st.markdown(_GUIDE_INTRO)
+    st.plotly_chart(_guide_diagram(), width="stretch")
+    st.markdown(_GUIDE_REST)
 
 
 # Top-of-page view switch as a header bar: full-width buttons (large), the active
