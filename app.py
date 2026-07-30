@@ -432,26 +432,45 @@ with tab_setup:
     _clamp("roof_clearance", 0.0, 0.5)
 
     # --- Display units ---
-    # All values are stored and computed in METERS internally (so the physics,
-    # the optimizer, and shared URLs stay consistent). This toggle only changes
-    # how lengths are *displayed*: widgets, plots, and captions multiply by `U`.
+    # Everything is stored and computed in SI base units internally — lengths in
+    # METERS, mass in KG, force in N, specific force in N/kg, pressure in bar — so
+    # the physics, the optimizer, and shared URLs stay consistent. This single
+    # Imperial/Metric switch only changes how values are *displayed*: widgets,
+    # plots, and captions convert on the way out (and the bore card follows it).
     st.subheader("Display units")
-    units = st.radio("Length units", ["meters", "inches"], key="units",
+    units = st.radio("Units", ["Metric", "Imperial"], key="units",
                      horizontal=True, label_visibility="collapsed")
     fine = st.toggle(
         "Fine precision", key="fine",
         help="Finer slider/number steps for exact values (0.001 m / 0.01 in), "
              "and the optimizer rounds to that precision — so the plotted force "
              "matches the reported one more closely.")
-    inches = units == "inches"
-    U = 39.3700787 if inches else 1.0    # meters -> display-unit factor
-    ULABEL = "in" if inches else "m"      # short unit label
-    UWORD = "inches" if inches else "meters"
-    if inches:
+    imperial = units == "Imperial"
+    U = 39.3700787 if imperial else 1.0   # meters -> display length
+    ULABEL = "in" if imperial else "m"     # short length label
+    UWORD = "inches" if imperial else "meters"
+    MU = 2.2046226 if imperial else 1.0   # kg -> display mass
+    MLABEL = "lb" if imperial else "kg"
+    PU = 0.10197162 if imperial else 1.0  # N/kg -> display specific force (lbf/lb)
+    PLABEL = "lbf/lb" if imperial else "N/kg"
+    if imperial:
         LEN_STEP, LEN_FMT = (0.01, "%.3f") if fine else (0.1, "%.2f")
     else:
         LEN_STEP, LEN_FMT = (0.001, "%.3f") if fine else (0.01, "%.2f")
     ROUND_DP = 3 if fine else 2           # meters precision the optimize snaps to
+
+    def fmt_pk(nkg):
+        """A specific / peak force (base N/kg) in the display unit."""
+        return f"{nkg * PU:.2f} {PLABEL}"
+
+    def fmt_total(newtons):
+        """A total force (base newtons) in the display unit — lbf or kN."""
+        return (f"{newtons * 0.224809:,.0f} lbf" if imperial
+                else f"{newtons / 1000:.1f} kN")
+
+    def fmt_mass(kg):
+        """A mass (base kg) in the display unit."""
+        return f"{kg * MU:,.0f} {MLABEL}"
 
     # --- Center of gravity: the load the actuator must hold ---
     st.subheader(f"Center of gravity ({UWORD})")
@@ -460,10 +479,10 @@ with tab_setup:
                         fmt=LEN_FMT)
     z_cg = linked_input(f"z_cg — perpendicular off wall [{ULABEL}]", "z_cg",
                         0.0, 1.5, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
-    mass = linked_input("Wall + load mass (kg)", "mass", 50.0, 20000.0, step=10.0,
-                        fmt="%.0f",
+    mass = linked_input(f"Wall + load mass ({MLABEL})", "mass", 50.0, 20000.0,
+                        step=10.0, disp_factor=MU, disp_step=10.0, fmt="%.0f",
                         help="Total mass of the wall plus anything mounted on it. "
-                             "Peak force per kg × this = the real cylinder force.")
+                             "Peak force per unit mass × this = the real cylinder force.")
 
     # --- Constraints (shared with the optimizer) ---
     st.subheader("Constraints")
@@ -519,21 +538,23 @@ with tab_optimize:
     if opt_mode == "Cylinder length":
         st.session_state.setdefault("force_cap_nkg", 40.0)
         force_cap_per_kg = linked_input(
-            "Max piston force (N/kg)", "force_cap_nkg", 1.0, 200.0, step=1.0, fmt="%.0f",
-            help="The optimizer returns the shortest cylinder whose PEAK force per kg "
-                 "stays at or below this. Same unit as the Peak force metric; it does "
-                 "not depend on the wall mass.")
+            f"Max piston force ({PLABEL})", "force_cap_nkg", 1.0, 200.0, step=1.0,
+            disp_factor=PU, disp_step=(0.1 if imperial else 1.0),
+            fmt=("%.1f" if imperial else "%.0f"),
+            help="The optimizer returns the shortest cylinder whose PEAK force per unit "
+                 "mass stays at or below this. Same unit as the Peak force metric; it "
+                 "does not depend on the wall mass.")
         opt_mass = linked_input(
-            "Wall + load mass (kg)", "mass", 50.0, 20000.0, step=10.0, fmt="%.0f",
-            wkey="mass_opt",
+            f"Wall + load mass ({MLABEL})", "mass", 50.0, 20000.0, step=10.0,
+            disp_factor=MU, disp_step=10.0, fmt="%.0f", wkey="mass_opt",
             help="Same value as the Setup tab (kept in sync). Only translates the cap "
-                 "into a real force in kN — it does not change the optimization.")
+                 "into a real total force — it does not change the optimization.")
         st.metric(
-            f"Total force ({force_cap_per_kg:.0f} N/kg × {opt_mass:,.0f} kg)",
-            f"{force_cap_per_kg * opt_mass / 1000:.1f} kN",
-            help="The force limit in real units: the N/kg cap multiplied by the wall "
-                 "+ load mass. The optimizer finds the shortest cylinder whose peak "
-                 "force stays within it.")
+            f"Total force ({fmt_pk(force_cap_per_kg)} × {fmt_mass(opt_mass)})",
+            fmt_total(force_cap_per_kg * opt_mass),
+            help="The force limit in real units: the per-mass cap multiplied by the "
+                 "wall + load mass. The optimizer finds the shortest cylinder whose "
+                 "peak force stays within it.")
 
     if st.button("Optimize geometry for current settings", type="primary",
                  use_container_width=True):
@@ -576,11 +597,11 @@ with tab_optimize:
                 # Lead with the geometry, then the extended length and the total
                 # force per cylinder (peak per kg x mass).
                 detail = (f"{geom_str} — extended length {res['L_max'] * U:.2f} {ULABEL}; "
-                          f"total force {_pk_pc:.2f} N/kg × {mass:,.0f} kg = "
-                          f"{_pk_pc * mass / 1000:.1f} kN per cylinder; "
+                          f"total force {fmt_pk(_pk_pc)} × {fmt_mass(mass)} = "
+                          f"{fmt_total(_pk_pc * mass)} per cylinder; "
                           f"stroke ratio {res['stroke_ratio']:.2f}")
             else:
-                detail = (f"{geom_str} — peak {_pk_pc:.2f} N/kg per cylinder, "
+                detail = (f"{geom_str} — peak {fmt_pk(_pk_pc)} per cylinder, "
                           f"stroke {(res['L_max'] - res['L_min']) * U:.2f} {ULABEL} "
                           f"(ratio {res['stroke_ratio']:.2f}), "
                           f"roof breach {res['ceiling_violation'] * U:.3f} {ULABEL}")
@@ -638,7 +659,7 @@ with tab_optimize:
                          if "L_max" in _x else "")
                 _lbl = (f"a = {_x['a'] * U:.2f}  b = {_x['b'] * U:.2f}  "
                         f"d = {_x['d'] * U:.2f}  f = {_x['f'] * U:.2f} {ULABEL}  "
-                        f"— {_x['peak_force'] / n_cyl:.2f} N/kg{_lmax} ({_tag})")
+                        f"— {fmt_pk(_x['peak_force'] / n_cyl)}{_lmax} ({_tag})")
                 if st.button(_lbl, key=f"alt_{_i}", use_container_width=True):
                     for _k in ("a", "b", "d", "f"):
                         _lo, _hi = USER_BOUNDS[_k]
@@ -769,10 +790,10 @@ stroke_ok = L_ratio <= stroke_ratio + STROKE_TOL
 st.info(cylinder_banner(n_cyl))
 with st.container(border=True):
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Peak force (worst case)", f"{peak_pc:.2f} N/kg",
+    m1.metric("Peak force (worst case)", fmt_pk(peak_pc),
               help="Largest force over the full 0–90° swing, per cylinder — the "
                    "number to size the cylinder by.")
-    m2.metric(f"Force at θ = {theta_deg:.0f}°", f"{F_here_pc:.2f} N/kg",
+    m2.metric(f"Force at θ = {theta_deg:.0f}°", fmt_pk(F_here_pc),
               help="Force at the current wall angle (red marker on the plots), "
                    "per cylinder.")
     m3.metric("Stroke", f"{(L_max - L_min) * U:.2f} {ULABEL}",
@@ -782,14 +803,14 @@ with st.container(border=True):
               delta_color=("off" if stroke_ok else "inverse"),
               help=f"Extended/retracted length ratio vs. your {stroke_ratio:g}× limit.")
     total_kn, bar_fill, bar_color = force_bar(peak_pc, mass)
-    st.caption(f"**Peak cylinder force at {mass:,.0f} kg:**")
-    st.markdown(force_bar_html(bar_fill, BAR_NEUTRAL, f"{total_kn:.1f} kN"),
+    st.caption(f"**Peak cylinder force at {fmt_mass(mass)}:**")
+    st.markdown(force_bar_html(bar_fill, BAR_NEUTRAL, fmt_total(peak_pc * mass)),
                 unsafe_allow_html=True)
 
 # --- Cylinder sizing: turn the peak force into a bore + operating pressure ---
 # Shared with the Browse inspector via cylinder_panel; returns the design pressure
 # and bore standard so the PDF export below reports the same numbers.
-pressure_bar, series = render_cylinder_sizing(peak_pc, mass)
+pressure_bar, series = render_cylinder_sizing(peak_pc, mass, imperial=imperial)
 
 # --- Side view large on top; force + length curves small below it. diag_area is
 # created first so its slot sits above the curve row, even though the diagram
@@ -880,10 +901,10 @@ with diag_area:
 with col_force:
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=np.degrees(theta_curve), y=F_plot, mode="lines", name="F(theta)",
+        x=np.degrees(theta_curve), y=F_plot * PU, mode="lines", name="F(theta)",
         line=dict(color=PRIMARY, width=2.5)))
     fig.add_trace(go.Scatter(
-        x=[theta_deg], y=[F_here], mode="markers",
+        x=[theta_deg], y=[F_here * PU], mode="markers",
         marker=dict(size=14, color="red"), name="current"))
     if overlay:
         for _lab, _dd, _col in (("A", design_A, "green"), ("B", design_B, "darkorange")):
@@ -893,24 +914,24 @@ with col_force:
                                        x_cg=_dd["x_cg"], z_cg=_dd["z_cg"])
             _Fd = np.where(np.isfinite(_Fd) & (np.abs(_Fd) <= F_CAP), _Fd, np.nan)
             fig.add_trace(go.Scatter(
-                x=np.degrees(theta_curve), y=_Fd, mode="lines",
+                x=np.degrees(theta_curve), y=_Fd * PU, mode="lines",
                 name=f"design {_lab}", line=dict(color=_col, dash="dash")))
     if F_valid.size:
-        fig.add_hline(y=F_min, line=dict(color="green", dash="dot"),
-                       annotation_text=f"F_min = {F_min:.2f} N/kg",
+        fig.add_hline(y=F_min * PU, line=dict(color="green", dash="dot"),
+                       annotation_text=f"F_min = {fmt_pk(F_min)}",
                        annotation_position="bottom right")
-        fig.add_hline(y=F_max, line=dict(color="red", dash="dot"),
-                       annotation_text=f"F_max = {F_max:.2f} N/kg",
+        fig.add_hline(y=F_max * PU, line=dict(color="red", dash="dot"),
+                       annotation_text=f"F_max = {fmt_pk(F_max)}",
                        annotation_position="top right")
         span = F_max - F_min if F_max > F_min else 1.0
-        y_range = [F_min - 0.1 * span, F_max + 0.1 * span]
+        y_range = [(F_min - 0.1 * span) * PU, (F_max + 0.1 * span) * PU]
     else:
-        y_range = [-F_CAP, F_CAP]
+        y_range = [-F_CAP * PU, F_CAP * PU]
     fig.update_layout(
         template=PLOT_TEMPLATE, font=PLOT_FONT,
         title="Piston force vs. wall angle",
         xaxis_title="theta (degrees)",
-        yaxis_title="Piston force (N per kg of wall + equipment mass)",
+        yaxis_title=f"Piston force ({PLABEL} of wall + equipment mass)",
         xaxis=dict(range=[0, 90]),
         # Autoscale y when overlaying so A/B curves fit; otherwise frame the
         # current design's extremes.
@@ -922,7 +943,7 @@ with col_force:
     st.plotly_chart(fig, width="stretch")
     if has_singularity:
         st.caption(
-            f"Warning — part of the swing needs more than {F_CAP:.0f} N/kg "
+            f"Warning — part of the swing needs more than {fmt_pk(F_CAP)} "
             "(near-singular geometry) and is hidden — extremes shown are over "
             "the usable range only."
         )
@@ -975,8 +996,8 @@ if overlay:
         return float(np.max(np.abs(fd))) if fd.size else float("nan")
     st.caption(
         f"**Overlay** — A ({_fmt_design(design_A)}): peak "
-        f"**{_peak_force(design_A):.2f} N/kg**   ·   B ({_fmt_design(design_B)}): "
-        f"peak **{_peak_force(design_B):.2f} N/kg**.")
+        f"**{fmt_pk(_peak_force(design_A))}**   ·   B ({_fmt_design(design_B)}): "
+        f"peak **{fmt_pk(_peak_force(design_B))}**.")
 
 # --- Sensitivity: which dimension moves the force most, and WHERE in its range ---
 # Shared with the Browse inspector via sensitivity_panel so the two stay identical.

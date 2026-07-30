@@ -42,7 +42,7 @@ def test_app_loads_clean():
         _ = at.session_state[key]
 
 
-@pytest.mark.parametrize("units", ["meters", "inches"])
+@pytest.mark.parametrize("units", ["Metric", "Imperial"])
 @pytest.mark.parametrize("fine", [False, True])
 def test_units_and_precision_combinations(units, fine):
     at = fresh_app()
@@ -215,6 +215,22 @@ def test_summary_metrics_render():
     assert any("Geometry (a, b, d, f)" in str(c.value) for c in at.caption)
 
 
+def test_imperial_units_switch_all_readouts():
+    """Switching Units to Imperial flips the whole Designer, not just lengths: the
+    Peak force metric reads lbf/lb and the bore card follows too (pressure in psi,
+    no bar input), all without error."""
+    at = fresh_app()
+    at.session_state["units"] = "Imperial"
+    at.run()
+    assert not at.exception, at.exception
+    peak = next(v for k, v in {m.label: m.value for m in at.metric}.items()
+                if "Peak force" in k)
+    assert "lbf/lb" in peak, f"peak metric should read lbf/lb, got {peak}"
+    press_labels = [n.label or "" for n in at.number_input]
+    assert any("psi" in lbl for lbl in press_labels), "bore card should ask pressure in psi"
+    assert not any("bar" in lbl for lbl in press_labels), "no bar input in imperial mode"
+
+
 def test_browse_view_renders():
     """Switching to the Browse view builds a (small) lookup table and renders a
     results table without error, and filtering/sorting reruns cleanly."""
@@ -235,7 +251,7 @@ def test_browse_view_renders():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("units", ["meters", "inches"])
+@pytest.mark.parametrize("units", ["Metric", "Imperial"])
 def test_optimize_through_ui(units):
     """Press the Optimize button in each unit system and confirm it fills the
     geometry with a sane, in-range design and raises nothing."""

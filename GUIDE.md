@@ -104,7 +104,9 @@ fixed: **lower force ⇒ longer stroke, and a shorter cylinder ⇒ more force.**
 geometry meets the force cap, the result is flagged not-buildable — raise the cap
 until one qualifies.
 
-Extras: switch **units** (m / in), turn on **Fine precision** for smaller steps,
+Extras: switch **units** (Imperial / Metric) — one toggle flips *every* readout
+together (lengths, mass, force, the peak-force metric, pressure, and bore), turn on
+**Fine precision** for smaller steps,
 **lock** any value so Optimize holds it fixed, and use **Compare** to save two
 designs (A/B) and overlay them on the plots. **Export design (PDF)** downloads a
 one-page spec sheet for the current design — inputs, geometry, forces, bore &
