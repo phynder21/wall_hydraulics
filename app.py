@@ -97,16 +97,20 @@ or — in Reverse — outside your cylinder's length).
 
 def _guide_diagram():
     """A labelled schematic of the geometry for the guide: hinge, wall, cylinder,
-    base, attachment and cg, with a, b, d, f dimensioned."""
-    a, b, d, f, xcg, zcg = 0.6, 1.8, 0.1, 0.4, 1.2, 0.55
+    base, attachment and cg, with a and f dimensioned in Cartesian, and b (along the
+    wall) and d (perpendicular off it) dimensioned in the wall frame. Illustrative
+    values (a bigger d than typical) so every dimension reads clearly."""
+    a, b, d, f, xcg, zcg = 0.6, 1.4, 0.35, 0.4, 1.15, 0.5
     W, H = 2.438, 2.591
     th = np.radians(52)
     c, s = np.cos(th), np.sin(th)
-    base = (-a, f)
-    tip = (2.30 * c, 2.30 * s)
-    footb = (b * c, b * s)                         # wall-axis point at distance b
-    att = (b * c - d * s, b * s + d * c)           # attachment (b up, d off)
-    cg = (xcg * c - zcg * s, xcg * s + zcg * c)
+    wall = np.array([c, s])                        # unit vector up the wall
+    perp = np.array([-s, c])                        # unit vector off the wall (bracket side)
+    base = np.array([-a, f])
+    tip = 2.25 * wall
+    footb = b * wall                                # wall-axis point at distance b
+    att = b * wall + d * perp                       # attachment: b up, d off
+    cg = xcg * wall + zcg * perp
     fig = go.Figure()
 
     def line(p, q, color, w):
@@ -119,7 +123,7 @@ def _guide_diagram():
     fig.add_hline(y=0, line=dict(color="#cbd5e1", dash="dot"))
     line((0, 0), tip, "#111827", 7)                # wall
     line(base, (base[0], 0), "#94a3b8", 3)         # base post
-    line(footb, att, "#94a3b8", 3)                 # bracket
+    line(footb, att, "#94a3b8", 3)                 # bracket (this IS d)
     line(base, att, "#dc2626", 4)                  # cylinder
 
     def dot(p, color, name, sym="circle", size=11):
@@ -130,7 +134,7 @@ def _guide_diagram():
     dot(base, "#dc2626", "cylinder base", "square")
     dot(att, "#2563eb", "piston attachment")
     dot(cg, "#16a34a", "center of gravity", "cross", 13)
-    # a (floor bracket) and f (height) dimensions
+    # a (floor) and f (post): Cartesian dimension lines with end ticks
     fig.add_shape(type="line", x0=0, y0=-0.16, x1=-a, y1=-0.16, line=dict(color="#475569", width=1))
     for xx in (0, -a):
         fig.add_shape(type="line", x0=xx, y0=-0.10, x1=xx, y1=-0.22, line=dict(color="#475569", width=1))
@@ -141,16 +145,29 @@ def _guide_diagram():
         fig.add_shape(type="line", x0=-a - 0.10, y0=yy, x1=-a - 0.22, y1=yy, line=dict(color="#475569", width=1))
     fig.add_annotation(x=-a - 0.5, y=f / 2, text="<b>f</b> — base height",
                        showarrow=False, font=dict(size=13, color="#0f172a"), textangle=-90)
-
-    def arrow(text, x, y, ax, ay, size=13):
-        fig.add_annotation(x=x, y=y, ax=ax, ay=ay, axref="x", ayref="y", text=text,
-                           showarrow=True, arrowhead=3, arrowwidth=1.3,
-                           arrowcolor="#475569", font=dict(size=size, color="#0f172a"),
-                           bgcolor="rgba(255,255,255,0.85)")
-    arrow("<b>b</b> — up the wall", footb[0], footb[1], footb[0] + 0.55, footb[1] - 0.4)
-    arrow("<b>d</b> — bracket offset", att[0], att[1], att[0] + 0.75, att[1] + 0.2)
-    arrow("<b>cg</b> — weight acts here<br>(x_cg up the wall, z_cg off it)",
-          cg[0], cg[1], cg[0] - 0.75, cg[1] + 0.45, size=12)
+    # b: a dimension line PARALLEL to the wall, offset to the side away from the
+    # bracket, with ticks — so it clearly reads as a distance measured UP the wall.
+    o = 0.28 * (-perp)
+    p0, p1 = np.array([0.0, 0.0]) + o, footb + o
+    line((0, 0), p0, "#475569", 1)                 # tick at the hinge end
+    line(footb, p1, "#475569", 1)                  # tick at the b end
+    line(p0, p1, "#475569", 1)                     # the dimension line
+    lab = (p0 + p1) / 2 + 0.17 * (-perp)
+    fig.add_annotation(x=lab[0], y=lab[1], text="<b>b</b> — up the wall", showarrow=False,
+                       textangle=-(90 - np.degrees(th)), font=dict(size=13, color="#0f172a"))
+    # d: the bracket sticks off the wall at a right angle; mark the right angle.
+    ra = 0.11
+    line(footb + ra * wall, footb + ra * wall + ra * perp, "#475569", 1)
+    line(footb + ra * wall + ra * perp, footb + ra * perp, "#475569", 1)
+    mid = (footb + att) / 2
+    fig.add_annotation(x=mid[0], y=mid[1], ax=mid[0] + 0.62, ay=mid[1] - 0.08,
+                       axref="x", ayref="y", text="<b>d</b> — sticks off the wall",
+                       showarrow=True, arrowhead=3, arrowwidth=1.3, arrowcolor="#475569",
+                       font=dict(size=13, color="#0f172a"), bgcolor="rgba(255,255,255,0.85)")
+    fig.add_annotation(x=cg[0], y=cg[1], ax=cg[0] - 0.8, ay=cg[1] + 0.5, axref="x", ayref="y",
+                       text="<b>cg</b> — weight acts here", showarrow=True, arrowhead=3,
+                       arrowwidth=1.3, arrowcolor="#475569", font=dict(size=12, color="#0f172a"),
+                       bgcolor="rgba(255,255,255,0.85)")
     fig.add_annotation(x=tip[0], y=tip[1], text="wall (swings 0–90°)", showarrow=False,
                        font=dict(size=12, color="#374151"), yshift=14, xshift=30)
     fig.update_layout(template=PLOT_TEMPLATE, font=PLOT_FONT, height=520,
