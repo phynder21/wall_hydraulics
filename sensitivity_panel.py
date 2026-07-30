@@ -16,11 +16,34 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 
-from wall import force_feasibility_profiles, peak_force, peak_force_feasible
+from wall import force_feasibility_profiles, peak_force_feasible
 from lookup import force_color
 
 _LABELS = {"a": "a — base along floor", "b": "b — attach up wall",
            "d": "d — bracket offset", "f": "f — base height"}
+
+# The two things the panel can color by. The optimizer minimizes one or the other
+# (least force, or the shortest cylinder), so the sensitivity charts can track
+# whichever objective you care about. `arr` indexes the per-variable profile tuple
+# (values, forces, lengths, ok); `per_cyl` divides by cylinder count (force splits
+# between cylinders; a length is the same for both). Lower is better for both, so
+# blue = better / red = worse holds either way.
+_METRICS = {
+    "force": dict(arr=1, key_label="Force vs.<br>current", word="peak force",
+                  short="force", unit="N/kg", swing="peak-force", fmt=".1f",
+                  per_cyl=True),
+    "length": dict(arr=2, key_label="Length vs.<br>current", word="cylinder length",
+                   short="cylinder length", unit="m", swing="length", fmt=".3f",
+                   per_cyl=False),
+}
+
+
+def selected_metric():
+    """Which metric the shared 'Color by' toggle is set to ('force' or 'length').
+    The toggle lives in render_sensitivity_panel; the interaction map and the PDF
+    export read this so one switch drives every part of the sensitivity."""
+    return "length" if st.session_state.get("sens_metric") == "Cylinder length" \
+        else "force"
 
 
 # Samples per variable across its range. This sets the width of each strip cell
@@ -62,12 +85,20 @@ def _ratio_colorscale(finite):
     return zmin, zmax, cs, dtick
 
 
-def _ratio_colorbar(dtick):
-    """The larger, tick-labelled key shared by the strip and the interaction map."""
-    return dict(title=dict(text="Force vs.<br>current", side="top"),
+def _ratio_colorbar(dtick, key_label="Force vs.<br>current"):
+    """The larger, tick-labelled key shared by the strip and the interaction map.
+    `key_label` names the metric (force or cylinder length) being colored."""
+    return dict(title=dict(text=key_label, side="top"),
                 ticksuffix="%", tick0=100.0, dtick=dtick, ticks="outside",
                 ticklen=6, tickwidth=1.2, thickness=20, len=1.0,
                 outlinewidth=1, outlinecolor="#888")
+
+
+def _current_metric_value(metric, a, b, d, f, x_cg, z_cg):
+    """The current design's value of the chosen metric (peak force, or extended
+    cylinder length) — the 100% reference the strip and map color relative to."""
+    peak, l_max, _ = peak_force_feasible(a, b, d, f, x_cg, z_cg)
+    return peak if metric == "force" else l_max
 
 
 def _blackout_sentence(stroke_max, width, height, length_window):
@@ -100,13 +131,17 @@ def _capacity_note(length_window):
 def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
                               template="plotly_white", font=None, samples=SAMPLES,
                               stroke_max=None, roof_clearance=0.0, width=None,
-                              height=None, length_window=None):
+                              height=None, length_window=None, metric="force"):
     """Build the (tornado bar, within-range strip) figures and the caption text for
     one geometry. Shared by the on-screen panel and the PDF export so both show the
     identical charts. `bounds` maps each of a, b, d, f to its (min, max) range; the
     current a, b, d, f mark the white dot. The optimizer rules (stroke_max,
     roof_clearance, width/height, length_window) black out geometries that would be
-    rejected. Returns (fig_bar, fig_strip, caption)."""
+    rejected. `metric` picks what the charts track — 'force' (peak piston force) or
+    'length' (extended cylinder length). Returns (fig_bar, fig_strip, caption)."""
+    M = _METRICS[metric]
+    ai = M["arr"]                                        # profile-tuple index of metric
+    div = n_cyl if M["per_cyl"] else 1
     bounds_items = tuple(sorted((k, tuple(bounds[k])) for k in ("a", "b", "d", "f")))
     feas = (("stroke_max", stroke_max), ("roof_clearance", roof_clearance),
             ("width", width), ("height", height), ("length_window", length_window))
@@ -114,51 +149,51 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
     cur = {"a": a, "b": b, "d": d, "f": f}
 
     def swing(v):
-        _vals, F, _ok = prof[v]
-        F = F[np.isfinite(F)]           # raw leverage over the buildable range
-        return float(F.max() - F.min()) / n_cyl if F.size else 0.0
+        vals = prof[v][ai][np.isfinite(prof[v][ai])]    # raw leverage over buildable range
+        return float(vals.max() - vals.min()) / div if vals.size else 0.0
 
     ordered = sorted(("a", "b", "d", "f"), key=swing)   # small→big (big on top)
     ys = [_LABELS[v] for v in ordered]
 
-    # Top — tornado: total peak-force swing per variable (length + color = impact).
+    # Top — tornado: total metric swing per variable (length + color = impact).
     xs = [swing(v) for v in ordered]
     mx = max(xs) if any(xs) else 1.0
     cols = [force_color(x, 0.0, mx) or "#63be7b" for x in xs]
     fig_bar = go.Figure(go.Bar(
         x=xs, y=ys, orientation="h", marker=dict(color=cols),
-        text=[f"{x:.1f}" for x in xs], textposition="outside", hoverinfo="skip"))
+        text=[f"{x:{M['fmt']}}" for x in xs], textposition="outside", hoverinfo="skip"))
+    percyl = " per cyl" if (n_cyl > 1 and M["per_cyl"]) else ""
     fig_bar.update_layout(
         template=template, font=font, height=190,
-        xaxis_title=f"Total peak-force swing (N/kg{' per cyl' if n_cyl > 1 else ''})",
+        xaxis_title=f"Total {M['swing']} swing ({M['unit']}{percyl})",
         xaxis=dict(range=[0, mx * 1.18]), margin=dict(l=10, r=10, t=6, b=30))
 
-    # Bottom — within-range strip. Color = the peak force AT each position as a
-    # percent of your CURRENT design's force, so you can read "move this variable
-    # there and the force becomes 150% of what it is now." 100% (white) = same as
-    # now; red = higher (worse), blue = lower (better). Any spot the OPTIMIZER would
-    # reject — over-center, over the stroke ratio, through the roof, or outside the
-    # cylinder length window — is painted black and left out of the color scale, so
-    # after optimizing there is no "better" (blue) spot the design isn't already
+    # Bottom — within-range strip. Color = the chosen metric AT each position as a
+    # percent of your CURRENT design's value, so you can read "move this variable
+    # there and the force (or length) becomes 150% of what it is now." 100% (white) =
+    # same as now; red = higher (worse), blue = lower (better). Any spot the OPTIMIZER
+    # would reject — over-center, over the stroke ratio, through the roof, or outside
+    # the cylinder length window — is painted black and left out of the color scale,
+    # so after optimizing there is no "better" (blue) spot the design isn't already
     # using. It's a ratio, so it's mass- and cylinder-count-independent and each
     # variable's range is normalized to 0->1 (one shared position axis).
-    f0 = peak_force(a, b, d, f, x_cg, z_cg)              # current design's peak force
-    if not (np.isfinite(f0) and f0 > 0):                 # current geometry impossible:
-        allF = [prof[v][1][prof[v][2] & np.isfinite(prof[v][1])] for v in ordered]
-        allF = np.concatenate([s for s in allF if s.size]) if any(s.size for s in allF) \
+    m0 = _current_metric_value(metric, a, b, d, f, x_cg, z_cg)   # current value = 100%
+    if not (np.isfinite(m0) and m0 > 0):                 # current geometry impossible:
+        allM = [prof[v][ai][prof[v][3] & np.isfinite(prof[v][ai])] for v in ordered]
+        allM = np.concatenate([s for s in allM if s.size]) if any(s.size for s in allM) \
             else np.array([1.0])
-        f0 = float(np.nanmin(allF)) if allF.size else 1.0   # fall back to best in view
+        m0 = float(np.nanmin(allM)) if allM.size else 1.0   # fall back to best in view
     pos = np.linspace(0.0, 1.0, prof["a"][0].size)
     Z, black, finite, cdata = [], [], [], []
     for v in ordered:
-        _vals, F, ok = prof[v]
-        ratio = np.where(ok, F / f0 * 100.0, np.nan)     # color only feasible spots
+        vals, val_arr, ok = prof[v][0], prof[v][ai], prof[v][3]
+        ratio = np.where(ok, val_arr / m0 * 100.0, np.nan)   # color only feasible spots
         Z.append(ratio)
         finite.append(ratio[np.isfinite(ratio)])
         # Everything the optimizer rejects (over-center OR a broken rule) -> black.
         black.append(np.where(ok, np.nan, 1.0))
-        # Hover shows the actual value + peak force (per cylinder), not the %.
-        cdata.append(np.stack([_vals, F / n_cyl], axis=-1))
+        # Hover shows the actual value + the metric (per cylinder for force), not the %.
+        cdata.append(np.stack([vals, val_arr / div], axis=-1))
     allr = np.concatenate([s for s in finite if s.size]) if any(s.size for s in finite) \
         else np.array([100.0])
     zmin, zmax, strip_cs, dtick = _ratio_colorscale(allr)
@@ -168,9 +203,9 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
     fig_strip = go.Figure(go.Heatmap(
         x=pos, y=ys, z=Z, zmin=zmin, zmax=zmax, customdata=np.array(cdata),
         hovertemplate="%{y}<br>value = %{customdata[0]:.3f} m<br>"
-                      "peak force = %{customdata[1]:.1f} N/kg<extra></extra>",
+                      f"{M['word']} = %{{customdata[1]:{M['fmt']}}} {M['unit']}<extra></extra>",
         # blue = lower (better), white = 100% (same), red = higher (worse).
-        colorscale=strip_cs, colorbar=_ratio_colorbar(dtick)))
+        colorscale=strip_cs, colorbar=_ratio_colorbar(dtick, M["key_label"])))
     # Rejected cells (over-center or rule-breaking) on top of the color layer, black.
     fig_strip.add_trace(go.Heatmap(
         x=pos, y=ys, z=black, zmin=0.0, zmax=1.0, showscale=False, hoverinfo="skip",
@@ -183,13 +218,13 @@ def build_sensitivity_figures(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
         xaxis=dict(title="Position in each variable's range  (0 = min → 1 = max)",
                    range=[0.0, 1.0]),
         margin=dict(l=10, r=10, t=6, b=40))
-    caption = (f"**Top:** each dimension's overall impact on the force. "
-               f"**Bottom:** move a dimension to any spot and the color is the peak "
-               f"force there as a **% of now** (200% = double, 50% = half) — "
+    caption = (f"**Top:** each dimension's overall impact on the {M['short']}. "
+               f"**Bottom:** move a dimension to any spot and the color is the "
+               f"{M['word']} there as a **% of now** (200% = double, 50% = half) — "
                f"**white = same**, **red = worse**, **blue = better**. "
                f"{_blackout_sentence(stroke_max, width, height, length_window)} "
                f"The **white dot** is your current design."
-               f"{_capacity_note(length_window)}")
+               f"{_capacity_note(length_window) if metric == 'force' else ''}")
     return fig_bar, fig_strip, caption
 
 
@@ -199,14 +234,26 @@ def render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
                              height=None, length_window=None):
     """Render the two-chart sensitivity panel for one geometry inside a bordered
     container (uses build_sensitivity_figures so the on-screen charts match the PDF).
-    Returns (fig_bar, fig_strip) so the caller can embed the same charts in the PDF."""
-    fig_bar, fig_strip, caption = build_sensitivity_figures(
-        a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl,
-        template=template, font=font, samples=samples, stroke_max=stroke_max,
-        roof_clearance=roof_clearance, width=width, height=height,
-        length_window=length_window)
+    A 'Color by' toggle switches every part of the sensitivity — this panel, the
+    interaction map below, and the PDF — between peak force and cylinder length (the
+    two things the optimizer can minimize). Returns (fig_bar, fig_strip) so the caller
+    can embed the same charts in the PDF."""
     with st.container(border=True):
-        st.markdown("**Sensitivity — which dimension moves the force most?**")
+        choice = st.radio(
+            "Color the charts by", ["Peak force", "Cylinder length"],
+            key="sens_metric", horizontal=True,
+            help="The two things you can optimize for. **Peak force** = the push the "
+                 "cylinder must give (smaller = a cheaper cylinder). **Cylinder "
+                 "length** = the extended length (smaller = a shorter, more compact "
+                 "actuator). Lower is better either way, so blue always = better.")
+        metric = "force" if choice == "Peak force" else "length"
+        fig_bar, fig_strip, caption = build_sensitivity_figures(
+            a, b, d, f, x_cg, z_cg, bounds, n_cyl=n_cyl,
+            template=template, font=font, samples=samples, stroke_max=stroke_max,
+            roof_clearance=roof_clearance, width=width, height=height,
+            length_window=length_window, metric=metric)
+        st.markdown(f"**Sensitivity — which dimension moves the {_METRICS[metric]['short']} "
+                    f"most?**")
         st.plotly_chart(fig_bar, width="stretch")
         st.plotly_chart(fig_strip, width="stretch")
         st.caption(caption)
@@ -216,9 +263,11 @@ def render_sensitivity_panel(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
 # --- 2-D interaction map: lock two variables, sweep the other two -------------
 @st.cache_data(show_spinner=False)
 def _pair_grid(v1, v2, a, b, d, f, x_cg, z_cg, r1, r2, res, feas):
-    """2-D (peak, feasible) grid: sweep v1 across r1=(lo,hi) (columns) and v2 across
-    r2 (rows) with the other two variables fixed at (a, b, d, f). feas is
-    ((name, value), ...) of the optimizer rules. All args hashable -> cached."""
+    """2-D (peak, L_max, feasible) grid: sweep v1 across r1=(lo,hi) (columns) and v2
+    across r2 (rows) with the other two variables fixed at (a, b, d, f). feas is
+    ((name, value), ...) of the optimizer rules. Carries both metrics (force and
+    extended cylinder length) so the map can color by either. All args hashable ->
+    cached."""
     base = dict(a=a, b=b, d=d, f=f)
     fk = dict(feas)
     vals1 = np.linspace(r1[0], r1[1], res)
@@ -231,14 +280,16 @@ def _pair_grid(v1, v2, a, b, d, f, x_cg, z_cg, r1, r2, res, feas):
     vals1[int(np.argmin(np.abs(vals1 - base[v1])))] = base[v1]
     vals2[int(np.argmin(np.abs(vals2 - base[v2])))] = base[v2]
     peak = np.full((res, res), np.nan)
+    lmax = np.full((res, res), np.nan)
     ok = np.zeros((res, res), dtype=bool)
     for i, yv in enumerate(vals2):
         for j, xv in enumerate(vals1):
-            p, fe = peak_force_feasible(**{**base, v1: float(xv), v2: float(yv)},
-                                        x_cg=x_cg, z_cg=z_cg, **fk)
+            p, lm, fe = peak_force_feasible(**{**base, v1: float(xv), v2: float(yv)},
+                                            x_cg=x_cg, z_cg=z_cg, **fk)
             peak[i, j] = p
+            lmax[i, j] = lm
             ok[i, j] = bool(fe)
-    return vals1, vals2, peak, ok
+    return vals1, vals2, peak, lmax, ok
 
 
 def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
@@ -247,8 +298,12 @@ def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
                            length_window=None):
     """A 2-D 'vary two dimensions at once' heatmap. Pick two of a, b, d, f from the
     dropdown; the other two stay at the current design. Same color language as the
-    strip (% of the current force; black = a spot the optimizer would reject), so it
-    exposes the interactions the one-at-a-time strip can't see (combined moves)."""
+    strip (% of the current metric; black = a spot the optimizer would reject), so it
+    exposes the interactions the one-at-a-time strip can't see (combined moves). Colors
+    by whatever the panel's 'Color by' toggle selects — peak force or cylinder length."""
+    metric = selected_metric()
+    M = _METRICS[metric]
+    div = n_cyl if M["per_cyl"] else 1
     with st.container(border=True):
         st.markdown("**Interaction map — vary two dimensions at once**")
         st.caption("Pick two dimensions to vary; the other two stay at your current "
@@ -264,23 +319,24 @@ def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
             return
         feas = (("stroke_max", stroke_max), ("roof_clearance", roof_clearance),
                 ("width", width), ("height", height), ("length_window", length_window))
-        vals1, vals2, peak, ok = _pair_grid(
+        vals1, vals2, peak, lmax, ok = _pair_grid(
             v1, v2, a, b, d, f, x_cg, z_cg,
             tuple(bounds[v1]), tuple(bounds[v2]), res, feas)
-        f0 = peak_force(a, b, d, f, x_cg, z_cg)          # current design's peak force
-        if not (np.isfinite(f0) and f0 > 0):             # current impossible: best in view
-            fin = peak[ok & np.isfinite(peak)]
-            f0 = float(np.nanmin(fin)) if fin.size else 1.0
-        ratio = np.where(ok, peak / f0 * 100.0, np.nan)
+        grid = peak if metric == "force" else lmax        # metric to color by
+        m0 = _current_metric_value(metric, a, b, d, f, x_cg, z_cg)   # current = 100%
+        if not (np.isfinite(m0) and m0 > 0):             # current impossible: best in view
+            fin = grid[ok & np.isfinite(grid)]
+            m0 = float(np.nanmin(fin)) if fin.size else 1.0
+        ratio = np.where(ok, grid / m0 * 100.0, np.nan)
         black = np.where(ok, np.nan, 1.0)
         zmin, zmax, cs, dtick = _ratio_colorscale(ratio[np.isfinite(ratio)])
         cur = {"a": a, "b": b, "d": d, "f": f}
         fig = go.Figure(go.Heatmap(
             x=vals1, y=vals2, z=ratio, zmin=zmin, zmax=zmax, colorscale=cs,
-            customdata=peak / n_cyl,                      # hover shows force, not %
+            customdata=grid / div,                        # hover shows the metric, not %
             hovertemplate=(f"{v1} = %{{x:.3f}} m<br>{v2} = %{{y:.3f}} m<br>"
-                           "peak force = %{customdata:.1f} N/kg<extra></extra>"),
-            colorbar=_ratio_colorbar(dtick)))
+                           f"{M['word']} = %{{customdata:{M['fmt']}}} {M['unit']}<extra></extra>"),
+            colorbar=_ratio_colorbar(dtick, M["key_label"])))
         fig.add_trace(go.Heatmap(                        # rejected cells -> black
             x=vals1, y=vals2, z=black, zmin=0.0, zmax=1.0, showscale=False,
             hoverinfo="skip", colorscale=[[0.0, "#111111"], [1.0, "#111111"]]))
@@ -294,14 +350,14 @@ def render_interaction_map(a, b, d, f, x_cg, z_cg, bounds, n_cyl=1,
             margin=dict(l=10, r=10, t=6, b=40))
         st.plotly_chart(fig, width="stretch")
         st.caption(
-            f"Color = the peak force at each (**{v1}**, **{v2}**) as a **% of now** — "
+            f"Color = the {M['word']} at each (**{v1}**, **{v2}**) as a **% of now** — "
             f"**white = same**, **red = worse**, **blue = better**; the **white dot** "
             f"is your design. "
             f"{_blackout_sentence(stroke_max, width, height, length_window)} "
-            f"Sometimes the force only drops when you change **both** dimensions "
+            f"Sometimes the {M['short']} only drops when you change **both** dimensions "
             f"together — those designs show up as blue here, but the one-at-a-time "
             f"strip above can't find them."
-            f"{_capacity_note(length_window)}")
+            f"{_capacity_note(length_window) if metric == 'force' else ''}")
 
 
 _ALL_PAIRS = (("a", "b"), ("a", "d"), ("a", "f"), ("b", "d"), ("b", "f"), ("d", "f"))
@@ -309,33 +365,36 @@ _ALL_PAIRS = (("a", "b"), ("a", "d"), ("a", "f"), ("b", "d"), ("b", "f"), ("d", 
 
 def build_interaction_matrix(a, b, d, f, x_cg, z_cg, bounds, res=41, stroke_max=None,
                              roof_clearance=0.0, width=None, height=None,
-                             length_window=None, template="plotly_white"):
+                             length_window=None, template="plotly_white", metric="force"):
     """A 2x3 small-multiples matrix of ALL six 2-D interaction maps (every pair of
-    a, b, d, f), on ONE shared 'force vs. current %' scale so the panels compare.
-    Built on demand (for the PDF), not live. Returns a print-ready figure. Uses the
-    cached _pair_grid per pair, so any pair already shown on screen is reused."""
+    a, b, d, f), on ONE shared 'metric vs. current %' scale so the panels compare.
+    `metric` picks peak force or cylinder length. Built on demand (for the PDF), not
+    live. Returns a print-ready figure. Uses the cached _pair_grid per pair, so any
+    pair already shown on screen is reused."""
+    M = _METRICS[metric]
     feas = (("stroke_max", stroke_max), ("roof_clearance", roof_clearance),
             ("width", width), ("height", height), ("length_window", length_window))
     cur = {"a": a, "b": b, "d": d, "f": f}
     grids, all_feas = [], []
     for v1, v2 in _ALL_PAIRS:
-        vals1, vals2, peak, ok = _pair_grid(
+        vals1, vals2, peak, lmax, ok = _pair_grid(
             v1, v2, a, b, d, f, x_cg, z_cg, tuple(bounds[v1]), tuple(bounds[v2]), res, feas)
-        grids.append((v1, v2, vals1, vals2, peak, ok))
-        r = peak[ok & np.isfinite(peak)]
+        grid = peak if metric == "force" else lmax
+        grids.append((v1, v2, vals1, vals2, grid, ok))
+        r = grid[ok & np.isfinite(grid)]
         if r.size:
             all_feas.append(r.ravel())
-    f0 = peak_force(a, b, d, f, x_cg, z_cg)              # shared reference = current force
-    if not (np.isfinite(f0) and f0 > 0):
-        f0 = float(np.nanmin(np.concatenate(all_feas))) if all_feas else 1.0
-    allr = (np.concatenate(all_feas) / f0 * 100.0) if all_feas else np.array([100.0])
+    m0 = _current_metric_value(metric, a, b, d, f, x_cg, z_cg)   # shared ref = current
+    if not (np.isfinite(m0) and m0 > 0):
+        m0 = float(np.nanmin(np.concatenate(all_feas))) if all_feas else 1.0
+    allr = (np.concatenate(all_feas) / m0 * 100.0) if all_feas else np.array([100.0])
     zmin, zmax, cs, dtick = _ratio_colorscale(allr)     # one scale for all six panels
     fig = make_subplots(rows=2, cols=3,
                         subplot_titles=[f"{v1} x {v2}" for v1, v2, *_ in grids],
                         horizontal_spacing=0.09, vertical_spacing=0.14)
-    for k, (v1, v2, vals1, vals2, peak, ok) in enumerate(grids):
+    for k, (v1, v2, vals1, vals2, grid, ok) in enumerate(grids):
         rr, cc = k // 3 + 1, k % 3 + 1
-        ratio = np.where(ok, peak / f0 * 100.0, np.nan)
+        ratio = np.where(ok, grid / m0 * 100.0, np.nan)
         black = np.where(ok, np.nan, 1.0)
         fig.add_trace(go.Heatmap(x=vals1, y=vals2, z=ratio, coloraxis="coloraxis",
                                  hoverinfo="skip"), row=rr, col=cc)
@@ -354,5 +413,5 @@ def build_interaction_matrix(a, b, d, f, x_cg, z_cg, bounds, res=41, stroke_max=
         template=template, font=dict(family="sans-serif", size=12, color="#0F172A"),
         showlegend=False, margin=dict(l=55, r=40, t=45, b=45),
         coloraxis=dict(colorscale=cs, cmin=zmin, cmax=zmax,
-                       colorbar=_ratio_colorbar(dtick)))
+                       colorbar=_ratio_colorbar(dtick, M["key_label"])))
     return fig

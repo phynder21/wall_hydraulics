@@ -95,7 +95,7 @@ def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_ma
                       roof_clearance, a, b, d, f, peak_pc, L_min, L_max,
                       fig_geom, fig_force, fig_len,
                       fig_sens_bar=None, fig_sens_strip=None, fig_interactions=None,
-                      pressure_bar=None, series=None,
+                      pressure_bar=None, series=None, sens_metric="force",
                       mass_label="Wall + load mass", extra_setup_rows=(),
                       extra_notes=(), stroke_tol=1e-9, show_stroke_ratio_max=True,
                       title="Container Wall Actuator - Design Report",
@@ -201,13 +201,16 @@ def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_ma
                          clen.to_image(format="png", width=lw, height=lh, scale=2)),
                     ]
                     # Sensitivity charts (tornado + within-range strip), if provided.
+                    # `sens_metric` names what they color by (peak force / cylinder
+                    # length), kept in step with the on-screen 'Color by' toggle.
+                    mword = "cylinder length" if sens_metric == "length" else "peak force"
                     if fig_sens_bar is not None and fig_sens_strip is not None:
                         sb, sw, sh = _prep_panel(fig_sens_bar, height=300)
                         ss, ssw, ssh = _prep_panel(fig_sens_strip, height=360)
                         images += [
-                            ("Sensitivity - each dimension's total impact on peak force",
+                            (f"Sensitivity - each dimension's total impact on {mword}",
                              sb.to_image(format="png", width=sw, height=sh, scale=2)),
-                            ("Sensitivity - force at each position as a % of the current design",
+                            (f"Sensitivity - {mword} at each position as a % of the current design",
                              ss.to_image(format="png", width=ssw, height=ssh, scale=2)),
                         ]
                     # Interaction matrix (all six variable pairs). Passed as a callable
@@ -216,7 +219,7 @@ def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_ma
                         fig_i = fig_interactions() if callable(fig_interactions) else fig_interactions
                         if fig_i is not None:
                             images.append((
-                                "Interaction maps - vary two dimensions at once (force vs. current)",
+                                f"Interaction maps - vary two dimensions at once ({mword} vs. current)",
                                 fig_i.to_image(format="png", width=1000, height=760, scale=2)))
                 except Exception:
                     notes.append("Diagrams omitted (image rendering unavailable here).")

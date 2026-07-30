@@ -2,8 +2,8 @@
 
 A tool for sizing the **hydraulic cylinder that raises and lowers a hinged
 shipping-container sidewall**. You describe the wall and where the cylinder can
-mount; the tool finds the geometry that needs the **least piston force** — so you
-can spec a smaller, cheaper cylinder.
+mount; the tool finds the geometry that needs the **least piston force** — or the
+**shortest cylinder** — so you can spec a smaller, cheaper actuator.
 
 There are two apps with the same engine: a Streamlit version and a NiceGUI
 version (deployed on Render). Both have the same three views.
@@ -51,13 +51,17 @@ total force.
 4. Press **Optimize** and the tool finds the a, b, d, f that minimize peak force
    for your setup, and lists a few near-optimal alternatives you can click to load.
 
-**Sensitivity — which dimension moves the force most, and how much better or worse
-each spot is.** Two aligned charts below the plots, for your *current* design.
-**Top (tornado bars):** how much the peak force swings as each of `a, b, d, f`
-sweeps its allowed range (others fixed) — longer / redder = more impact overall
-(e.g. base height `f` usually dominates). **Bottom (strip):** move that dimension
-to any position and the color is the peak force *there* as a **percent of your
-current force** — so **200% means double, 50% means half**. **White (100%) = same
+**Sensitivity — which dimension moves the result most, and how much better or worse
+each spot is.** Two aligned charts below the plots, for your *current* design. A
+**Color by** toggle at the top switches every part of the sensitivity — these charts,
+the interaction map, and the PDF — between **peak force** and **cylinder length**, so
+you can chase whichever the optimizer is minimizing (lower is better for both, so
+**blue = better** either way). **Top (tornado bars):** how much the peak force (or
+cylinder length) swings as each of `a, b, d, f` sweeps its allowed range (others
+fixed) — longer / redder = more impact overall (e.g. base height `f` usually
+dominates). **Bottom (strip):** move that dimension to any position and the color is
+the peak force (or length) *there* as a **percent of your current value** — so **200%
+means double, 50% means half**. **White (100%) = same
 as now** (the **white dot** is your current value), **red = higher (worse)**,
 **blue = lower (better)**, **black = a spot the optimizer would reject** (over-center,
 over your stroke ratio, through the roof, or — in Reverse — outside the cylinder's

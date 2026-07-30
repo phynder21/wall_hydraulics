@@ -121,8 +121,10 @@ def force_sensitivity(a, b, d, f, x_cg, z_cg, bounds, n=41):
 def peak_force_feasible(a, b, d, f, x_cg=1.2, z_cg=0.55, n_theta=200, cap=50.0,
                         stroke_max=None, roof_clearance=0.0, width=None, height=None,
                         length_window=None):
-    """(peak, feasible) for one geometry. `peak` is peak_force (NaN if over-center);
-    `feasible` is False if over-center OR any provided rule is broken over the swing:
+    """(peak, L_max, feasible) for one geometry. `peak` is peak_force and `L_max` the
+    extended (longest) cylinder length over the swing — the two metrics the sensitivity
+    panel can color by; both are NaN if over-center. `feasible` is False if over-center
+    OR any provided rule is broken over the swing:
 
       * stroke ratio L_max / L_min > stroke_max,
       * cylinder length falls outside length_window = (lo, hi),
@@ -136,19 +138,19 @@ def peak_force_feasible(a, b, d, f, x_cg=1.2, z_cg=0.55, n_theta=200, cap=50.0,
     c, s = np.cos(theta), np.sin(theta)
     x_att = b * c - d * s
     z_att = b * s + d * c
+    L = np.sqrt((x_att + a) ** 2 + (z_att - f) ** 2)
+    L_min, L_max = float(L.min()), float(L.max())
     m_arm = np.sin(np.arctan2(z_att, x_att) - np.arctan2(z_att - f, x_att + a))
     if m_arm.min() < 0.0 < m_arm.max():          # over-center -> impossible
-        return float("nan"), False
+        return float("nan"), float("nan"), False
     with np.errstate(divide="ignore", invalid="ignore"):
         F = np.abs(compute_F_piston(theta, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg))
     F = F[np.isfinite(F)]
     peak = float(np.minimum(F, cap).max()) if F.size else float("nan")
     if not np.isfinite(peak):
-        return peak, False
+        return peak, L_max, False
 
     feasible = True
-    L = np.sqrt((x_att + a) ** 2 + (z_att - f) ** 2)
-    L_min, L_max = float(L.min()), float(L.max())
     if stroke_max is not None and L_min > 0.0 and L_max / L_min > stroke_max + 1e-3:
         feasible = False
     if length_window is not None:
@@ -160,16 +162,18 @@ def peak_force_feasible(a, b, d, f, x_cg=1.2, z_cg=0.55, n_theta=200, cap=50.0,
         overshoot = np.where(inside, z_att - (height - roof_clearance), 0.0)
         if float(np.maximum(overshoot, 0.0).max()) > 1e-3:
             feasible = False
-    return peak, feasible
+    return peak, L_max, feasible
 
 
 def force_feasibility_profiles(a, b, d, f, x_cg, z_cg, bounds, n=41, stroke_max=None,
                                roof_clearance=0.0, width=None, height=None,
                                length_window=None):
-    """Like force_profiles, but each variable's sweep also carries a feasibility mask
-    (the optimizer's rules, see peak_force_feasible). Returns {var: (values, forces,
-    feasible)} where forces is NaN at over-center samples and feasible is False
-    wherever a rule is broken."""
+    """Like force_profiles, but each variable's sweep also carries the extended
+    cylinder length and a feasibility mask (the optimizer's rules, see
+    peak_force_feasible). Returns {var: (values, forces, lengths, feasible)} where
+    forces/lengths are NaN at over-center samples and feasible is False wherever a
+    rule is broken. `lengths` lets the sensitivity panel color by cylinder length
+    instead of force."""
     base = dict(a=a, b=b, d=d, f=f)
     feas = dict(stroke_max=stroke_max, roof_clearance=roof_clearance, width=width,
                 height=height, length_window=length_window)
@@ -177,11 +181,12 @@ def force_feasibility_profiles(a, b, d, f, x_cg, z_cg, bounds, n=41, stroke_max=
     for v in ("a", "b", "d", "f"):
         lo, hi = bounds[v]
         vals = np.linspace(lo, hi, n)
-        pairs = [peak_force_feasible(**dict(base, **{v: float(x)}),
-                                     x_cg=x_cg, z_cg=z_cg, **feas) for x in vals]
-        forces = np.array([p for p, _ in pairs])
-        ok = np.array([bool(fe) for _, fe in pairs])
-        out[v] = (vals, forces, ok)
+        triples = [peak_force_feasible(**dict(base, **{v: float(x)}),
+                                       x_cg=x_cg, z_cg=z_cg, **feas) for x in vals]
+        forces = np.array([p for p, _, _ in triples])
+        lengths = np.array([lm for _, lm, _ in triples])
+        ok = np.array([bool(fe) for _, _, fe in triples])
+        out[v] = (vals, forces, lengths, ok)
     return out
 
 

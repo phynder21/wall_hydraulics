@@ -427,17 +427,61 @@ def test_sensitivity_strip_paints_over_center_black():
 
 
 def test_peak_force_feasible_flags_rule_violations():
-    """peak_force_feasible reports (peak, feasible): a buildable geometry with no
-    rules is feasible; a too-tight stroke ratio makes it infeasible; over-center is
-    (NaN, False)."""
+    """peak_force_feasible reports (peak, L_max, feasible): a buildable geometry with
+    no rules is feasible and reports a finite extended length; a too-tight stroke ratio
+    makes it infeasible; over-center is (NaN, NaN, False)."""
     import numpy as np
     from wall import peak_force_feasible
-    peak, feas = peak_force_feasible(0.6, 1.8, 0.1, 0.4, 1.2, 0.55)
+    peak, l_max, feas = peak_force_feasible(0.6, 1.8, 0.1, 0.4, 1.2, 0.55)
     assert np.isfinite(peak) and feas
-    _, tight = peak_force_feasible(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, stroke_max=1.05)
+    assert np.isfinite(l_max) and l_max > 0, "extended length must be finite and positive"
+    _, _, tight = peak_force_feasible(0.6, 1.8, 0.1, 0.4, 1.2, 0.55, stroke_max=1.05)
     assert not tight, "stroke ratio 1.63 must fail a 1.05 cap"
-    p3, feas3 = peak_force_feasible(0.05, 0.1, 0.9, 2.5, 1.2, 0.55)
-    assert np.isnan(p3) and not feas3
+    p3, l3, feas3 = peak_force_feasible(0.05, 0.1, 0.9, 2.5, 1.2, 0.55)
+    assert np.isnan(p3) and np.isnan(l3) and not feas3
+
+
+def test_sensitivity_works_with_length_metric():
+    """Every part of the sensitivity can color by cylinder length, not just force:
+    the tornado axis and strip hover switch to meters, the caption/colorbar name the
+    length metric, the ratios genuinely differ from the force ones, and the PDF matrix
+    and current-value helper accept metric='length'."""
+    import numpy as np
+    import sensitivity_panel as sp
+    bounds = {"a": (0.05, 1.2), "b": (0.05, 2.5), "d": (0.0, 1.0), "f": (0.0, 2.5)}
+    a, b, d, f = 0.6, 1.8, 0.1, 0.4
+    bar_F, strip_F, cap_F = sp.build_sensitivity_figures(a, b, d, f, 1.2, 0.55, bounds,
+                                                         metric="force")
+    bar_L, strip_L, cap_L = sp.build_sensitivity_figures(a, b, d, f, 1.2, 0.55, bounds,
+                                                         metric="length")
+    assert "N/kg" in bar_F.layout.xaxis.title.text
+    assert "(m)" in bar_L.layout.xaxis.title.text and "length" in bar_L.layout.xaxis.title.text
+    hov_L = strip_L.data[0].hovertemplate
+    assert "cylinder length" in hov_L and " m<" in hov_L, "length hover reports meters"
+    assert "cylinder length" in cap_L and "peak force" in cap_F
+    assert "Length" in strip_L.data[0].colorbar.title.text
+    # The two metrics are genuinely different surfaces, not the same numbers relabeled.
+    zF = np.array(strip_F.data[0].z, dtype=float)
+    zL = np.array(strip_L.data[0].z, dtype=float)
+    fin = np.isfinite(zF) & np.isfinite(zL)
+    assert fin.any() and not np.allclose(zF[fin], zL[fin]), "length coloring must differ"
+    # The interaction matrix and the current-value helper support length too.
+    fig = sp.build_interaction_matrix(a, b, d, f, 1.2, 0.55, bounds, res=11, metric="length")
+    assert "Length" in fig.layout.coloraxis.colorbar.title.text
+    assert sp._current_metric_value("length", a, b, d, f, 1.2, 0.55) > 0
+
+
+def test_sensitivity_color_by_toggle_present_and_switchable():
+    """The panel exposes a 'Color by' toggle (peak force / cylinder length); switching
+    it to length re-renders the Designer without error and the widget holds the choice."""
+    at = fresh_app()
+    metric_radios = [r for r in at.radio if r.key == "sens_metric"]
+    assert metric_radios, "a force/length toggle should exist"
+    assert set(metric_radios[0].options) == {"Peak force", "Cylinder length"}
+    at.session_state["sens_metric"] = "Cylinder length"
+    at.run()
+    assert not at.exception, at.exception
+    assert at.radio(key="sens_metric").value == "Cylinder length"
 
 
 def test_sensitivity_hover_shows_force_not_percent():
@@ -497,14 +541,15 @@ def test_pair_grid_shapes_and_feasibility():
     from sensitivity_panel import _pair_grid
     feas = (("stroke_max", 1.8), ("roof_clearance", 0.0), ("width", 2.44),
             ("height", 2.59), ("length_window", None))
-    v1, v2, peak, ok = _pair_grid("b", "d", 0.6, 1.8, 0.1, 0.4, 1.2, 0.55,
-                                  (0.05, 2.5), (0.0, 1.0), 21, feas)
+    v1, v2, peak, lmax, ok = _pair_grid("b", "d", 0.6, 1.8, 0.1, 0.4, 1.2, 0.55,
+                                        (0.05, 2.5), (0.0, 1.0), 21, feas)
     assert v1.shape == (21,) and v2.shape == (21,)
-    assert peak.shape == (21, 21) and ok.shape == (21, 21)
+    assert peak.shape == (21, 21) and lmax.shape == (21, 21) and ok.shape == (21, 21)
+    assert np.isfinite(lmax[ok]).all(), "feasible cells carry a finite extended length"
     assert ok.any() and not ok.all(), "some (b,d) cells feasible, some rejected"
     tight = (("stroke_max", 1.2),) + feas[1:]
-    _, _, _, ok2 = _pair_grid("b", "d", 0.6, 1.8, 0.1, 0.4, 1.2, 0.55,
-                              (0.05, 2.5), (0.0, 1.0), 21, tight)
+    _, _, _, _, ok2 = _pair_grid("b", "d", 0.6, 1.8, 0.1, 0.4, 1.2, 0.55,
+                                 (0.05, 2.5), (0.0, 1.0), 21, tight)
     assert ok2.sum() <= ok.sum(), "a tighter stroke cap can't add feasible cells"
 
 
@@ -518,11 +563,11 @@ def test_interaction_map_snaps_current_to_a_feasible_cell():
     from wall import peak_force_feasible
     a, b, d, f = 1.219, 1.063, 0.205, 2.591          # optimum: right on the 1.8 stroke cap
     rules = dict(stroke_max=1.8, roof_clearance=0.0, width=2.438, height=2.591)
-    assert peak_force_feasible(a, b, d, f, 1.2, 0.55, **rules)[1], "design must be feasible"
+    assert peak_force_feasible(a, b, d, f, 1.2, 0.55, **rules)[2], "design must be feasible"
     feas = (("stroke_max", 1.8), ("roof_clearance", 0.0), ("width", 2.438),
             ("height", 2.591), ("length_window", None))
-    vals1, vals2, _peak, okg = _pair_grid("a", "b", a, b, d, f, 1.2, 0.55,
-                                          (0.05, 1.219), (0.05, 2.591), 51, feas)
+    vals1, vals2, _peak, _lmax, okg = _pair_grid("a", "b", a, b, d, f, 1.2, 0.55,
+                                                 (0.05, 1.219), (0.05, 2.591), 51, feas)
     i1 = int(np.argmin(np.abs(vals1 - a)))
     i2 = int(np.argmin(np.abs(vals2 - b)))
     assert vals1[i1] == a and vals2[i2] == b, "a sample must land exactly on the current value"
