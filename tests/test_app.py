@@ -277,8 +277,10 @@ def test_optimize_for_length_through_ui():
     at = fresh_app()
     at.session_state["opt_mode"] = "Cylinder length"
     run_ok(at, "select length mode")
-    at.session_state["force_cap_nkg"] = 40.0
-    run_ok(at, "set force cap")
+    # One slider now sets the max force; the per-kg cap = max force / Setup mass.
+    at.session_state["mass"] = 5000.0
+    at.session_state["max_force_n"] = 200000.0   # 200 kN / 5000 kg = 40 N/kg cap
+    run_ok(at, "set max cylinder force")
     button = next(b for b in at.sidebar.button if "Optimize" in b.label)
     button.click()
     run_ok(at, "optimize for length")
@@ -288,6 +290,23 @@ def test_optimize_for_length_through_ui():
     # not only pushed into the sliders
     msgs = [str(m.value) for m in list(at.success) + list(at.warning)]
     assert any(all(tok in m for tok in ("a =", "b =", "d =", "f =")) for m in msgs), msgs
+
+
+def test_length_mode_single_max_force_slider():
+    """Length mode folds the old per-kg cap + duplicate mass sliders into ONE 'Max
+    cylinder force' slider; the per-kg cap the optimizer uses is derived from the
+    Setup mass (200 kN / 5000 kg = 40 N/kg) and shown as a caption."""
+    at = fresh_app()
+    at.session_state["opt_mode"] = "Cylinder length"
+    at.session_state["mass"] = 5000.0
+    at.session_state["max_force_n"] = 200000.0
+    at.run()
+    assert not at.exception, at.exception
+    labels = [w.label or "" for w in list(at.slider) + list(at.number_input)]
+    assert any("Max cylinder force" in lbl for lbl in labels), "single max-force slider expected"
+    assert not any("Max piston force" in lbl for lbl in labels), "old per-kg cap slider is gone"
+    caps = " ".join(str(c.value) for c in at.caption)
+    assert "40.00 N/kg" in caps, caps
 
 
 # --- Animation bounce logic (unit-tested directly; see module docstring) ------

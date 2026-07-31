@@ -453,6 +453,8 @@ with tab_setup:
     MLABEL = "lb" if imperial else "kg"
     PU = 0.10197162 if imperial else 1.0  # N/kg -> display specific force (lbf/lb)
     PLABEL = "lbf/lb" if imperial else "N/kg"
+    FU = 0.224809 if imperial else 0.001  # N -> display total force (lbf / kN)
+    FLABEL = "lbf" if imperial else "kN"
     if imperial:
         LEN_STEP, LEN_FMT = (0.01, "%.3f") if fine else (0.1, "%.2f")
     else:
@@ -536,25 +538,22 @@ with tab_optimize:
              "e.g. an electromechanical actuator.")
     force_cap_per_kg = None
     if opt_mode == "Cylinder length":
-        st.session_state.setdefault("force_cap_nkg", 40.0)
-        force_cap_per_kg = linked_input(
-            f"Max piston force ({PLABEL})", "force_cap_nkg", 1.0, 200.0, step=1.0,
-            disp_factor=PU, disp_step=(0.1 if imperial else 1.0),
-            fmt=("%.1f" if imperial else "%.0f"),
-            help="The optimizer returns the shortest cylinder whose PEAK force per unit "
-                 "mass stays at or below this. Same unit as the Peak force metric; it "
-                 "does not depend on the wall mass.")
-        opt_mass = linked_input(
-            f"Wall + load mass ({MLABEL})", "mass", 50.0, 20000.0, step=10.0,
-            disp_factor=MU, disp_step=10.0, fmt="%.0f", wkey="mass_opt",
-            help="Same value as the Setup tab (kept in sync). Only translates the cap "
-                 "into a real total force — it does not change the optimization.")
-        st.metric(
-            f"Total force ({fmt_pk(force_cap_per_kg)} × {fmt_mass(opt_mass)})",
-            fmt_total(force_cap_per_kg * opt_mass),
-            help="The force limit in real units: the per-mass cap multiplied by the "
-                 "wall + load mass. The optimizer finds the shortest cylinder whose "
-                 "peak force stays within it.")
+        # ONE slider: the biggest push your actuator can give (per cylinder). The
+        # optimizer's real constraint is per-mass, so we divide by the Setup wall +
+        # load mass to get it — the max force and the mass fold into a single limit,
+        # and a heavier wall spends that force budget faster.
+        st.session_state.setdefault("max_force_n", 200000.0)   # base newtons
+        max_force_n = linked_input(
+            f"Max cylinder force ({FLABEL})", "max_force_n", 1000.0, 1_000_000.0,
+            step=1000.0, disp_factor=FU, disp_step=(100.0 if imperial else 1.0),
+            fmt="%.0f",
+            help="The largest force your actuator can push, per cylinder. The optimizer "
+                 "finds the shortest cylinder whose peak force stays at or below this "
+                 "for your Setup wall + load mass — so set the mass in Setup first.")
+        force_cap_per_kg = max_force_n / mass if mass > 0 else float("inf")
+        st.caption(
+            f"= **{fmt_pk(force_cap_per_kg)}** at your {fmt_mass(mass)} wall — the "
+            f"per-mass budget the optimizer actually holds the peak force under.")
 
     if st.button("Optimize geometry for current settings", type="primary",
                  use_container_width=True):

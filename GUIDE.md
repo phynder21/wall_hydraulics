@@ -92,12 +92,13 @@ to minimize:
 - **Peak force** (default) — the smallest piston force. Best when force is the
   binding constraint, e.g. a hydraulic cylinder, where force is cheap to buy.
 - **Cylinder length** — the *shortest actuator* (smallest extended length) that
-  still keeps peak force at or below a **Max piston force (N/kg)** cap you set.
-  The cap is in N/kg — the same unit as the Peak force metric — so it depends only
-  on geometry, not mass. A **Wall + load mass** slider (kept in sync with Setup)
-  sits alongside it and shows the cap as a real force in **kN**. Best when physical
-  size is what costs — e.g. an **electromechanical actuator**, where you pay most
-  for force/size.
+  still keeps peak force at or below a limit you set. You give it as a single
+  **Max cylinder force** (the biggest push your actuator can provide, per cylinder,
+  in kN / lbf); the optimizer divides that by your **Setup wall + load mass** to get
+  the per-kg budget it holds the peak force under (shown as a caption). So the max
+  force and the mass fold into one limit, and a heavier wall spends that budget
+  faster. Best when physical size is what costs — e.g. an **electromechanical
+  actuator**, where you pay most for force/size.
 
 These pull toward different geometries because the work to raise the wall is
 fixed: **lower force ⇒ longer stroke, and a shorter cylinder ⇒ more force.** If no
