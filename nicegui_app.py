@@ -73,8 +73,8 @@ body, .q-page, .nicegui-content { background: #f6f1e7; color: #1a1a1a; }
 """
 
 CONTAINERS = {
-    "Standard (2.44 × 2.59 m)": CONTAINER_PRESETS["standard"],
-    "High-Cube (2.44 × 2.90 m)": CONTAINER_PRESETS["highcube"],
+    "Standard (2.35 × 2.39 m internal)": CONTAINER_PRESETS["standard"],
+    "High-Cube (2.35 × 2.70 m internal)": CONTAINER_PRESETS["highcube"],
 }
 WIDTH = CONTAINER_PRESETS["highcube"][0]
 HEIGHT_MAX = CONTAINER_PRESETS["highcube"][1]     # tallest; fixes slider extents

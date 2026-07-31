@@ -112,6 +112,8 @@ def render_reverse():
 
     # --- Wall / problem (Wall tab; the container and geometry are metric) ---
     size = tab_wall.selectbox("Container", list(CONTAINERS), key="rv_size")
+    tab_wall.caption("**Internal (clear) dimensions** — the usable space inside the "
+                     "container, not the outer shell.")
     width, height = CONTAINERS[size]
     x_cg = _sb_linked("x_cg — along wall from hinge (m)", "rv_xcg", 0.0, HEIGHT_MAX,
                       1.20, 0.01, ctx=tab_wall)

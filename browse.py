@@ -16,6 +16,7 @@ from optimize import CONTAINER_PRESETS, optimize_actuator
 from sensitivity_panel import (render_sensitivity_panel, render_interaction_map,
                                selected_metric)
 from cylinder_panel import render_cylinder_sizing
+from container_view import add_container_shell
 from pdf_export import render_pdf_export
 import lookup
 import lookup_build
@@ -24,9 +25,11 @@ import lookup_build
 # this lower for speed since the build is done once per process.
 TABLE_RES = 40
 
+# Labels show INTERNAL (clear) dimensions — the usable interior, not the outer shell
+# (values come from optimize.CONTAINER_PRESETS, which are internal).
 CONTAINERS = {
-    "Standard (8'6\") — 2.44 m W x 2.59 m H": CONTAINER_PRESETS["standard"],
-    "High-Cube (9'6\") — 2.44 m W x 2.90 m H": CONTAINER_PRESETS["highcube"],
+    "Standard (8'6\") — 2.35 × 2.39 m internal": CONTAINER_PRESETS["standard"],
+    "High-Cube (9'6\") — 2.35 × 2.70 m internal": CONTAINER_PRESETS["highcube"],
 }
 # Widest physical extents (High-Cube). Sliders use these FIXED ranges regardless
 # of the selected container, so switching container never changes a slider's
@@ -89,10 +92,17 @@ def _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, theta_deg=45.0,
     xb, zb = -a, f                                   # cylinder base
     door = (height * np.cos(th), height * np.sin(th))
     fig = go.Figure()
+    # Container steel shell around the internal clear space (width/height are internal),
+    # so the mechanism reads as working inside the clear interior, not the outer box.
+    shell_x, shell_zb, shell_zt = add_container_shell(fig, width, height)
+    # Invisible anchors at the shell's outer corners so autorange includes the shell.
+    fig.add_trace(go.Scatter(x=[shell_x, shell_x], y=[shell_zb, shell_zt], mode="markers",
+                             marker=dict(size=0.1, opacity=0), hoverinfo="skip",
+                             showlegend=False))
     fig.add_hline(y=0, line=dict(color="lightgray", dash="dash"))
     fig.add_trace(go.Scatter(x=[0, -width, -width, 0], y=[0, 0, height, height],
                              mode="lines", line=dict(color="darkgray", width=2),
-                             name="container", hoverinfo="skip"))
+                             name="container (clear)", hoverinfo="skip"))
     fig.add_trace(go.Scatter(x=[0, door[0]], y=[0, door[1]], mode="lines",
                              line=dict(color="black", width=5), name="wall"))
     fig.add_trace(go.Scatter(x=[x_wb, x_att], y=[z_wb, z_att], mode="lines",
@@ -196,6 +206,8 @@ def render_browse():
     # mounting limits stay in a collapsible expander below.
     st.sidebar.header("Problem")
     size = st.sidebar.selectbox("Container", list(CONTAINERS), key="lk_size")
+    st.sidebar.caption("**Internal (clear) dimensions** — the usable space inside the "
+                       "container, not the outer shell.")
     width, height = CONTAINERS[size]
     x_cg = _sb_linked("x_cg — along wall from hinge (m)", "lk_xcg",
                       0.0, HEIGHT_MAX, 1.20, 0.01)

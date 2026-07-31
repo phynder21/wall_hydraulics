@@ -137,7 +137,8 @@ def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0
            limit=200, group_cap=None):
     """Filter and rank the table for one query. Returns a dict of column arrays.
 
-    - container_height: 2.591 (Standard) or 2.896 (High-Cube); caps b, f and the roof.
+    - container_height: internal clear height — 2.393 (Standard) or 2.698 (High-Cube);
+      caps b, f and the roof.
     - x_cg, z_cg: exact center of gravity (continuous, not gridded).
     - stroke_max, roof_clearance: constraint thresholds.
     - bounds: optional {var: (lo, hi)} mounting limits on a, b, d, f.

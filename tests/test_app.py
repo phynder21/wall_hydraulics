@@ -17,8 +17,8 @@ from streamlit.testing.v1 import AppTest
 
 APP_PATH = str(Path(__file__).resolve().parent.parent / "app.py")
 
-STANDARD_KEY = "Standard (8'6\") — 2.44 m W x 2.59 m H"
-HIGHCUBE_KEY = "High-Cube (9'6\") — 2.44 m W x 2.90 m H"
+STANDARD_KEY = "Standard (8'6\") — 2.35 × 2.39 m internal"
+HIGHCUBE_KEY = "High-Cube (9'6\") — 2.35 × 2.70 m internal"
 
 
 def fresh_app():
@@ -113,13 +113,13 @@ def test_untouched_mounting_limits_grow_with_container():
     at = fresh_app()
     at.session_state["size_key"] = STANDARD_KEY
     run_ok(at, "standard")
-    assert at.session_state["rng_b"][1] == pytest.approx(2.591, abs=1e-3)
+    assert at.session_state["rng_b"][1] == pytest.approx(2.393, abs=1e-3)
     # Narrow f deliberately; leave b untouched.
     at.session_state["rng_f"] = (0.3, 1.0)
     at.session_state["size_key"] = HIGHCUBE_KEY
     run_ok(at, "highcube")
-    # Untouched b grew to the High-Cube height...
-    assert at.session_state["rng_b"][1] == pytest.approx(2.896, abs=1e-3)
+    # Untouched b grew to the High-Cube (internal) height...
+    assert at.session_state["rng_b"][1] == pytest.approx(2.698, abs=1e-3)
     # ...but the deliberately narrowed f range was preserved.
     assert at.session_state["rng_f"] == pytest.approx((0.3, 1.0), abs=1e-6)
 

@@ -18,6 +18,7 @@ from reverse import render_reverse
 from lookup import force_bar, force_bar_html, BAR_NEUTRAL, cylinder_banner
 from sensitivity_panel import (render_sensitivity_panel, render_interaction_map,
                                build_interaction_matrix, selected_metric)
+from container_view import add_container_shell
 from cylinder_panel import render_cylinder_sizing
 from pdf_export import render_pdf_export
 
@@ -103,7 +104,7 @@ def _guide_diagram():
     wall) and d (perpendicular off it) dimensioned in the wall frame. Illustrative
     values (a bigger d than typical) so every dimension reads clearly."""
     a, b, d, f, xcg, zcg = 0.6, 1.55, 0.5, 0.4, 1.0, 0.42
-    W, H = 2.438, 2.591
+    W, H = 2.352, 2.393                             # internal (clear) — Standard
     th = np.radians(52)
     c, s = np.cos(th), np.sin(th)
     wall = np.array([c, s])                        # unit vector up the wall
@@ -119,8 +120,15 @@ def _guide_diagram():
         fig.add_trace(go.Scatter(x=[p[0], q[0]], y=[p[1], q[1]], mode="lines",
                                  hoverinfo="skip", showlegend=False,
                                  line=dict(color=color, width=w)))
+    # Container: the grey steel shell drawn around the internal clear space, so it's
+    # clear the mechanism works INSIDE (the white interior), not the outer box.
+    g_sx, g_szb, g_szt = add_container_shell(fig, W, H, fill="#eef2f7",
+                                             line_color="#cbd5e1")
+    fig.add_trace(go.Scatter(x=[g_sx, g_sx], y=[g_szb, g_szt], mode="markers",
+                             marker=dict(size=0.1, opacity=0), hoverinfo="skip",
+                             showlegend=False))
     fig.add_trace(go.Scatter(x=[0, -W, -W, 0], y=[0, 0, H, H], mode="lines",
-                             line=dict(color="#cbd5e1", width=2), hoverinfo="skip",
+                             line=dict(color="#94a3b8", width=2), hoverinfo="skip",
                              showlegend=False))
     fig.add_hline(y=0, line=dict(color="#cbd5e1", dash="dot"))
     line((0, 0), tip, "#111827", 7)                # wall
@@ -218,9 +226,12 @@ if _view == "Size from a cylinder":
     st.stop()
 
 # ISO container dimensions (external)
+# Values are INTERNAL (clear) dimensions — the usable space inside the shell, which
+# is what constrains the mechanism (see optimize.CONTAINER_PRESETS). The 8'6"/9'6"
+# in the labels is the container's external name; the metres are the clear interior.
 CONTAINER_SIZES = {
-    "Standard (8'6\") — 2.44 m W x 2.59 m H": (2.438, 2.591),
-    "High-Cube (9'6\") — 2.44 m W x 2.90 m H": (2.438, 2.896),
+    "Standard (8'6\") — 2.35 × 2.39 m internal": (2.352, 2.393),
+    "High-Cube (9'6\") — 2.35 × 2.70 m internal": (2.352, 2.698),
 }
 
 # Initial values used on first load (no URL params). Chosen to give a plausible
@@ -412,6 +423,9 @@ with tab_setup:
     size_key = st.selectbox("Container size", list(CONTAINER_SIZES.keys()),
                             key="size_key")
     container_width, container_height = CONTAINER_SIZES[size_key]
+    st.caption("**These are internal (clear) dimensions** — the usable space *inside* "
+               "the container, not the outer shell. The wall panel spans this clear "
+               "opening and the moving parts must clear the internal roof.")
 
     # Bounds for the four geometry variables — single source of truth shared by
     # the slider widgets, the clamp-on-resize logic, and the optimize button's
@@ -820,17 +834,29 @@ col_force, col_len = st.columns(2)
 with diag_area:
     fig_geom = go.Figure()
 
-    # Ground (the door lies on it when open)
+    # Container steel shell (back wall, floor understructure, roof) drawn AROUND the
+    # internal clear space, so it's visible that the mechanism works inside the clear
+    # interior — the dims above are internal, not the outer box. Returns the shell's
+    # outer extents so the axes include it.
+    shell_x, shell_zb, shell_zt = add_container_shell(
+        fig_geom, container_width, container_height, scale=U)
+    # Invisible anchors at the shell's outer corners so the PDF export (which reranges
+    # from trace data, not shapes) includes the shell, matching the on-screen view.
     fig_geom.add_trace(go.Scatter(
-        x=[-cw - pad, ch + pad], y=[0, 0], mode="lines",
+        x=[shell_x, shell_x], y=[shell_zb, shell_zt], mode="markers",
+        marker=dict(size=0.1, opacity=0), hoverinfo="skip", showlegend=False))
+
+    # Ground the container rests on (bottom of the floor understructure)
+    fig_geom.add_trace(go.Scatter(
+        x=[shell_x - pad, ch + pad], y=[shell_zb, shell_zb], mode="lines",
         line=dict(color="lightgray", dash="dash"), hoverinfo="skip", showlegend=False))
 
-    # Container outline: floor + back wall + ceiling
+    # Internal clear-space outline: floor + back wall + ceiling
     fig_geom.add_trace(go.Scatter(
         x=[0, -cw, -cw, 0],
         y=[0, 0, ch, ch],
         mode="lines", line=dict(color="darkgray", width=3),
-        hoverinfo="skip", name="container"))
+        hoverinfo="skip", name="container (clear)"))
 
     # Effective ceiling the optimizer respects (roof minus clearance margin)
     if roof_clearance > 0:
@@ -887,9 +913,9 @@ with diag_area:
     fig_geom.update_layout(
         template=PLOT_TEMPLATE, font=PLOT_FONT,
         title=f"Side view (theta = {theta_deg:.0f} deg)",
-        xaxis=dict(range=[-cw - pad, ch + pad],
+        xaxis=dict(range=[shell_x - pad, ch + pad],
                     title=f"x ({ULABEL})", zeroline=False),
-        yaxis=dict(range=[-pad, ch + pad],
+        yaxis=dict(range=[shell_zb - pad, ch + pad],
                     title=f"z ({ULABEL})", scaleanchor="x", scaleratio=1, zeroline=False),
         height=560,
         legend=dict(orientation="h", y=-0.15),

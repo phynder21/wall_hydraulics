@@ -41,6 +41,11 @@ total force.
 ## Designer — try a geometry, see what it needs
 
 1. Pick the **container** (Standard or High-Cube) and set the weight (x_cg, z_cg).
+   Container sizes are the **internal (clear) dimensions** — the usable space *inside*
+   the shell (Standard ≈ 2.35 × 2.39 m, High-Cube ≈ 2.35 × 2.70 m), not the outer ISO
+   box — because the wall panel spans the clear opening and the moving parts must clear
+   the *internal* roof. The diagram draws the steel shell (grey) around this clear
+   interior so you can see the wall thickness.
 2. Drag or type the four geometry values (a, b, d, f). The **diagram** — looking
    down the container's long axis, the wall swinging up from flat — shows the
    layout, and the **plots** show force and cylinder length across the full swing.
