@@ -225,6 +225,50 @@ if _view == "Size from a cylinder":
     render_reverse()
     st.stop()
 
+# --- Display units — at the TOP of the Designer sidebar so it's visible from every
+# tab (Geometry/Setup/Optimize/Compare), not buried in Setup. Everything is stored and
+# computed in SI base units internally — lengths in METERS, mass in KG, force in N,
+# specific force in N/kg, pressure in bar — so the physics, the optimizer, and shared
+# URLs stay consistent; this single Imperial/Metric switch only changes how values are
+# *displayed* (and the bore card follows it).
+units = st.sidebar.radio("Units", ["Metric", "Imperial"], key="units", horizontal=True)
+fine = st.sidebar.toggle(
+    "Fine precision", key="fine",
+    help="Finer slider/number steps for exact values (0.001 m / 0.01 in), and the "
+         "optimizer rounds to that precision — so the plotted force matches the "
+         "reported one more closely.")
+imperial = units == "Imperial"
+U = 39.3700787 if imperial else 1.0   # meters -> display length
+ULABEL = "in" if imperial else "m"     # short length label
+UWORD = "inches" if imperial else "meters"
+MU = 2.2046226 if imperial else 1.0   # kg -> display mass
+MLABEL = "lb" if imperial else "kg"
+PU = 0.10197162 if imperial else 1.0  # N/kg -> display specific force (lbf/lb)
+PLABEL = "lbf/lb" if imperial else "N/kg"
+FU = 0.224809 if imperial else 0.001  # N -> display total force (lbf / kN)
+FLABEL = "lbf" if imperial else "kN"
+if imperial:
+    LEN_STEP, LEN_FMT = (0.01, "%.3f") if fine else (0.1, "%.2f")
+else:
+    LEN_STEP, LEN_FMT = (0.001, "%.3f") if fine else (0.01, "%.2f")
+ROUND_DP = 3 if fine else 2           # meters precision the optimize snaps to
+
+
+def fmt_pk(nkg):
+    """A specific / peak force (base N/kg) in the display unit."""
+    return f"{nkg * PU:.2f} {PLABEL}"
+
+
+def fmt_total(newtons):
+    """A total force (base newtons) in the display unit — lbf or kN."""
+    return (f"{newtons * 0.224809:,.0f} lbf" if imperial else f"{newtons / 1000:.1f} kN")
+
+
+def fmt_mass(kg):
+    """A mass (base kg) in the display unit."""
+    return f"{kg * MU:,.0f} {MLABEL}"
+
+
 # ISO container dimensions (external)
 # Values are INTERNAL (clear) dimensions — the usable space inside the shell, which
 # is what constrains the mechanism (see optimize.CONTAINER_PRESETS). The 8'6"/9'6"
@@ -451,49 +495,6 @@ with tab_setup:
     _clamp("theta_deg", 0.0, 90.0)
     _clamp("stroke_ratio", 1.0, 3.0)
     _clamp("roof_clearance", 0.0, 0.5)
-
-    # --- Display units ---
-    # Everything is stored and computed in SI base units internally — lengths in
-    # METERS, mass in KG, force in N, specific force in N/kg, pressure in bar — so
-    # the physics, the optimizer, and shared URLs stay consistent. This single
-    # Imperial/Metric switch only changes how values are *displayed*: widgets,
-    # plots, and captions convert on the way out (and the bore card follows it).
-    st.subheader("Display units")
-    units = st.radio("Units", ["Metric", "Imperial"], key="units",
-                     horizontal=True, label_visibility="collapsed")
-    fine = st.toggle(
-        "Fine precision", key="fine",
-        help="Finer slider/number steps for exact values (0.001 m / 0.01 in), "
-             "and the optimizer rounds to that precision — so the plotted force "
-             "matches the reported one more closely.")
-    imperial = units == "Imperial"
-    U = 39.3700787 if imperial else 1.0   # meters -> display length
-    ULABEL = "in" if imperial else "m"     # short length label
-    UWORD = "inches" if imperial else "meters"
-    MU = 2.2046226 if imperial else 1.0   # kg -> display mass
-    MLABEL = "lb" if imperial else "kg"
-    PU = 0.10197162 if imperial else 1.0  # N/kg -> display specific force (lbf/lb)
-    PLABEL = "lbf/lb" if imperial else "N/kg"
-    FU = 0.224809 if imperial else 0.001  # N -> display total force (lbf / kN)
-    FLABEL = "lbf" if imperial else "kN"
-    if imperial:
-        LEN_STEP, LEN_FMT = (0.01, "%.3f") if fine else (0.1, "%.2f")
-    else:
-        LEN_STEP, LEN_FMT = (0.001, "%.3f") if fine else (0.01, "%.2f")
-    ROUND_DP = 3 if fine else 2           # meters precision the optimize snaps to
-
-    def fmt_pk(nkg):
-        """A specific / peak force (base N/kg) in the display unit."""
-        return f"{nkg * PU:.2f} {PLABEL}"
-
-    def fmt_total(newtons):
-        """A total force (base newtons) in the display unit — lbf or kN."""
-        return (f"{newtons * 0.224809:,.0f} lbf" if imperial
-                else f"{newtons / 1000:.1f} kN")
-
-    def fmt_mass(kg):
-        """A mass (base kg) in the display unit."""
-        return f"{kg * MU:,.0f} {MLABEL}"
 
     # --- Center of gravity: the load the actuator must hold ---
     st.subheader(f"Center of gravity ({UWORD})")

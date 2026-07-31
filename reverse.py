@@ -57,12 +57,10 @@ def render_reverse():
     with st.spinner("Building the configuration database (first time only, ~15 s)…"):
         table = _get_table(TABLE_RES)
 
-    # Sidebar tabs (like the Designer): the Cylinder you enter, and the Wall it lifts.
-    tab_cyl, tab_wall = st.sidebar.tabs(["Cylinder", "Wall"])
-
-    # --- Units switch (top of the Cylinder tab): converts stored values on flip ---
-    units = tab_cyl.radio("Units", ["Imperial", "Metric"], key="rv_units",
-                          horizontal=True)
+    # --- Units switch — at the TOP of the sidebar (above the tabs) so it's visible from
+    # both the Cylinder and Wall tabs; converts stored cylinder values on flip. ---
+    units = st.sidebar.radio("Units", ["Imperial", "Metric"], key="rv_units",
+                             horizontal=True)
     cfg = _CYL[units]
     prev = st.session_state.get("rv_units_prev")
     if prev is not None and prev != units:
@@ -75,6 +73,9 @@ def render_reverse():
                     min(max(st.session_state[skey] * old_m / new_m, lo), hi))
     st.session_state["rv_units_prev"] = units
     len_fac, len_u = (39.37008, "in") if units == "Imperial" else (1000.0, "mm")
+
+    # Sidebar tabs (like the Designer): the Cylinder you enter, and the Wall it lifts.
+    tab_cyl, tab_wall = st.sidebar.tabs(["Cylinder", "Wall"])
 
     def _cyl(k, ctx):
         """A cylinder input in the current units; returns (shown, base-unit value)."""
