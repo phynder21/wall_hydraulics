@@ -266,6 +266,23 @@ def test_browse_view_renders():
     assert not at.exception, at.exception
 
 
+def test_browse_imperial_units():
+    """Browse honors the Imperial toggle: the results-table headers switch to inches /
+    lbf-lb (no m / N/kg), and it renders without error."""
+    import browse
+    browse.TABLE_RES = 12
+    at = AppTest.from_file(APP_PATH, default_timeout=120)
+    at.run()
+    assert not at.exception, at.exception
+    at.session_state["view"] = "Browse configurations"
+    at.session_state["units"] = "Imperial"
+    at.run()
+    assert not at.exception, at.exception
+    cols = " ".join(str(c) for c in at.dataframe[0].value.columns)
+    assert "(in)" in cols and "lbf/lb" in cols, cols
+    assert "(m)" not in cols and "N/kg" not in cols, cols
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("units", ["Metric", "Imperial"])
 def test_optimize_through_ui(units):

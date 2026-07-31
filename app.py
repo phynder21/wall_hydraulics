@@ -19,6 +19,7 @@ from lookup import force_bar, force_bar_html, BAR_NEUTRAL, cylinder_banner
 from sensitivity_panel import (render_sensitivity_panel, render_interaction_map,
                                build_interaction_matrix, selected_metric)
 from container_view import add_container_shell
+from display_units import Units
 from cylinder_panel import render_cylinder_sizing
 from pdf_export import render_pdf_export
 
@@ -237,36 +238,13 @@ fine = st.sidebar.toggle(
     help="Finer slider/number steps for exact values (0.001 m / 0.01 in), and the "
          "optimizer rounds to that precision — so the plotted force matches the "
          "reported one more closely.")
-imperial = units == "Imperial"
-U = 39.3700787 if imperial else 1.0   # meters -> display length
-ULABEL = "in" if imperial else "m"     # short length label
-UWORD = "inches" if imperial else "meters"
-MU = 2.2046226 if imperial else 1.0   # kg -> display mass
-MLABEL = "lb" if imperial else "kg"
-PU = 0.10197162 if imperial else 1.0  # N/kg -> display specific force (lbf/lb)
-PLABEL = "lbf/lb" if imperial else "N/kg"
-FU = 0.224809 if imperial else 0.001  # N -> display total force (lbf / kN)
-FLABEL = "lbf" if imperial else "kN"
-if imperial:
-    LEN_STEP, LEN_FMT = (0.01, "%.3f") if fine else (0.1, "%.2f")
-else:
-    LEN_STEP, LEN_FMT = (0.001, "%.3f") if fine else (0.01, "%.2f")
-ROUND_DP = 3 if fine else 2           # meters precision the optimize snaps to
-
-
-def fmt_pk(nkg):
-    """A specific / peak force (base N/kg) in the display unit."""
-    return f"{nkg * PU:.2f} {PLABEL}"
-
-
-def fmt_total(newtons):
-    """A total force (base newtons) in the display unit — lbf or kN."""
-    return (f"{newtons * 0.224809:,.0f} lbf" if imperial else f"{newtons / 1000:.1f} kN")
-
-
-def fmt_mass(kg):
-    """A mass (base kg) in the display unit."""
-    return f"{kg * MU:,.0f} {MLABEL}"
+# Shared with Browse via display_units so the two convert identically.
+_u = Units(units, fine)
+imperial, U, ULABEL, UWORD = _u.imperial, _u.U, _u.ULABEL, _u.UWORD
+MU, MLABEL, PU, PLABEL = _u.MU, _u.MLABEL, _u.PU, _u.PLABEL
+FU, FLABEL = _u.FU, _u.FLABEL
+LEN_STEP, LEN_FMT, ROUND_DP = _u.LEN_STEP, _u.LEN_FMT, _u.ROUND_DP
+fmt_pk, fmt_total, fmt_mass = _u.pk, _u.total, _u.mass
 
 
 # ISO container dimensions (external)

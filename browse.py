@@ -17,6 +17,7 @@ from sensitivity_panel import (render_sensitivity_panel, render_interaction_map,
                                selected_metric)
 from cylinder_panel import render_cylinder_sizing
 from container_view import add_container_shell
+from display_units import Units
 from pdf_export import render_pdf_export
 import lookup
 import lookup_build
@@ -38,14 +39,9 @@ CONTAINERS = {
 WIDTH = CONTAINER_PRESETS["highcube"][0]
 HEIGHT_MAX = CONTAINER_PRESETS["highcube"][1]
 
-# Columns offerable in the results table (key -> label).
-COLUMNS = {
-    "peak_force": "peak force (N/kg)",
-    "a": "a (m)", "b": "b (m)", "d": "d (m)", "f": "f (m)",
-    "stroke": "stroke (m)", "stroke_ratio": "stroke ratio",
-    "L_min": "retracted (m)", "L_max": "extended (m)",
-    "moment_arm": "over-center margin",
-}
+# Columns offerable in the results table. Their display LABELS (with units) are built
+# per-render in render_browse so they follow the Imperial/Metric toggle; here we only
+# fix the default selection (keys).
 DEFAULT_COLUMNS = ["peak_force", "a", "b", "d", "f", "stroke", "stroke_ratio"]
 
 
@@ -55,8 +51,10 @@ def _get_table(res):
     return lookup_build.build_table(res=res)[0]
 
 
-def _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max):
-    """Exact force and length curves for one geometry, straight from wall.py."""
+def _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max, u=1.0, ulabel="m",
+                          pu=1.0, plabel="N/kg"):
+    """Exact force and length curves for one geometry, straight from wall.py. `u`/`pu`
+    scale length / specific-force to the display unit (with labels ulabel/plabel)."""
     theta = np.linspace(0.0, np.pi / 2, 400)
     deg = np.degrees(theta)
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -65,42 +63,45 @@ def _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max):
     L = compute_cylinder_length(theta, a=a, b=b, d=d, f=f)
 
     ff = go.Figure()
-    ff.add_trace(go.Scatter(x=deg, y=F, mode="lines", name="F"))
+    ff.add_trace(go.Scatter(x=deg, y=F * pu, mode="lines", name="F"))
     ff.update_layout(title="Piston force vs. angle (exact)",
-                     xaxis_title="theta (deg)", yaxis_title="N/kg",
+                     xaxis_title="theta (deg)", yaxis_title=plabel,
                      height=320, margin=dict(l=10, r=10, t=40, b=10))
     fl = go.Figure()
-    fl.add_trace(go.Scatter(x=deg, y=L, mode="lines", name="L"))
-    fl.add_hline(y=float(L.min()), line=dict(color="green", dash="dot"))
-    fl.add_hline(y=stroke_max * float(L.min()), line=dict(color="red", dash="dot"),
+    fl.add_trace(go.Scatter(x=deg, y=L * u, mode="lines", name="L"))
+    fl.add_hline(y=float(L.min()) * u, line=dict(color="green", dash="dot"))
+    fl.add_hline(y=stroke_max * float(L.min()) * u, line=dict(color="red", dash="dot"),
                  annotation_text=f"{stroke_max:g}x limit")
     fl.update_layout(title="Cylinder length vs. angle (exact)",
-                     xaxis_title="theta (deg)", yaxis_title="m",
+                     xaxis_title="theta (deg)", yaxis_title=ulabel,
                      height=320, margin=dict(l=10, r=10, t=40, b=10))
     return ff, fl
 
 
 def _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, theta_deg=45.0,
-                    fig_height=360):
+                    fig_height=360, scale=1.0, ulabel="m"):
     """Side-view of the geometry at one wall angle: container, wall/door, bracket,
-    cylinder, and the key points (hinge, base, attachment, cg)."""
+    cylinder, and the key points (hinge, base, attachment, cg). `scale` converts the
+    coordinates to the display unit (m->in)."""
     th = np.radians(theta_deg)
     geo = compute_geometry(th, a=a, b=b, d=d, f=f, x_cg=x_cg, z_cg=z_cg)
-    x_att, z_att = float(geo["attachment"][0]), float(geo["attachment"][1])
-    x_cgw, z_cgw = float(geo["cg"][0]), float(geo["cg"][1])
-    x_wb, z_wb = float(geo["wall_axis_at_b"][0]), float(geo["wall_axis_at_b"][1])
-    xb, zb = -a, f                                   # cylinder base
-    door = (height * np.cos(th), height * np.sin(th))
+    s = scale
+    x_att, z_att = float(geo["attachment"][0]) * s, float(geo["attachment"][1]) * s
+    x_cgw, z_cgw = float(geo["cg"][0]) * s, float(geo["cg"][1]) * s
+    x_wb, z_wb = float(geo["wall_axis_at_b"][0]) * s, float(geo["wall_axis_at_b"][1]) * s
+    xb, zb = -a * s, f * s                            # cylinder base
+    W, H = width * s, height * s
+    door = (H * np.cos(th), H * np.sin(th))
     fig = go.Figure()
     # Container steel shell around the internal clear space (width/height are internal),
     # so the mechanism reads as working inside the clear interior, not the outer box.
-    shell_x, shell_zb, shell_zt = add_container_shell(fig, width, height)
+    shell_x, shell_zb, shell_zt = add_container_shell(fig, width, height, scale=s)
     # Invisible anchors at the shell's outer corners so autorange includes the shell.
     fig.add_trace(go.Scatter(x=[shell_x, shell_x], y=[shell_zb, shell_zt], mode="markers",
                              marker=dict(size=0.1, opacity=0), hoverinfo="skip",
                              showlegend=False))
     fig.add_hline(y=0, line=dict(color="lightgray", dash="dash"))
-    fig.add_trace(go.Scatter(x=[0, -width, -width, 0], y=[0, 0, height, height],
+    fig.add_trace(go.Scatter(x=[0, -W, -W, 0], y=[0, 0, H, H],
                              mode="lines", line=dict(color="darkgray", width=2),
                              name="container (clear)", hoverinfo="skip"))
     fig.add_trace(go.Scatter(x=[0, door[0]], y=[0, door[1]], mode="lines",
@@ -123,66 +124,75 @@ def _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, theta_deg=45.0,
                              marker=dict(size=12, color="green", symbol="cross"),
                              name="cg"))
     fig.update_layout(title=f"Geometry at theta = {theta_deg:.0f} deg",
-                      xaxis_title="x (m)", yaxis_title="z (m)", height=fig_height,
-                      margin=dict(l=10, r=10, t=40, b=10), showlegend=False)
+                      xaxis_title=f"x ({ulabel})", yaxis_title=f"z ({ulabel})",
+                      height=fig_height, margin=dict(l=10, r=10, t=40, b=10),
+                      showlegend=False)
     fig.update_yaxes(scaleanchor="x", scaleratio=1)   # equal aspect ratio
     return fig
 
 
-def _sb_linked(label, key, lo, hi, default, step, fmt="%.2f", help=None, ctx=None):
+def _sb_linked(label, key, lo, hi, default, step, fmt="%.2f", help=None, ctx=None,
+               disp_factor=1.0, disp_step=None):
     """Slider + typeable number box bound to one canonical value in
-    st.session_state[key]. Renders into `ctx` (default the sidebar; pass an
-    expander to group it)."""
+    st.session_state[key] (kept in BASE units). Renders into `ctx` (default the
+    sidebar). `disp_factor` scales the canonical value for display (e.g. m->in): the
+    widgets show value*factor and lo/hi*factor, converting edits back by dividing."""
     ctx = ctx if ctx is not None else st.sidebar
+    Uf = disp_factor
+    dstep = disp_step if disp_step is not None else step
     if key not in st.session_state:
         st.session_state[key] = float(default)
     skey, nkey = f"{key}__s", f"{key}__n"
-    st.session_state[skey] = st.session_state[key]
-    st.session_state[nkey] = st.session_state[key]
+    st.session_state[skey] = st.session_state[key] * Uf
+    st.session_state[nkey] = st.session_state[key] * Uf
 
     def _from_s():
-        st.session_state[key] = st.session_state[skey]
+        st.session_state[key] = float(min(max(st.session_state[skey] / Uf, lo), hi))
 
     def _from_n():
-        st.session_state[key] = float(min(max(st.session_state[nkey], lo), hi))
+        st.session_state[key] = float(min(max(st.session_state[nkey] / Uf, lo), hi))
 
     ctx.markdown(f"**{label}**")
     c1, c2 = ctx.columns([2, 1])
-    c1.slider(label, lo, hi, step=step, key=skey, on_change=_from_s,
+    c1.slider(label, lo * Uf, hi * Uf, step=dstep, key=skey, on_change=_from_s,
               help=help, label_visibility="collapsed")
-    c2.number_input(label, min_value=lo, max_value=hi, step=step, key=nkey,
+    c2.number_input(label, min_value=lo * Uf, max_value=hi * Uf, step=dstep, key=nkey,
                     on_change=_from_n, format=fmt, label_visibility="collapsed")
     return st.session_state[key]
 
 
-def _sb_range(label, key, full_lo, full_hi, step=0.01, fmt="%.2f"):
+def _sb_range(label, key, full_lo, full_hi, step=0.01, fmt="%.2f", disp_factor=1.0,
+              disp_step=None):
     """Sidebar range slider + typeable min/max number boxes, bound to a canonical
-    (lo, hi) tuple in st.session_state[key]."""
+    (lo, hi) tuple in st.session_state[key] (BASE units). `disp_factor` scales for
+    display (m->in); canonical (lo, hi) stay in base units."""
+    Uf = disp_factor
+    dstep = disp_step if disp_step is not None else step
     st.session_state.setdefault(key, (full_lo, full_hi))
     lo, hi = st.session_state[key]
     lo = min(max(lo, full_lo), full_hi)
     hi = min(max(hi, lo), full_hi)
     st.session_state[key] = (lo, hi)
     rk, lok, hik = f"{key}__r", f"{key}__lo", f"{key}__hi"
-    st.session_state[rk] = (lo, hi)
-    st.session_state[lok] = lo
-    st.session_state[hik] = hi
+    st.session_state[rk] = (lo * Uf, hi * Uf)
+    st.session_state[lok] = lo * Uf
+    st.session_state[hik] = hi * Uf
 
     def _from_r():
         a, b = st.session_state[rk]
-        st.session_state[key] = (a, b)
+        st.session_state[key] = (a / Uf, b / Uf)
 
     def _from_box():
-        a, b = st.session_state[lok], st.session_state[hik]
+        a, b = st.session_state[lok] / Uf, st.session_state[hik] / Uf
         st.session_state[key] = (min(a, b), max(a, b))
 
     st.markdown(f"**{label}**")
-    st.slider(label, full_lo, full_hi, step=step, key=rk, on_change=_from_r,
+    st.slider(label, full_lo * Uf, full_hi * Uf, step=dstep, key=rk, on_change=_from_r,
               label_visibility="collapsed")
     cc1, cc2 = st.columns(2)
-    cc1.number_input("min", min_value=full_lo, max_value=full_hi, step=step,
+    cc1.number_input("min", min_value=full_lo * Uf, max_value=full_hi * Uf, step=dstep,
                      key=lok, on_change=_from_box, format=fmt)
-    cc2.number_input("max", min_value=full_lo, max_value=full_hi, step=step,
+    cc2.number_input("max", min_value=full_lo * Uf, max_value=full_hi * Uf, step=dstep,
                      key=hik, on_change=_from_box, format=fmt)
     return st.session_state[key]
 
@@ -197,6 +207,18 @@ def render_browse():
 
     with st.spinner("Building the configuration database (first time only, ~15 s)…"):
         table = _get_table(TABLE_RES)
+
+    # --- Display units — at the TOP of the sidebar (matches the Designer), visible
+    # always. Shares the Designer's "units"/"fine" keys so the preference follows you
+    # between views. Everything is stored in SI base units; this only affects display.
+    units = st.sidebar.radio("Units", ["Metric", "Imperial"], key="units",
+                             horizontal=True)
+    fine = st.sidebar.toggle(
+        "Fine precision", key="fine",
+        help="Finer slider / number steps for exact values (0.001 m / 0.01 in).")
+    _u = Units(units, fine)
+    U, ULABEL, PU, PLABEL = _u.U, _u.ULABEL, _u.PU, _u.PLABEL
+    MU, MLABEL, LEN_STEP, LEN_FMT = _u.MU, _u.MLABEL, _u.LEN_STEP, _u.LEN_FMT
 
     # --- Prompts (sidebar) ---
     # Slider ranges are FIXED (High-Cube extents), never container-dependent, so
@@ -218,54 +240,77 @@ def render_browse():
                                       "container. Uncheck to allow the full width.")
     _half = WIDTH / 2
     if half_a:
-        st.sidebar.caption(f"Active: **a ≤ {_half:.2f} m** and **d ≤ {_half:.2f} m** "
-                           f"(half the {WIDTH:.2f} m width).")
+        st.sidebar.caption(f"Active: **a ≤ {_half * U:.2f} {ULABEL}** and **d ≤ "
+                           f"{_half * U:.2f} {ULABEL}** (half the {WIDTH * U:.2f} "
+                           f"{ULABEL} width).")
     else:
-        st.sidebar.caption(f"Off — **a** and **d** may use the full **{WIDTH:.2f} m** "
-                           f"width. (The precomputed table only covers up to half the "
-                           f"width; for wider layouts use the Designer.)")
-    x_cg = _sb_linked("x_cg — along wall from hinge (m)", "lk_xcg",
-                      0.0, HEIGHT_MAX, 1.20, 0.01)
-    z_cg = _sb_linked("z_cg — off the wall (m)", "lk_zcg", 0.0, 1.5, 0.55, 0.01)
+        st.sidebar.caption(f"Off — **a** and **d** may use the full **{WIDTH * U:.2f} "
+                           f"{ULABEL}** width. (The precomputed table only covers up to "
+                           f"half the width; for wider layouts use the Designer.)")
+    x_cg = _sb_linked(f"x_cg — along wall from hinge ({ULABEL})", "lk_xcg",
+                      0.0, HEIGHT_MAX, 1.20, 0.01, disp_factor=U, disp_step=LEN_STEP,
+                      fmt=LEN_FMT)
+    z_cg = _sb_linked(f"z_cg — off the wall ({ULABEL})", "lk_zcg", 0.0, 1.5, 0.55, 0.01,
+                      disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
     stroke_max = _sb_linked(
         "Max stroke ratio", "lk_stroke", 1.0, 3.0, float(STROKE_RATIO_MAX), 0.05,
         help="Hard cap: only designs with L_max/L_min at or below this appear. "
              "Real hydraulic cylinders are typically ~1.8–2×.")
     clearance = _sb_linked(
-        "Roof clearance (m)", "lk_clear", 0.0, 0.5, 0.0, 0.01,
+        f"Roof clearance ({ULABEL})", "lk_clear", 0.0, 0.5, 0.0, 0.01,
+        disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT,
         help="Keep the piston attachment this far below the roof.")
-    mass = _sb_linked("Wall + load mass (kg)", "lk_mass", 50.0, 20000.0, 500.0, 10.0,
-                      fmt="%.0f",
-                      help="Converts the per-kg peak force into the real cylinder "
+    mass = _sb_linked(f"Wall + load mass ({MLABEL})", "lk_mass", 50.0, 20000.0, 500.0,
+                      10.0, disp_factor=MU, disp_step=10.0, fmt="%.0f",
+                      help="Converts the per-mass peak force into the real cylinder "
                            "force (shown for the inspected design).")
 
     ranges = {
-        "a": (0.05, _half if half_a else WIDTH, "a — base along floor (m)"),
-        "b": (0.05, HEIGHT_MAX, "b — attachment along wall (m)"),
-        "d": (0.0, _half if half_a else WIDTH, "d — bracket length (m)"),
-        "f": (0.0, HEIGHT_MAX, "f — base height (m)"),
+        "a": (0.05, _half if half_a else WIDTH, f"a — base along floor ({ULABEL})"),
+        "b": (0.05, HEIGHT_MAX, f"b — attachment along wall ({ULABEL})"),
+        "d": (0.0, _half if half_a else WIDTH, f"d — bracket length ({ULABEL})"),
+        "f": (0.0, HEIGHT_MAX, f"f — base height ({ULABEL})"),
     }
     bounds = {}
     with st.sidebar.expander("Mounting limits", expanded=False):
         for v, (lo, hi, label) in ranges.items():
-            bounds[v] = _sb_range(label, f"lk_rng_{v}", lo, hi)
+            bounds[v] = _sb_range(label, f"lk_rng_{v}", lo, hi, disp_factor=U,
+                                  disp_step=LEN_STEP, fmt=LEN_FMT)
+
+    # Unit-aware column labels (lengths -> ULABEL, peak force -> PLABEL); the length
+    # columns and peak force are converted to the display unit when the table is built.
+    columns = {
+        "peak_force": f"peak force ({PLABEL})",
+        "a": f"a ({ULABEL})", "b": f"b ({ULABEL})", "d": f"d ({ULABEL})",
+        "f": f"f ({ULABEL})", "stroke": f"stroke ({ULABEL})",
+        "stroke_ratio": "stroke ratio",
+        "L_min": f"retracted ({ULABEL})", "L_max": f"extended ({ULABEL})",
+        "moment_arm": "over-center margin",
+    }
+    _LEN_COLS = {"a", "b", "d", "f", "stroke", "L_min", "L_max"}
+
+    def _col_display(k, arr):
+        """A table column's values in the display unit (per cylinder for force)."""
+        if k == "peak_force":
+            return arr / n_cyl * PU
+        return arr * U if k in _LEN_COLS else arr
 
     # --- Filter / sort controls (main area) ---
     with st.expander("Columns, extra filters & sorting", expanded=True):
-        cols = st.multiselect("Columns to show", list(COLUMNS),
+        cols = st.multiselect("Columns to show", list(columns),
                               default=DEFAULT_COLUMNS,
-                              format_func=lambda k: COLUMNS[k], key="lk_cols")
+                              format_func=lambda k: columns[k], key="lk_cols")
         c1, c2, c3 = st.columns(3)
-        sort_by = c1.selectbox("Sort by", list(COLUMNS),
-                               format_func=lambda k: COLUMNS[k], key="lk_sort")
+        sort_by = c1.selectbox("Sort by", list(columns),
+                               format_func=lambda k: columns[k], key="lk_sort")
         ascending = c2.radio("Order", ["ascending", "descending"],
                              key="lk_order") == "ascending"
         top_n = c3.number_input("Show top", 10, 1000, 100, 10, key="lk_top")
         # A RESULT cap only. Every GEOMETRY value (a, b, d, f) has its own min AND
         # max in the sidebar's "Mounting limits" — that's the single place to bound
         # the geometry, so we don't duplicate f/d caps here.
-        max_force = st.number_input(
-            "Max peak force (N/kg) — 0 = no cap", 0.0, 500.0, 0.0, 1.0,
+        max_force_disp = st.number_input(
+            f"Max peak force ({PLABEL}) — 0 = no cap", 0.0, 500.0, 0.0, 1.0,
             key="lk_fmax",
             help="Hide any configuration whose peak force exceeds this. To cap the "
                  "geometry itself (a, b, d, f), use the Mounting-limits sliders in "
@@ -277,9 +322,9 @@ def render_browse():
                  "one value can't flood the list.")
 
     filters = {}
-    if max_force > 0:
-        # The cap is entered per cylinder; the table stores whole-wall force.
-        filters["peak_force"] = (None, max_force * n_cyl)
+    if max_force_disp > 0:
+        # Entered per cylinder in the display unit; the table stores whole-wall N/kg.
+        filters["peak_force"] = (None, max_force_disp / PU * n_cyl)
 
     res = lookup.search(table, height, x_cg, z_cg, stroke_max=stroke_max,
                         roof_clearance=clearance, bounds=bounds, filters=filters,
@@ -295,19 +340,18 @@ def render_browse():
     # Peak force first, then whatever we're sorting by, then the rest.
     show = lookup.order_columns(cols or DEFAULT_COLUMNS, sort_by)
     # Rank the list from 1 (not 0); the "rank" index matches the inspector below.
-    # Peak force is shown PER CYLINDER (divided by n_cyl); other columns are as-is.
+    # Peak force is shown PER CYLINDER; lengths and force are in the display unit.
     df = pd.DataFrame(
-        {COLUMNS[k]: np.round(res[k] / n_cyl if k == "peak_force" else res[k], 3)
-         for k in show},
+        {columns[k]: np.round(_col_display(k, res[k]), 3) for k in show},
         index=np.arange(1, n + 1))
     df.index.name = "rank"
     capped = f" — showing the top {n}" if total > n else ""
     st.markdown(f"**{total:,} matching configurations**{capped} (best "
-                f"`{COLUMNS[sort_by]}` first). Every Problem, Mounting-limit and "
+                f"`{columns[sort_by]}` first). Every Problem, Mounting-limit and "
                 f"filter setting changes this count. Peak force is shaded "
                 f"green (low / good) → red (high).")
     styler = df.style.format(precision=3)
-    peak_label = COLUMNS["peak_force"]
+    peak_label = columns["peak_force"]
     if peak_label in df.columns:                   # green->red shade on peak force
         pv = df[peak_label].to_numpy(dtype=float)
         fin = pv[np.isfinite(pv)]
@@ -333,20 +377,23 @@ def render_browse():
                   float(res["d"][rank]), float(res["f"][rank]))
     peak_pc = float(res["peak_force"][rank]) / n_cyl        # per cylinder
     st.markdown(
-        f"**a = {a:.3f}  b = {b:.3f}  d = {d:.3f}  f = {f:.3f} m** — "
-        f"peak **{peak_pc:.2f} N/kg** per cylinder, stroke "
-        f"{res['stroke'][rank]:.2f} m (ratio {res['stroke_ratio'][rank]:.2f})")
-    total_kn, bar_fill, bar_color = lookup.force_bar(peak_pc, mass)
-    st.caption(f"**Peak cylinder force at {mass:,.0f} kg:**")
-    st.markdown(lookup.force_bar_html(bar_fill, lookup.BAR_NEUTRAL, f"{total_kn:.1f} kN"),
-                unsafe_allow_html=True)
-    # Same bore & pressure sizing card as the Designer, for the inspected force.
-    pressure_bar, series = render_cylinder_sizing(peak_pc, mass, key_prefix="lk_")
+        f"**a = {a * U:.3f}  b = {b * U:.3f}  d = {d * U:.3f}  f = {f * U:.3f} "
+        f"{ULABEL}** — peak **{_u.pk(peak_pc)}** per cylinder, stroke "
+        f"{res['stroke'][rank] * U:.2f} {ULABEL} "
+        f"(ratio {res['stroke_ratio'][rank]:.2f})")
+    _total, bar_fill, bar_color = lookup.force_bar(peak_pc, mass)
+    st.caption(f"**Peak cylinder force at {_u.mass(mass)}:**")
+    st.markdown(lookup.force_bar_html(bar_fill, lookup.BAR_NEUTRAL,
+                                      _u.total(peak_pc * mass)), unsafe_allow_html=True)
+    # Same bore & pressure sizing card as the Designer, tied to the units toggle.
+    pressure_bar, series = render_cylinder_sizing(peak_pc, mass, key_prefix="lk_",
+                                                  imperial=_u.imperial)
     # The setup diagram is the main thing to read — show it large, on top.
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
-                           fig_height=560)
+                           fig_height=560, scale=U, ulabel=ULABEL)
     st.plotly_chart(diag, width="stretch")
-    ff, fl = _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max)
+    ff, fl = _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max,
+                                   u=U, ulabel=ULABEL, pu=PU, plabel=PLABEL)
     pf, pl = st.columns(2)
     pf.plotly_chart(ff, width="stretch")
     pl.plotly_chart(fl, width="stretch")
@@ -383,6 +430,7 @@ def render_browse():
                                     roof_clearance=clearance, var_bounds=bounds)
         grid_best = float(res["peak_force"].min()) / n_cyl
         st.success(
-            f"Exact optimum: peak **{opt['peak_force'] / n_cyl:.2f} N/kg** per cylinder at "
-            f"a = {opt['a']:.3f} b = {opt['b']:.3f} d = {opt['d']:.3f} f = {opt['f']:.3f} m "
-            f"(grid best in the list was {grid_best:.2f}).")
+            f"Exact optimum: peak **{_u.pk(opt['peak_force'] / n_cyl)}** per cylinder at "
+            f"a = {opt['a'] * U:.3f} b = {opt['b'] * U:.3f} d = {opt['d'] * U:.3f} "
+            f"f = {opt['f'] * U:.3f} {ULABEL} "
+            f"(grid best in the list was {_u.pk(grid_best)}).")
