@@ -1060,16 +1060,6 @@ if overlay:
         f"**{fmt_pk(_peak_force(design_A) / n_cyl)}**   ·   B ({_fmt_design(design_B)}): "
         f"peak **{fmt_pk(_peak_force(design_B) / n_cyl)}**.")
 
-# When you switch the optimize objective, colour the sensitivity by the SAME thing
-# (peak force vs cylinder length) so it reflects what you're minimizing. Otherwise a
-# length-optimum coloured by force reads as one flat colour (every nearby design is
-# a force improvement) with no red — the length view shows the real trade-off. You can
-# still flip "Color by" manually; this only re-syncs when the objective changes.
-_want_metric = "Cylinder length" if opt_mode == "Cylinder length" else "Peak force"
-if st.session_state.get("_opt_mode_seen") != opt_mode:
-    st.session_state["sens_metric"] = _want_metric
-    st.session_state["_opt_mode_seen"] = opt_mode
-
 # --- Sensitivity: which dimension moves the force most, and WHERE in its range ---
 # Shared with the Browse inspector via sensitivity_panel so the two stay identical.
 sens_bar, sens_strip = render_sensitivity_panel(

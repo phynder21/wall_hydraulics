@@ -194,11 +194,13 @@ def render_reverse():
                    "figure is this ÷ your safety factor — use the safe one.")
     m3.metric("Peak force per cylinder", f"{peak / n_cyl:.2f} N/kg")
     st.markdown(
-        f"**Best geometry (from the instant database):** a = {a:.3f}  b = {b:.3f}  "
-        f"d = {d:.3f}  f = {f:.3f} m — its cylinder runs "
+        f"**Best database match:** a = {a:.3f}  b = {b:.3f}  d = {d:.3f}  f = {f:.3f} m "
+        f"— its cylinder runs "
         f"**{res['L_min'][0] * len_fac:.1f}–{res['L_max'][0] * len_fac:.1f} {len_u}** "
         f"(inside your {L_ret * len_fac:.1f}–{L_ext * len_fac:.1f} {len_u} window). "
-        f"{n if n < 5 else 'Many'} layouts fit; this is the lowest-force one.")
+        f"{n if n < 5 else 'Many'} layouts fit; this is the lowest-force one **in the "
+        f"precomputed grid** — a fast, only *near*-optimal pick. For the true best for "
+        f"your exact inputs, run **Get the exact optimum** below.")
 
     # --- Plots: setup diagram large on top, curves small below ---
     stroke_ratio = float(res["stroke_ratio"][0])
@@ -265,11 +267,12 @@ def render_reverse():
 
     # --- Refine to the exact optimum for this cylinder ---
     st.subheader("Get the exact optimum")
-    st.caption("The **best geometry** above is the lowest-force match from the *instant "
-               "precomputed database* — a fine grid, so it's only *near*-optimal. This "
-               "button runs the **actual optimizer** for your exact cylinder to find the "
-               "true continuous best (usually a little better than the grid), and shows "
-               "how far the grid was off. Same idea as Browse's 'Get the exact optimum'.")
+    st.caption("Two results, two methods: the **best database match** above is picked "
+               "instantly from a precomputed *grid* of geometries (fast, but the grid "
+               "only lands *near* the ideal). This button runs the **actual optimizer** "
+               "to find the **best-possible geometry for your parameters** — the true "
+               "continuous optimum, usually a little better — and tells you how far the "
+               "grid was off. (Same idea as Browse's 'Get the exact optimum'.)")
     if st.button("Get the exact optimum — run optimizer"):
         with st.spinner("Optimizing…"):
             opt = optimize_actuator(width, height, x_cg, z_cg,
@@ -277,11 +280,12 @@ def render_reverse():
                                     roof_clearance=clearance, var_bounds=bounds)
         if opt["feasible"]:
             st.success(
-                f"Exact optimum: peak **{opt['peak_force'] / n_cyl:.2f} N/kg** per "
-                f"cylinder → safe max "
+                f"**Best-possible geometry for your parameters:** peak "
+                f"**{opt['peak_force'] / n_cyl:.2f} N/kg** per cylinder → safe max "
                 f"**{force_use / opt['peak_force'] * n_cyl:,.0f} kg** at a = {opt['a']:.3f} "
-                f"b = {opt['b']:.3f} d = {opt['d']:.3f} f = {opt['f']:.3f} m "
-                f"(grid best was {max_mass:,.0f} kg).")
+                f"b = {opt['b']:.3f} d = {opt['d']:.3f} f = {opt['f']:.3f} m — the exact "
+                f"optimum for your exact cylinder (the database match above gave "
+                f"{max_mass:,.0f} kg).")
         else:
             st.warning("The optimizer couldn't find a geometry that fits the exact "
                        "cylinder window here — the grid match above is the closest.")
