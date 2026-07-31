@@ -134,7 +134,7 @@ The optimizer writes its result here; you can also edit any value by hand.
 | --------- | ------------------------------------------------------------------------------------------------------ |
 | `a`       | Distance along the floor from the hinge to the cylinder mounting base. Capped at half the floor width. |
 | `b`       | Distance along the wall from the hinge to the piston attachment point. Stays fixed on the wall as it rotates. |
-| `d`       | Perpendicular stand-off from the wall surface to the piston attachment (the length of the bracket).    |
+| `d`       | Perpendicular stand-off from the wall surface to the piston attachment (the length of the bracket). Capped at half the container width by the same toggle as `a` (uncheck for the full width).    |
 | `f`       | Height of the cylinder mounting base above the floor.                                                  |
 
 ### Wall angle

@@ -124,18 +124,20 @@ def test_untouched_mounting_limits_grow_with_container():
     assert at.session_state["rng_f"] == pytest.approx((0.3, 1.0), abs=1e-6)
 
 
-def test_half_container_toggle_controls_a_bound():
-    """The 'Keep base within half the container' toggle caps a at half the internal
-    width when on (default) and opens a to the full width when off."""
+def test_half_container_toggle_controls_a_and_d_bounds():
+    """The 'Keep base and bracket within half the container' toggle caps BOTH a and d
+    at half the internal width when on (default) and opens them to the full width off."""
     at = fresh_app()
     at.session_state["size_key"] = STANDARD_KEY
     run_ok(at, "half on (default)")
     assert at.session_state["half_a_cap"] is True
     assert at.session_state["rng_a"][1] == pytest.approx(2.352 / 2, abs=1e-3)
-    # Uncheck -> the (untouched) a range grows to the full internal width.
+    assert at.session_state["rng_d"][1] == pytest.approx(2.352 / 2, abs=1e-3)
+    # Uncheck -> the (untouched) a and d ranges grow to the full internal width.
     at.session_state["half_a_cap"] = False
     run_ok(at, "half off")
     assert at.session_state["rng_a"][1] == pytest.approx(2.352, abs=1e-3)
+    assert at.session_state["rng_d"][1] == pytest.approx(2.352, abs=1e-3)
 
 
 def test_overlay_two_designs_renders():

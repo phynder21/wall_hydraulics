@@ -45,12 +45,14 @@ total force.
    the shell (Standard ≈ 2.35 × 2.39 m, High-Cube ≈ 2.35 × 2.70 m), not the outer ISO
    box — because the wall panel spans the clear opening and the moving parts must clear
    the *internal* roof. The diagram draws the steel shell (grey) around this clear
-   interior so you can see the wall thickness. A **Keep base within half the
-   container** toggle (on by default, in every view) caps the cylinder base `a` at half
-   the width, so it stays in the near half of the floor — the usual layout with a
-   cylinder near each end; a caption shows the exact active limit. Uncheck it to let
-   `a` use the full width. (`d`, the bracket offset, is separately capped at a fixed
-   1 m — that's a bracket-size limit, not a half-container one.)
+   interior so you can see the wall thickness. A **Keep base and bracket within half
+   the container** toggle (on by default, in every view; in the Designer it lives in the
+   Geometry tab) caps both the cylinder base `a` **and** the bracket offset `d` at half
+   the width — so the base stays in the near half of the floor and the attachment stays
+   in the near half at full lift (the usual layout with a cylinder near each end); a
+   caption shows the exact active limits. Uncheck it to let `a` and `d` use the full
+   width. (Browse's precomputed table only covers up to half-width, so unlock wider
+   layouts in the Designer.)
 2. Drag or type the four geometry values (a, b, d, f). The **diagram** — looking
    down the container's long axis, the wall swinging up from flat — shows the
    layout, and the **plots** show force and cylinder length across the full swing.

@@ -437,10 +437,11 @@ with tab_setup:
     # the slider widgets, the clamp-on-resize logic, and the optimize button's
     # clamp, so they can never drift apart and let an optimized value fall
     # outside a slider. `a`'s upper bound follows the half-container toggle above.
+    _a_hi = container_width / 2 if half_a else container_width
     GEOM_BOUNDS = {
-        "a": (0.05, container_width / 2 if half_a else container_width),
+        "a": (0.05, _a_hi),
         "b": (0.05, container_height),
-        "d": (0.00, 1.00),
+        "d": (0.00, _a_hi),          # bracket offset shares the half-container cap
         "f": (0.00, container_height),
     }
     for _k, (_lo, _hi) in GEOM_BOUNDS.items():
@@ -523,19 +524,25 @@ with tab_setup:
 # it in the same Geometry tab).
 with tab_geometry:
     st.subheader("Variable ranges")
-    # Half-container cap on `a`: keep the cylinder base in the near half of the floor
-    # (the usual layout puts a cylinder near each end). Governs a's range/slider below;
-    # on by default. tab_setup reads this key to build GEOM_BOUNDS before this renders.
-    st.checkbox("Keep base within half the container", value=True, key="half_a_cap",
-                help="Caps the cylinder base position a at half the container width, so "
-                     "it stays in the near half of the floor — the usual layout with a "
-                     "cylinder near each end. Uncheck to let a use the full width.")
+    # Half-container cap on `a` (base along the floor) AND `d` (bracket offset): keep
+    # both in the near half of the container — the base on the near-half floor, and the
+    # attachment (which sits at x = -d when the wall is vertical) in the near half too.
+    # Governs a's and d's range/slider below; on by default. tab_setup reads this key to
+    # build GEOM_BOUNDS before this renders.
+    st.checkbox("Keep base and bracket within half the container", value=True,
+                key="half_a_cap",
+                help="Caps both the base position **a** and the bracket offset **d** at "
+                     "half the container width, so the base stays in the near half of "
+                     "the floor and the attachment stays in the near half at full lift. "
+                     "Uncheck to let a and d use the full width.")
+    _half = container_width / 2 * U
     if half_a:
-        st.caption(f"Active: **a ≤ {container_width / 2 * U:.2f} {ULABEL}** "
-                   f"(half of the {container_width * U:.2f} {ULABEL} internal width).")
+        st.caption(f"Active: **a ≤ {_half:.2f} {ULABEL}** and **d ≤ {_half:.2f} "
+                   f"{ULABEL}** (half of the {container_width * U:.2f} {ULABEL} internal "
+                   f"width).")
     else:
-        st.caption(f"Off — **a** may use the full **{container_width * U:.2f} {ULABEL}** "
-                   f"width.")
+        st.caption(f"Off — **a** and **d** may use the full "
+                   f"**{container_width * U:.2f} {ULABEL}** width.")
     with st.expander("Restrict where each dimension may sit (optimizer + slider)"):
         USER_BOUNDS = {
             v: range_input(f"{lbl} [{ULABEL}]", f"rng_{v}", *GEOM_BOUNDS[v],
@@ -701,18 +708,18 @@ with tab_optimize:
 with tab_geometry:
     st.subheader(f"Values ({UWORD})")
     _geom = dict(disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT, lockable=True)
+    _half_note = (f"Capped at half the container width "
+                  f"({container_width / 2 * U:.2f} {ULABEL}) by the 'Keep base and "
+                  f"bracket within half the container' toggle above."
+                  if half_a else
+                  f"Can use the full container width "
+                  f"({container_width * U:.2f} {ULABEL}).")
     a = linked_input(f"a — hinge to cylinder base (along floor) [{ULABEL}]", "a",
-                     *USER_BOUNDS["a"], **_geom,
-                     help=(f"Limited to half the floor width "
-                           f"({container_width / 2 * U:.2f} {ULABEL}) — the "
-                           f"'Keep base within half the container' toggle in Setup."
-                           if half_a else
-                           f"Can use the full floor width "
-                           f"({container_width * U:.2f} {ULABEL})."))
+                     *USER_BOUNDS["a"], **_geom, help=_half_note)
     b = linked_input(f"b — hinge to piston attachment (along wall) [{ULABEL}]", "b",
                      *USER_BOUNDS["b"], **_geom)
     d = linked_input(f"d — wall to piston attachment (perpendicular) [{ULABEL}]", "d",
-                     *USER_BOUNDS["d"], **_geom)
+                     *USER_BOUNDS["d"], **_geom, help=_half_note)
     f = linked_input(f"f — cylinder base height above floor [{ULABEL}]", "f",
                      *USER_BOUNDS["f"], **_geom)
 

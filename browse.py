@@ -209,17 +209,21 @@ def render_browse():
     st.sidebar.caption("**Internal (clear) dimensions** — the usable space inside the "
                        "container, not the outer shell.")
     width, height = CONTAINERS[size]
-    # Optional half-container cap on the base position `a` (see the Designer).
-    half_a = st.sidebar.checkbox("Keep base within half the container", value=True,
-                                 key="lk_half_a",
-                                 help="Caps a at half the width so the base stays in "
-                                      "the near half of the floor. Uncheck to allow "
-                                      "the full width.")
+    # Optional half-container cap on the base `a` AND the bracket offset `d` (see the
+    # Designer): both stay in the near half of the container when on.
+    half_a = st.sidebar.checkbox("Keep base and bracket within half the container",
+                                 value=True, key="lk_half_a",
+                                 help="Caps a and d at half the width so the base and "
+                                      "the attachment stay in the near half of the "
+                                      "container. Uncheck to allow the full width.")
+    _half = WIDTH / 2
     if half_a:
-        st.sidebar.caption(f"Active: **a ≤ {WIDTH / 2:.2f} m** (half the {WIDTH:.2f} m "
-                           f"width).")
+        st.sidebar.caption(f"Active: **a ≤ {_half:.2f} m** and **d ≤ {_half:.2f} m** "
+                           f"(half the {WIDTH:.2f} m width).")
     else:
-        st.sidebar.caption(f"Off — **a** may use the full **{WIDTH:.2f} m** width.")
+        st.sidebar.caption(f"Off — **a** and **d** may use the full **{WIDTH:.2f} m** "
+                           f"width. (The precomputed table only covers up to half the "
+                           f"width; for wider layouts use the Designer.)")
     x_cg = _sb_linked("x_cg — along wall from hinge (m)", "lk_xcg",
                       0.0, HEIGHT_MAX, 1.20, 0.01)
     z_cg = _sb_linked("z_cg — off the wall (m)", "lk_zcg", 0.0, 1.5, 0.55, 0.01)
@@ -236,9 +240,9 @@ def render_browse():
                            "force (shown for the inspected design).")
 
     ranges = {
-        "a": (0.05, WIDTH / 2 if half_a else WIDTH, "a — base along floor (m)"),
+        "a": (0.05, _half if half_a else WIDTH, "a — base along floor (m)"),
         "b": (0.05, HEIGHT_MAX, "b — attachment along wall (m)"),
-        "d": (0.0, 1.0, "d — bracket length (m)"),
+        "d": (0.0, _half if half_a else WIDTH, "d — bracket length (m)"),
         "f": (0.0, HEIGHT_MAX, "f — base height (m)"),
     }
     bounds = {}

@@ -323,7 +323,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     full_bounds = {
         "a": (0.05, container_width / 2),   # hinge to cylinder base, along floor
         "b": (0.05, container_height),      # hinge to attachment, along wall
-        "d": (0.00, 1.00),                  # wall to attachment, perpendicular
+        "d": (0.00, container_width / 2),   # wall to attachment, perpendicular (half-width)
         "f": (0.00, container_height),      # cylinder base height above floor
     }
     if var_bounds:

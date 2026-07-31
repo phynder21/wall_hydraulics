@@ -43,7 +43,7 @@ STORE_THETA = 46
 VAR_RANGES = {
     "a": (0.05, CONTAINER_WIDTH / 2),   # hinge to cylinder base, along floor
     "b": (0.05, HEIGHT_MAX),            # hinge to attachment, along wall
-    "d": (0.00, 1.00),                  # wall to attachment, perpendicular
+    "d": (0.00, CONTAINER_WIDTH / 2),   # wall to attachment, perpendicular (half-width)
     "f": (0.00, HEIGHT_MAX),            # cylinder base height above floor
 }
 
