@@ -211,8 +211,9 @@ def render_browse():
     # --- Display units — at the TOP of the sidebar (matches the Designer), visible
     # always. Shares the Designer's "units"/"fine" keys so the preference follows you
     # between views. Everything is stored in SI base units; this only affects display.
+    st.sidebar.markdown("<u>Units</u>", unsafe_allow_html=True)
     units = st.sidebar.radio("Units", ["Metric", "Imperial"], key="units",
-                             horizontal=True)
+                             horizontal=True, label_visibility="collapsed")
     fine = st.sidebar.toggle(
         "Fine precision", key="fine",
         help="Finer slider / number steps for exact values (0.001 m / 0.01 in).")
@@ -392,8 +393,10 @@ def render_browse():
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
                            fig_height=560, scale=U, ulabel=ULABEL)
     st.plotly_chart(diag, width="stretch")
-    ff, fl = _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_max,
-                                   u=U, ulabel=ULABEL, pu=PU, plabel=PLABEL)
+    # Force is shown PER CYLINDER (pu carries the ÷ n_cyl) to match the readout/banner.
+    ff, fl = _force_length_figures(
+        a, b, d, f, x_cg, z_cg, stroke_max, u=U, ulabel=ULABEL, pu=PU / n_cyl,
+        plabel=f"{PLABEL}{' per cyl' if n_cyl > 1 else ''}")
     pf, pl = st.columns(2)
     pf.plotly_chart(ff, width="stretch")
     pl.plotly_chart(fl, width="stretch")

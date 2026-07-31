@@ -38,8 +38,10 @@ st.set_page_config(page_title="Container Wall Actuator", layout="wide")
 
 # Left rail: a build marker + the cylinder count, beside the tabbed control panel.
 st.sidebar.markdown("### Wall actuator")
+st.sidebar.markdown("<u>Cylinders sharing the load</u>", unsafe_allow_html=True)
 n_cyl = st.sidebar.radio(
     "Cylinders sharing the load", [1, 2], key="n_cyl", horizontal=True,
+    label_visibility="collapsed",
     help="How many cylinders share the wall load equally. With 2, each carries "
          "half — so every force and bore size shown is PER CYLINDER. The geometry "
          "is the same either way.")
@@ -232,7 +234,9 @@ if _view == "Size from a cylinder":
 # specific force in N/kg, pressure in bar — so the physics, the optimizer, and shared
 # URLs stay consistent; this single Imperial/Metric switch only changes how values are
 # *displayed* (and the bore card follows it).
-units = st.sidebar.radio("Units", ["Metric", "Imperial"], key="units", horizontal=True)
+st.sidebar.markdown("<u>Units</u>", unsafe_allow_html=True)
+units = st.sidebar.radio("Units", ["Metric", "Imperial"], key="units", horizontal=True,
+                         label_visibility="collapsed")
 fine = st.sidebar.toggle(
     "Fine precision", key="fine",
     help="Finer slider/number steps for exact values (0.001 m / 0.01 in), and the "
@@ -811,6 +815,17 @@ F_here_pc = F_here / n_cyl
 stroke_ok = L_ratio <= stroke_ratio + STROKE_TOL
 st.info(cylinder_banner(n_cyl))
 with st.container(border=True):
+    # Geometry front and centre — the four numbers you're designing, shown large.
+    g1, g2, g3, g4 = st.columns(4)
+    g1.metric(f"a — base along floor", f"{a * U:.3f} {ULABEL}",
+              help="Cylinder base position along the floor, from the hinge.")
+    g2.metric(f"b — attach up wall", f"{b * U:.3f} {ULABEL}",
+              help="Piston attachment point up the wall, from the hinge.")
+    g3.metric(f"d — bracket offset", f"{d * U:.3f} {ULABEL}",
+              help="How far the attachment bracket sticks off the wall.")
+    g4.metric(f"f — base height", f"{f * U:.3f} {ULABEL}",
+              help="Cylinder base height above the floor.")
+    st.divider()
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Peak force (worst case)", fmt_pk(peak_pc),
               help="Largest force over the full 0–90° swing, per cylinder — the "
@@ -824,6 +839,15 @@ with st.container(border=True):
               delta=("within limit" if stroke_ok else "over limit"),
               delta_color=("off" if stroke_ok else "inverse"),
               help=f"Extended/retracted length ratio vs. your {stroke_ratio:g}× limit.")
+    # The two cylinder lengths to order by — closed (retracted) and open (extended).
+    st.divider()
+    L1, L2 = st.columns(2)
+    L1.metric("Retracted length (closed)", f"{L_min * U:.3f} {ULABEL}",
+              help="Shortest the cylinder gets over the swing — the closed length you "
+                   "order.")
+    L2.metric("Extended length (open)", f"{L_max * U:.3f} {ULABEL}",
+              help="Longest the cylinder gets over the swing — the open length. Order a "
+                   "cylinder that spans closed → open (stroke = the difference).")
     total_kn, bar_fill, bar_color = force_bar(peak_pc, mass)
     st.caption(f"**Peak cylinder force at {fmt_mass(mass)}:**")
     st.markdown(force_bar_html(bar_fill, BAR_NEUTRAL, fmt_total(peak_pc * mass)),
@@ -933,12 +957,15 @@ with diag_area:
     st.plotly_chart(fig_geom, width="stretch")
 
 with col_force:
+    # Force is shown PER CYLINDER (÷ n_cyl) to match the Peak-force metric, the
+    # total-force bar, and the banner — with 2 cylinders each carries half.
+    pc = PU / n_cyl                                     # whole-wall N/kg -> per-cyl display
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=np.degrees(theta_curve), y=F_plot * PU, mode="lines", name="F(theta)",
+        x=np.degrees(theta_curve), y=F_plot * pc, mode="lines", name="F(theta)",
         line=dict(color=PRIMARY, width=2.5)))
     fig.add_trace(go.Scatter(
-        x=[theta_deg], y=[F_here * PU], mode="markers",
+        x=[theta_deg], y=[F_here * pc], mode="markers",
         marker=dict(size=14, color="red"), name="current"))
     if overlay:
         for _lab, _dd, _col in (("A", design_A, "green"), ("B", design_B, "darkorange")):
@@ -948,24 +975,24 @@ with col_force:
                                        x_cg=_dd["x_cg"], z_cg=_dd["z_cg"])
             _Fd = np.where(np.isfinite(_Fd) & (np.abs(_Fd) <= F_CAP), _Fd, np.nan)
             fig.add_trace(go.Scatter(
-                x=np.degrees(theta_curve), y=_Fd * PU, mode="lines",
+                x=np.degrees(theta_curve), y=_Fd * pc, mode="lines",
                 name=f"design {_lab}", line=dict(color=_col, dash="dash")))
     if F_valid.size:
-        fig.add_hline(y=F_min * PU, line=dict(color="green", dash="dot"),
-                       annotation_text=f"F_min = {fmt_pk(F_min)}",
+        fig.add_hline(y=F_min * pc, line=dict(color="green", dash="dot"),
+                       annotation_text=f"F_min = {fmt_pk(F_min / n_cyl)}",
                        annotation_position="bottom right")
-        fig.add_hline(y=F_max * PU, line=dict(color="red", dash="dot"),
-                       annotation_text=f"F_max = {fmt_pk(F_max)}",
+        fig.add_hline(y=F_max * pc, line=dict(color="red", dash="dot"),
+                       annotation_text=f"F_max = {fmt_pk(F_max / n_cyl)}",
                        annotation_position="top right")
         span = F_max - F_min if F_max > F_min else 1.0
-        y_range = [(F_min - 0.1 * span) * PU, (F_max + 0.1 * span) * PU]
+        y_range = [(F_min - 0.1 * span) * pc, (F_max + 0.1 * span) * pc]
     else:
-        y_range = [-F_CAP * PU, F_CAP * PU]
+        y_range = [-F_CAP * pc, F_CAP * pc]
     fig.update_layout(
         template=PLOT_TEMPLATE, font=PLOT_FONT,
         title="Piston force vs. wall angle",
         xaxis_title="theta (degrees)",
-        yaxis_title=f"Piston force ({PLABEL} of wall + equipment mass)",
+        yaxis_title=f"Piston force ({PLABEL}{' per cyl' if n_cyl > 1 else ''})",
         xaxis=dict(range=[0, 90]),
         # Autoscale y when overlaying so A/B curves fit; otherwise frame the
         # current design's extremes.
@@ -977,7 +1004,7 @@ with col_force:
     st.plotly_chart(fig, width="stretch")
     if has_singularity:
         st.caption(
-            f"Warning — part of the swing needs more than {fmt_pk(F_CAP)} "
+            f"Warning — part of the swing needs more than {fmt_pk(F_CAP / n_cyl)} "
             "(near-singular geometry) and is hidden — extremes shown are over "
             "the usable range only."
         )
@@ -1030,8 +1057,18 @@ if overlay:
         return float(np.max(np.abs(fd))) if fd.size else float("nan")
     st.caption(
         f"**Overlay** — A ({_fmt_design(design_A)}): peak "
-        f"**{fmt_pk(_peak_force(design_A))}**   ·   B ({_fmt_design(design_B)}): "
-        f"peak **{fmt_pk(_peak_force(design_B))}**.")
+        f"**{fmt_pk(_peak_force(design_A) / n_cyl)}**   ·   B ({_fmt_design(design_B)}): "
+        f"peak **{fmt_pk(_peak_force(design_B) / n_cyl)}**.")
+
+# When you switch the optimize objective, colour the sensitivity by the SAME thing
+# (peak force vs cylinder length) so it reflects what you're minimizing. Otherwise a
+# length-optimum coloured by force reads as one flat colour (every nearby design is
+# a force improvement) with no red — the length view shows the real trade-off. You can
+# still flip "Color by" manually; this only re-syncs when the objective changes.
+_want_metric = "Cylinder length" if opt_mode == "Cylinder length" else "Peak force"
+if st.session_state.get("_opt_mode_seen") != opt_mode:
+    st.session_state["sens_metric"] = _want_metric
+    st.session_state["_opt_mode_seen"] = opt_mode
 
 # --- Sensitivity: which dimension moves the force most, and WHERE in its range ---
 # Shared with the Browse inspector via sensitivity_panel so the two stay identical.

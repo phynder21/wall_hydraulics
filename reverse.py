@@ -59,8 +59,9 @@ def render_reverse():
 
     # --- Units switch — at the TOP of the sidebar (above the tabs) so it's visible from
     # both the Cylinder and Wall tabs; converts stored cylinder values on flip. ---
+    st.sidebar.markdown("<u>Units</u>", unsafe_allow_html=True)
     units = st.sidebar.radio("Units", ["Imperial", "Metric"], key="rv_units",
-                             horizontal=True)
+                             horizontal=True, label_visibility="collapsed")
     cfg = _CYL[units]
     prev = st.session_state.get("rv_units_prev")
     if prev is not None and prev != units:
@@ -193,8 +194,9 @@ def render_reverse():
                    "figure is this ÷ your safety factor — use the safe one.")
     m3.metric("Peak force per cylinder", f"{peak / n_cyl:.2f} N/kg")
     st.markdown(
-        f"**Best geometry:** a = {a:.3f}  b = {b:.3f}  d = {d:.3f}  f = {f:.3f} m — its "
-        f"cylinder runs **{res['L_min'][0] * len_fac:.1f}–{res['L_max'][0] * len_fac:.1f} {len_u}** "
+        f"**Best geometry (from the instant database):** a = {a:.3f}  b = {b:.3f}  "
+        f"d = {d:.3f}  f = {f:.3f} m — its cylinder runs "
+        f"**{res['L_min'][0] * len_fac:.1f}–{res['L_max'][0] * len_fac:.1f} {len_u}** "
         f"(inside your {L_ret * len_fac:.1f}–{L_ext * len_fac:.1f} {len_u} window). "
         f"{n if n < 5 else 'Many'} layouts fit; this is the lowest-force one.")
 
@@ -227,7 +229,22 @@ def render_reverse():
 
     # One-page PDF sheet: the cylinder you entered + the geometry it sized. The
     # cylinder is the input here (no bore-sizing card), so the mass shown is the
-    # SAFE max this cylinder can raise, and the cylinder window is noted.
+    # SAFE max this cylinder can raise, and the cylinder window is noted. The setup
+    # table lists EVERY cylinder input — including bore/rod/pressure when the force was
+    # given that way (so the sheet fully records what you entered).
+    _cyl_rows = [
+        ("Absolute max wall mass (no margin)", report.dual_mass(abs_mass)),
+        ("Cylinder push force", report.dual_force(force_n)),
+        ("Safety factor", f"{safety:g}x"),
+        ("Cylinder length window",
+         f"{L_ret * len_fac:.1f}-{L_ext * len_fac:.1f} {len_u}"),
+    ]
+    if mode == "Bore + pressure":
+        _cyl_rows[1:1] = [                          # right after the push force
+            ("Cylinder bore", report.dual_bore(bore_mm)),
+            ("Rod diameter", report.dual_bore(rod_mm)),
+            ("Design pressure", report.dual_pressure(press_bar)),
+        ]
     render_pdf_export(
         key="reverse", size_key=size, n_cyl=n_cyl, x_cg=x_cg, z_cg=z_cg,
         mass=max_mass, stroke_ratio_max=stroke_ratio, roof_clearance=clearance,
@@ -236,13 +253,7 @@ def render_reverse():
         fig_geom=diag, fig_force=ff, fig_len=fl,
         fig_sens_bar=sens_bar, fig_sens_strip=sens_strip,
         mass_label="Safe max wall mass", show_stroke_ratio_max=False,
-        extra_setup_rows=[
-            ("Absolute max wall mass (no margin)", report.dual_mass(abs_mass)),
-            ("Cylinder push force", report.dual_force(force_n)),
-            ("Safety factor", f"{safety:g}x"),
-            ("Cylinder length window",
-             f"{L_ret * len_fac:.1f}-{L_ext * len_fac:.1f} {len_u}"),
-        ],
+        extra_setup_rows=_cyl_rows,
         extra_notes=["Safe max wall mass = cylinder push force / safety factor / "
                      "peak force per kg, summed over all cylinders. The absolute "
                      "max drops the safety factor — use the safe figure."],
@@ -254,6 +265,11 @@ def render_reverse():
 
     # --- Refine to the exact optimum for this cylinder ---
     st.subheader("Get the exact optimum")
+    st.caption("The **best geometry** above is the lowest-force match from the *instant "
+               "precomputed database* — a fine grid, so it's only *near*-optimal. This "
+               "button runs the **actual optimizer** for your exact cylinder to find the "
+               "true continuous best (usually a little better than the grid), and shows "
+               "how far the grid was off. Same idea as Browse's 'Get the exact optimum'.")
     if st.button("Get the exact optimum — run optimizer"):
         with st.spinner("Optimizing…"):
             opt = optimize_actuator(width, height, x_cg, z_cg,

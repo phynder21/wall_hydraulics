@@ -216,12 +216,18 @@ def test_quick_guide_link_opens():
 
 
 def test_summary_metrics_render():
-    """The four glance metrics render with the expected labels and units."""
+    """The glance metrics render with the expected labels and units, including the
+    large a/b/d/f geometry row at the top."""
     at = fresh_app()
     labels = [m.label for m in at.metric]
-    assert len(at.metric) == 4
+    # geometry front and centre: a, b, d, f each shown as a large metric
+    for v in ("a — base", "b — attach", "d — bracket", "f — base"):
+        assert any(v in x for x in labels), f"missing geometry metric {v}: {labels}"
     assert any("Peak force" in x for x in labels)
     assert any("Stroke ratio" in x for x in labels)
+    # retracted + extended cylinder lengths are shown explicitly
+    assert any("Retracted" in x for x in labels), labels
+    assert any("Extended" in x for x in labels), labels
     # values carry their units
     by_label = {m.label: m.value for m in at.metric}
     assert "N/kg" in next(v for k, v in by_label.items() if "Peak force" in k)
@@ -706,6 +712,9 @@ def test_reverse_shows_sensitivity_and_pdf_when_feasible():
     assert "Cylinder Sizing Report" in text
     assert "Safe max wall mass" in text and "Absolute max wall mass" in text
     assert "Cylinder push force" in text and "Cylinder length window" in text
+    # every cylinder input is recorded — including bore & rod (default is bore+pressure)
+    assert "Cylinder bore" in text and "Rod diameter" in text, \
+        "the sizing PDF must list the bore & rod inputs"
     assert "over limit" not in text, "Reverse has no stroke-ratio cap to be over"
     assert "bore above" not in text, "Reverse has no bore section"
     assert "Sensitivity" in text, "sensitivity charts missing from the Reverse PDF"
