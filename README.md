@@ -73,7 +73,7 @@ in meters internally, so shared links are identical regardless of unit.
 
 | Parameter          | Meaning                                                                    |
 | ------------------ | -------------------------------------------------------------------------- |
-| Container size     | Dropdown: Standard (2.35 × 2.39 m) or High-Cube (2.35 × 2.70 m), the **internal (clear)** dimensions (not the outer ISO box) — the usable interior is what constrains the mechanism. Sets `container_width`/`container_height`, which bound the other sliders and the internal roof; the diagram draws the steel shell around this clear space. |
+| Container size     | Dropdown: Standard (2.35 × 2.39 m) or High-Cube (2.35 × 2.70 m), the **internal (clear)** dimensions (not the outer ISO box) — the usable interior is what constrains the mechanism. Sets `container_width`/`container_height`, which bound the other sliders and the internal roof. |
 
 The left panel groups the controls into tabs that follow the workflow:
 **Setup** (container, units, center of gravity, constraints), **Geometry**

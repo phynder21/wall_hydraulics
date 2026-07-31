@@ -35,20 +35,11 @@ from wall import STROKE_RATIO_MAX, compute_F_piston, compute_cylinder_length, g
 # INTERNAL (clear) container dimensions (width, height) in meters — the usable
 # space inside the shell, which is what actually constrains the mechanism: the wall
 # panel spans the clear opening, and the moving parts must clear the internal roof.
-# (External ISO is ~86 mm wider and ~198 mm taller; see SHELL_T_* below.)
+# (External ISO is ~86 mm wider and ~198 mm taller.)
 CONTAINER_PRESETS = {
     "standard": (2.352, 2.393),   # Standard 8'6" — internal clear
     "highcube": (2.352, 2.698),   # High-Cube 9'6" — internal clear
 }
-
-# Thickness of the steel shell BETWEEN the internal clear space and the outer ISO
-# box (meters). Used only to DRAW the wall/floor/roof around the working area so the
-# internal envelope is visually distinct. ISO deltas are ~uniform across sizes:
-# each side ~43 mm, roof ~40 mm, floor understructure ~158 mm. So internal +
-# these = external (2.352 + 2·0.043 = 2.438 W; 2.393 + 0.158 + 0.040 = 2.591 H).
-SHELL_T_SIDE = 0.043
-SHELL_T_ROOF = 0.040
-SHELL_T_FLOOR = 0.158
 
 # The four design variables, in the order _metrics expects them.
 VAR_NAMES = ("a", "b", "d", "f")

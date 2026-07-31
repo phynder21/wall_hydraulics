@@ -44,8 +44,7 @@ total force.
    Container sizes are the **internal (clear) dimensions** — the usable space *inside*
    the shell (Standard ≈ 2.35 × 2.39 m, High-Cube ≈ 2.35 × 2.70 m), not the outer ISO
    box — because the wall panel spans the clear opening and the moving parts must clear
-   the *internal* roof. The diagram draws the steel shell (grey) around this clear
-   interior so you can see the wall thickness. A **Keep base and bracket within half
+   the *internal* roof. A **Keep base and bracket within half
    the container** toggle (on by default, in every view; in the Designer it lives in the
    Geometry tab) caps both the cylinder base `a` **and** the bracket offset `d` at half
    the width — so the base stays in the near half of the floor and the attachment stays

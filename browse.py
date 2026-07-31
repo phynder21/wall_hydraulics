@@ -16,7 +16,6 @@ from optimize import CONTAINER_PRESETS, optimize_actuator
 from sensitivity_panel import (render_sensitivity_panel, render_interaction_map,
                                selected_metric)
 from cylinder_panel import render_cylinder_sizing
-from container_view import add_container_shell
 from display_units import Units
 from pdf_export import render_pdf_export
 import lookup
@@ -93,17 +92,10 @@ def _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, theta_deg=45.0,
     W, H = width * s, height * s
     door = (H * np.cos(th), H * np.sin(th))
     fig = go.Figure()
-    # Container steel shell around the internal clear space (width/height are internal),
-    # so the mechanism reads as working inside the clear interior, not the outer box.
-    shell_x, shell_zb, shell_zt = add_container_shell(fig, width, height, scale=s)
-    # Invisible anchors at the shell's outer corners so autorange includes the shell.
-    fig.add_trace(go.Scatter(x=[shell_x, shell_x], y=[shell_zb, shell_zt], mode="markers",
-                             marker=dict(size=0.1, opacity=0), hoverinfo="skip",
-                             showlegend=False))
     fig.add_hline(y=0, line=dict(color="lightgray", dash="dash"))
     fig.add_trace(go.Scatter(x=[0, -W, -W, 0], y=[0, 0, H, H],
                              mode="lines", line=dict(color="darkgray", width=2),
-                             name="container (clear)", hoverinfo="skip"))
+                             name="container", hoverinfo="skip"))
     fig.add_trace(go.Scatter(x=[0, door[0]], y=[0, door[1]], mode="lines",
                              line=dict(color="black", width=5), name="wall"))
     fig.add_trace(go.Scatter(x=[x_wb, x_att], y=[z_wb, z_att], mode="lines",
