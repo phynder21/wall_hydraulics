@@ -121,10 +121,21 @@ def render_reverse():
                       ctx=tab_wall)
     clearance = _sb_linked("Roof clearance (m)", "rv_clear", 0.0, 0.5, 0.0, 0.01,
                            ctx=tab_wall)
+    # Optional half-container cap on the base position `a` (see the Designer).
+    half_a = tab_wall.checkbox("Keep base within half the container", value=True,
+                               key="rv_half_a",
+                               help="Caps a at half the width so the base stays in the "
+                                    "near half of the floor. Uncheck to allow the full "
+                                    "width.")
+    if half_a:
+        tab_wall.caption(f"Active: **a ≤ {WIDTH / 2:.2f} m** (half the {WIDTH:.2f} m "
+                         f"width).")
+    else:
+        tab_wall.caption(f"Off — **a** may use the full **{WIDTH:.2f} m** width.")
 
     # --- Constrain the OUTCOME geometry (advanced; expander inside the Wall tab) ---
     ranges = {
-        "a": (0.05, WIDTH / 2, "a — base along floor (m)"),
+        "a": (0.05, WIDTH / 2 if half_a else WIDTH, "a — base along floor (m)"),
         "b": (0.05, HEIGHT_MAX, "b — attachment along wall (m)"),
         "d": (0.0, 1.0, "d — bracket length (m)"),
         "f": (0.0, HEIGHT_MAX, "f — base height (m)"),
