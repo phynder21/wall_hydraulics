@@ -427,20 +427,11 @@ with tab_setup:
                "the container, not the outer shell. The wall panel spans this clear "
                "opening and the moving parts must clear the internal roof.")
 
-    # Optional half-container cap on the cylinder base position `a`: keep it in the
-    # near half of the floor (the usual layout puts a cylinder near each end). ON by
-    # default; unchecking lets `a` use the full internal width.
-    half_a = st.checkbox("Keep base within half the container", value=True,
-                         key="half_a_cap",
-                         help="Caps the cylinder base position **a** at half the "
-                              "container width, so it stays in the near half of the "
-                              "floor — the usual layout with a cylinder near each end. "
-                              "Uncheck to let a use the full width.")
-    if half_a:
-        st.caption(f"Active: **a ≤ {container_width / 2:.2f} m** (half of the "
-                   f"{container_width:.2f} m internal width).")
-    else:
-        st.caption(f"Off — **a** may use the full **{container_width:.2f} m** width.")
+    # Half-container cap on the cylinder base position `a` (keep it in the near half of
+    # the floor). The toggle WIDGET lives in the Geometry tab, next to the variable
+    # ranges it governs; here we only read its state so GEOM_BOUNDS reflects it. Defaults
+    # ON, so on first load `a` is capped at half the width.
+    half_a = st.session_state.get("half_a_cap", True)
 
     # Bounds for the four geometry variables — single source of truth shared by
     # the slider widgets, the clamp-on-resize logic, and the optimize button's
@@ -532,6 +523,19 @@ with tab_setup:
 # it in the same Geometry tab).
 with tab_geometry:
     st.subheader("Variable ranges")
+    # Half-container cap on `a`: keep the cylinder base in the near half of the floor
+    # (the usual layout puts a cylinder near each end). Governs a's range/slider below;
+    # on by default. tab_setup reads this key to build GEOM_BOUNDS before this renders.
+    st.checkbox("Keep base within half the container", value=True, key="half_a_cap",
+                help="Caps the cylinder base position a at half the container width, so "
+                     "it stays in the near half of the floor — the usual layout with a "
+                     "cylinder near each end. Uncheck to let a use the full width.")
+    if half_a:
+        st.caption(f"Active: **a ≤ {container_width / 2 * U:.2f} {ULABEL}** "
+                   f"(half of the {container_width * U:.2f} {ULABEL} internal width).")
+    else:
+        st.caption(f"Off — **a** may use the full **{container_width * U:.2f} {ULABEL}** "
+                   f"width.")
     with st.expander("Restrict where each dimension may sit (optimizer + slider)"):
         USER_BOUNDS = {
             v: range_input(f"{lbl} [{ULABEL}]", f"rng_{v}", *GEOM_BOUNDS[v],
