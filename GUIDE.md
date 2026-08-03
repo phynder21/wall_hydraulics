@@ -176,18 +176,20 @@ cylinder, and it finds the best geometry and the **biggest wall it can raise**.
    - **Use the full stroke** — an optional toggle that tightens the fit
      into an exact match: the geometry uses the cylinder's *whole* travel, so fully
      extended = door flat (0°) and fully retracted = door up (90°). The cylinder
-     bottoms out on its own hardstops exactly as the door reaches each end, so **no
-     travel sensor is needed** — the natural stops set both positions. Off, the
-     geometry only has to fit inside the stroke (it may stop short of an end).
+     bottoms out on its own hardstops exactly as the door reaches each end — the
+     natural stops set both positions. Off, the geometry only has to fit inside the
+     stroke (it may stop short of an end).
 4. Set the **wall** (container, cg) and, optionally, **restrict the output
    geometry** (a, b, d, f ranges) — e.g. keep the base height f low.
-5. It reports two mass numbers — the **safe max wall mass** (your force ÷ safety
-   factor) and the **absolute cylinder max** (flat-out, no margin) — plus the
-   best-fitting geometry and the setup diagram + plots. Use the safe one. Below the
-   plots it also shows the **sensitivity** panel for that geometry and an **Export
-   design (PDF)** — a one-page sizing sheet pairing the cylinder you entered with
-   the geometry it sized. (There's no bore-sizing card here: the cylinder is the
-   input, not an output.)
+5. It runs the **optimizer** for your exact inputs (a few seconds; the result is
+   cached until you change something) and shows the **best geometry** up top with
+   two mass numbers — the **safe max wall mass** (your force ÷ safety factor) and the
+   **absolute cylinder max** (flat-out, no margin). Use the safe one. Because many
+   different mountings often tie for best, a **picker** right below lets you switch to
+   an equally-good **alternative** layout that may be easier to build. Under that are
+   the setup diagram + plots, the **sensitivity** panel, and an **Export design
+   (PDF)** — a one-page sizing sheet. (There's no bore-sizing card here: the cylinder
+   is the input, not an output.)
 
 Because the length window and geometry limits are hard constraints, **some
 cylinders simply won't fit any wall** — when that happens it says so and tells

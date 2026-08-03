@@ -10,6 +10,7 @@ import streamlit as st
 
 from optimize import optimize_actuator, MIN_MOMENT_ARM
 from lookup_build import geometry_metrics
+from wall import compute_cylinder_length
 import lookup
 import report
 from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
@@ -49,6 +50,26 @@ _HELP = {
 }
 
 
+@st.cache_data(show_spinner="Finding the best geometry for your cylinder…")
+def _solve_exact(width, height, x_cg, z_cg, L_ret, L_ext, exact, clearance, bounds_items):
+    """The continuous OPTIMUM geometry for this exact cylinder. Cached, so it re-runs
+    only when an input changes (a few seconds) then stays instant. `alternatives` in the
+    result are diverse near-optimal layouts that raise the same load with the same force
+    — different mountings you can build instead. 8 restarts keeps it snappy for the
+    auto-run while still landing on the optimum (the near-optimal family is flat)."""
+    return optimize_actuator(
+        width, height, x_cg, z_cg, length_window=(L_ret, L_ext), length_exact=exact,
+        stroke_ratio_max=3.0, roof_clearance=clearance, var_bounds=dict(bounds_items),
+        n_starts=8, alt_rel_tol=0.15)
+
+
+def _length_span(a, b, d, f):
+    """(L_min, L_max, stroke_ratio) of the cylinder length over the 0-90 deg swing."""
+    L = compute_cylinder_length(np.linspace(0.0, np.pi / 2, 200), a=a, b=b, d=d, f=f)
+    L_min, L_max = float(L.min()), float(L.max())
+    return L_min, L_max, (L_max / L_min if L_min > 0 else float("inf"))
+
+
 def _nearest_window(L_min, L_max, L_ret, L_ext, exact=False):
     """Of the buildable layouts (arrays of each layout's shortest/longest cylinder length
     over the swing), pick the ONE closest to the cylinder's [L_ret, L_ext] window and
@@ -86,9 +107,6 @@ def render_reverse():
     # raise n_cyl times the wall mass (and the per-cylinder peak force is 1/n_cyl).
     n_cyl = int(st.session_state.get("n_cyl", 1))
     st.info(lookup.cylinder_banner(n_cyl))
-
-    with st.spinner("Building the configuration database (first time only, ~15 s)…"):
-        table = _get_table(TABLE_RES)
 
     # --- Units switch — at the TOP of the sidebar (above the tabs) so it's visible from
     # both the Cylinder and Wall tabs; converts stored cylinder values on flip. ---
@@ -166,9 +184,9 @@ def render_reverse():
         "Use the full stroke", key="rv_full_stroke", value=False,
         help="Size the geometry so the cylinder's own hardstops ARE the door's two end "
              "positions: fully extended = door flat/down (0°), fully retracted = door up "
-             "(90°). The swing then uses the whole stroke, so no travel sensor is needed "
-             "— the cylinder bottoms out exactly as the door reaches each end. Off: the "
-             "geometry only has to FIT inside the stroke (it may stop short of an end).")
+             "(90°). The swing then uses the whole stroke — the cylinder bottoms out "
+             "exactly as the door reaches each end. Off: the geometry only has to FIT "
+             "inside the stroke (it may stop short of an end).")
 
     # --- Wall / problem (Wall tab; the container and geometry are metric) ---
     size = tab_wall.selectbox("Container", list(CONTAINERS), key="rv_size")
@@ -212,17 +230,18 @@ def render_reverse():
             bounds[v] = _sb_range(label, f"rv_rng_{v}", lo, hi, disp_factor=wall_fac,
                                   disp_step=geo_step, fmt=geo_fmt)
 
-    # --- Solve: geometries whose cylinder length fits (or, full-stroke, MATCHES)
-    # [L_ret, L_ext]. The grid band is a fast preview; the optimizer below is exact. ---
-    exact_tol = max(0.04 * stroke_m, 0.025)
-    res = lookup.cylinder_matches(table, height, x_cg, z_cg, L_ret, L_ext,
-                                  bounds=bounds, roof_clearance=clearance, limit=5,
-                                  exact=full_stroke, exact_tol=exact_tol)
-    n = res["peak_force"].size
+    # --- Solve: the continuous OPTIMUM for this exact cylinder. Auto-run and cached,
+    # so it recomputes only when an input changes (a few seconds) then stays instant. ---
+    bounds_items = tuple(sorted((k, (float(v[0]), float(v[1]))) for k, v in bounds.items()))
+    opt = _solve_exact(width, height, x_cg, z_cg, L_ret, L_ext, full_stroke,
+                       clearance, bounds_items)
 
-    if n == 0:
-        # Buildable layouts ignoring the cylinder LENGTH window (still not over-center,
-        # under the roof, within the container and your a/b/d/f limits).
+    if not opt["feasible"]:
+        # Diagnose the no-fit from the grid (only built now — the feasible path uses the
+        # optimizer, not the table). Buildable layouts ignoring the cylinder LENGTH window
+        # (still not over-center, under the roof, within the container and a/b/d/f limits).
+        with st.spinner("Building the configuration database (first time only, ~15 s)…"):
+            table = _get_table(TABLE_RES)
         allrows = lookup.search(table, height, x_cg, z_cg, stroke_max=1e9,
                                 roof_clearance=clearance, bounds=bounds, limit=1000000)
         st.error("### No geometry fits this cylinder")
@@ -282,60 +301,87 @@ def render_reverse():
                     "higher.")
         return
 
-    # --- Best geometry + the headline numbers ---
-    a, b, d, f = (float(res["a"][0]), float(res["b"][0]),
-                  float(res["d"][0]), float(res["f"][0]))
-    peak = float(res["peak_force"][0])
-    # n_cyl cylinders (each with this spec) share the load, so they raise n_cyl x
-    # the mass; the per-cylinder peak force is peak / n_cyl.
+    # --- The optimum + its equally-good alternatives ---
+    alts = opt.get("alternatives") or [opt]
+    # Reset the alternative choice whenever any input changes, so a fresh solve shows its
+    # own optimum (index 0), not a stale index into a different family.
+    _sig = (round(L_ret, 5), round(L_ext, 5), round(x_cg, 5), round(z_cg, 5),
+            round(clearance, 5), bool(full_stroke), bounds_items, size, n_cyl)
+    if st.session_state.get("rv_geo_sig") != _sig:
+        st.session_state["rv_geo_sig"] = _sig
+        st.session_state["rv_geo_choice"] = 0
+
+    # Headline numbers render at the TOP (reserved here); the picker sits right below.
+    head = st.container()
+
+    def _glabel(i):
+        g = alts[i]
+        tag = "optimum" if i == 0 else f"+{max(g.get('penalty_pct', 0.0), 0.0):.1f}% force"
+        return (f"a={g['a'] * wall_fac:.2f}  b={g['b'] * wall_fac:.2f}  "
+                f"d={g['d'] * wall_fac:.2f}  f={g['f'] * wall_fac:.2f} {wall_u}  ·  "
+                f"{g['peak_force'] / n_cyl:.1f} N/kg  ({tag})")
+
+    if len(alts) > 1:
+        choice = st.selectbox(
+            "Geometry — the optimum, plus equally-good alternatives you can build instead",
+            range(len(alts)), format_func=_glabel, key="rv_geo_choice",
+            help="Every option raises the same load with the same force and uses the same "
+                 "stroke — they are just different mounting layouts. Pick whichever is "
+                 "easiest to build (mounting, clearance, base height).")
+    else:
+        choice = 0
+    sel = alts[choice]
+    a, b, d, f = float(sel["a"]), float(sel["b"]), float(sel["d"]), float(sel["f"])
+    peak = float(sel["peak_force"])
+    L_min, L_max, stroke_ratio = _length_span(a, b, d, f)
+    # n_cyl cylinders share the load, so they raise n_cyl x the mass; per-cylinder peak
+    # force is peak / n_cyl.
     max_mass = force_use / peak * n_cyl    # safe: force already ÷ safety factor
     abs_mass = force_n / peak * n_cyl      # absolute: cylinder flat out, no margin
 
-    # Geometry front and centre — the four numbers this cylinder sizes to, shown large
-    # (like the Designer), before the mass/force headline numbers.
-    g1, g2, g3, g4 = st.columns(4)
-    g1.metric("a — base along floor", f"{a * wall_fac:.3f} {wall_u}",
-              help="Cylinder base position along the floor, from the hinge.")
-    g2.metric("b — attach up wall", f"{b * wall_fac:.3f} {wall_u}",
-              help="Piston attachment point up the wall, from the hinge.")
-    g3.metric("d — bracket offset", f"{d * wall_fac:.3f} {wall_u}",
-              help="How far the attachment bracket sticks off the wall.")
-    g4.metric("f — base height", f"{f * wall_fac:.3f} {wall_u}",
-              help="Cylinder base height above the floor.")
-    st.divider()
-    m1, m2, m3 = st.columns(3)
-    m1.metric(f"Safe max wall mass ({n_cyl} cyl)", f"{max_mass:,.0f} kg",
-              help="The most you should load it — WITH your safety factor applied, "
-                   "summed over all cylinders (n × cylinder force ÷ safety factor ÷ "
-                   "peak force per kg).")
-    m2.metric(f"Absolute max ({n_cyl} cyl)", f"{abs_mass:,.0f} kg",
-              help="If every cylinder ran flat-out at 100% with no margin. The safe "
-                   "figure is this ÷ your safety factor — use the safe one.")
-    m3.metric("Peak force per cylinder", f"{peak / n_cyl:.2f} N/kg")
-    _win = (f"matching your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} window "
+    with head:
+        g1, g2, g3, g4 = st.columns(4)
+        g1.metric("a — base along floor", f"{a * wall_fac:.3f} {wall_u}",
+                  help="Cylinder base position along the floor, from the hinge.")
+        g2.metric("b — attach up wall", f"{b * wall_fac:.3f} {wall_u}",
+                  help="Piston attachment point up the wall, from the hinge.")
+        g3.metric("d — bracket offset", f"{d * wall_fac:.3f} {wall_u}",
+                  help="How far the attachment sits from the hinge, perpendicular to "
+                       "the wall.")
+        g4.metric("f — base height", f"{f * wall_fac:.3f} {wall_u}",
+                  help="Cylinder base height above the hinge.")
+        st.divider()
+        m1, m2, m3 = st.columns(3)
+        m1.metric(f"Safe max wall mass ({n_cyl} cyl)", f"{max_mass:,.0f} kg",
+                  help="The most you should load it — WITH your safety factor applied, "
+                       "summed over all cylinders (n × cylinder force ÷ safety factor ÷ "
+                       "peak force per kg).")
+        m2.metric(f"Absolute max ({n_cyl} cyl)", f"{abs_mass:,.0f} kg",
+                  help="If every cylinder ran flat-out at 100% with no margin. The safe "
+                       "figure is this ÷ your safety factor — use the safe one.")
+        m3.metric("Peak force per cylinder", f"{peak / n_cyl:.2f} N/kg")
+
+    _win = (f"filling your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} stroke "
             f"(full stroke)" if full_stroke else
             f"inside your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} window")
+    _which = ("the **exact optimum** for your inputs" if choice == 0 else
+              f"an **alternative** (+{max(sel.get('penalty_pct', 0.0), 0.0):.1f}% force "
+              "vs the optimum)")
     st.markdown(
-        f"**Best database match:** a = {a * wall_fac:.2f}  b = {b * wall_fac:.2f}  "
-        f"d = {d * wall_fac:.2f}  f = {f * wall_fac:.2f} {wall_u} — its cylinder runs "
-        f"**{res['L_min'][0] * len_fac:.2f}–{res['L_max'][0] * len_fac:.2f} {len_u}** "
-        f"({_win}). "
-        f"{n if n < 5 else 'Many'} layouts fit; this is the lowest-force one **in the "
-        f"precomputed grid** — a fast, only *near*-optimal pick. For the true best for "
-        f"your exact inputs, run **Get the exact optimum** below.")
+        f"This is {_which} — a = {a * wall_fac:.3f}  b = {b * wall_fac:.3f}  "
+        f"d = {d * wall_fac:.3f}  f = {f * wall_fac:.3f} {wall_u}, its cylinder running "
+        f"**{L_min * len_fac:.2f}–{L_max * len_fac:.2f} {len_u}** ({_win})."
+        + ("  Many mounting layouts tie for best — use the picker above to choose the "
+           "easiest to build." if len(alts) > 1 else ""))
     if full_stroke:
         st.info(
-            "**Full stroke — no sensor needed.** The geometry uses the cylinder's whole "
-            "travel while staying **inside** it, so the **door always reaches both ends**: "
-            f"near **0° (door flat)** the cylinder is fully **extended** "
-            f"(**{L_ext * len_fac:.2f} {len_u}**), near **90° (door up)** fully "
-            f"**retracted** (**{L_ret * len_fac:.2f} {len_u}**) — the hardstops set both "
-            "positions, no sensor needed. The grid pick sits a few mm inside the stroke "
-            "(so the door never stops short); **Get the exact optimum** below fills it to "
-            "the last millimetre.")
+            "**Full stroke.** The geometry uses the cylinder's whole travel while staying "
+            "**inside** it, so the **door reaches both ends**: near **0° (door flat)** the "
+            f"cylinder is fully **extended** (**{L_ext * len_fac:.2f} {len_u}**), near "
+            f"**90° (door up)** fully **retracted** (**{L_ret * len_fac:.2f} {len_u}**) — "
+            "the hardstops set both positions.")
 
     # --- Plots: setup diagram large on top, curves small below ---
-    stroke_ratio = float(res["stroke_ratio"][0])
     view_angle = st.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="rv_view")
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
                            fig_height=560, scale=wall_fac, ulabel=wall_u)
@@ -390,12 +436,12 @@ def render_reverse():
         _notes.append(
             "Full stroke: the geometry uses the cylinder's whole travel — retracted at "
             "90 deg (door up), extended at 0 deg (door flat) — so its hardstops set both "
-            "end positions and no travel sensor is needed.")
+            "end positions.")
     render_pdf_export(
         key="reverse", size_key=size, n_cyl=n_cyl, x_cg=x_cg, z_cg=z_cg,
         mass=max_mass, stroke_ratio_max=stroke_ratio, roof_clearance=clearance,
         a=a, b=b, d=d, f=f, peak_pc=peak / n_cyl,
-        L_min=float(res["L_min"][0]), L_max=float(res["L_max"][0]),
+        L_min=L_min, L_max=L_max,
         fig_geom=diag, fig_force=ff, fig_len=fl,
         fig_sens_bar=sens_bar, fig_sens_strip=sens_strip,
         mass_label="Safe max wall mass", show_stroke_ratio_max=False,
@@ -405,37 +451,3 @@ def render_reverse():
         file_name="wall_actuator_sizing.pdf",
         caption="A one-page sheet: the cylinder you entered and the geometry it "
                 "sized, with forces and the curves. Click Generate to capture it.")
-
-    # --- Refine to the exact optimum for this cylinder ---
-    st.subheader("Get the exact optimum")
-    st.caption("Two results, two methods: the **best database match** above is picked "
-               "instantly from a precomputed *grid* of geometries (fast, but the grid "
-               "only lands *near* the ideal). This button runs the **actual optimizer** "
-               "to find the **best-possible geometry for your parameters** — the true "
-               "continuous optimum, usually a little better — and tells you how far the "
-               "grid was off. (Same idea as Browse's 'Get the exact optimum'.)")
-    if st.button("Get the exact optimum — run optimizer"):
-        with st.spinner("Optimizing…"):
-            opt = optimize_actuator(width, height, x_cg, z_cg,
-                                    length_window=(L_ret, L_ext),
-                                    length_exact=full_stroke, stroke_ratio_max=3.0,
-                                    roof_clearance=clearance, var_bounds=bounds)
-        if opt["feasible"]:
-            _fs = (f" It uses the **full stroke**: retracted "
-                   f"**{opt['L_min'] * len_fac:.2f} {len_u}** at 90° (door up), extended "
-                   f"**{opt['L_max'] * len_fac:.2f} {len_u}** at 0° (door flat) — both "
-                   f"ends on the cylinder's hardstops, no sensor needed."
-                   if full_stroke else "")
-            st.success(
-                f"**Best-possible geometry for your parameters:** peak "
-                f"**{opt['peak_force'] / n_cyl:.2f} N/kg** per cylinder → safe max "
-                f"**{force_use / opt['peak_force'] * n_cyl:,.0f} kg** at "
-                f"a = {opt['a'] * wall_fac:.2f} b = {opt['b'] * wall_fac:.2f} "
-                f"d = {opt['d'] * wall_fac:.2f} f = {opt['f'] * wall_fac:.2f} {wall_u} — "
-                f"the exact optimum for your exact cylinder (the database match above gave "
-                f"{max_mass:,.0f} kg).{_fs}")
-        else:
-            _why = ("match the full stroke exactly" if full_stroke else
-                    "fits the exact cylinder window")
-            st.warning(f"The optimizer couldn't find a geometry that {_why} here — the "
-                       "grid match above is the closest.")

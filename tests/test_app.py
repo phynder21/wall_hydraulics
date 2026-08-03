@@ -417,23 +417,34 @@ def test_advance_angle_stays_in_range(start, direction):
 
 
 def test_reverse_view_renders():
-    """The 'Size from a cylinder' view builds the table and renders — for a
-    feasible cylinder AND an impossible one (which shows the no-fit message)."""
+    """The 'Size from a cylinder' view auto-runs the optimizer and renders the best
+    geometry up top with an alternatives picker — for a feasible cylinder AND an
+    impossible one (which shows the no-fit message). 'no sensor' wording is gone."""
     import browse
     browse.TABLE_RES = 12   # tiny grid so the build is fast in tests
-    at = AppTest.from_file(APP_PATH, default_timeout=120)
+    at = AppTest.from_file(APP_PATH, default_timeout=180)
     at.run()
     at.session_state["view"] = "Size from a cylinder"
     at.run()
     assert not at.exception, at.exception
-    # the full-stroke toggle (use the whole stroke, no sensor) renders and explains
+    # the optimizer result is the headline: a/b/d/f + mass metrics at the top...
+    labels = [m.label or "" for m in at.metric]
+    assert any("base along floor" in l for l in labels), "geometry metrics on top"
+    assert any("Safe max wall mass" in l for l in labels), "mass metric on top"
+    # ...with an alternatives picker, and NO 'get the exact optimum' button
+    assert any(s.key == "rv_geo_choice" for s in at.selectbox), "alternatives picker"
+    assert not any("exact optimum" in (b.label or "").lower() for b in at.button)
+    blurb = " ".join(str(m.value) for m in at.markdown) \
+        + " ".join(str(i.value) for i in at.info)
+    assert "sensor" not in blurb.lower(), "the 'no sensor' wording must be gone"
+    # the full-stroke toggle renders and explains
     at.session_state["rv_full_stroke"] = True
     at.run()
     assert not at.exception, at.exception
     assert any(t.key == "rv_full_stroke" for t in at.toggle), "full-stroke toggle exists"
     blurb = " ".join(str(m.value) for m in at.markdown) \
         + " ".join(str(i.value) for i in at.info)
-    assert "full stroke" in blurb.lower() and "no sensor" in blurb.lower()
+    assert "full stroke" in blurb.lower() and "sensor" not in blurb.lower()
     # an impossible cylinder window must not error (shows the no-fit path), exact on
     at.session_state["rv_ret"] = 0.1
     at.session_state["rv_stroke"] = 0.05
@@ -479,6 +490,23 @@ def test_reverse_nearest_window_exact_prefers_fullest_stroke():
     L_max = np.array([1.00, 1.18])
     assert _nearest_window(L_min, L_max, 0.70, 1.20, exact=False)[:2] == (0.90, 1.00)
     assert _nearest_window(L_min, L_max, 0.70, 1.20, exact=True)[:2] == (0.72, 1.18)
+
+
+def test_reverse_solve_exact_returns_optimum_and_alternatives():
+    """The Reverse view now drives off the cached optimizer: it returns a feasible
+    optimum plus diverse near-optimal alternatives, and _length_span agrees with the
+    optimizer's own L_max for the winning geometry."""
+    from reverse import _solve_exact, _length_span
+    from optimize import CONTAINER_PRESETS
+    W, H = CONTAINER_PRESETS["standard"]
+    bnds = (("a", (0.05, 1.176)), ("b", (0.05, 2.393)),
+            ("d", (0.0, 1.176)), ("f", (0.0, 2.393)))
+    opt = _solve_exact(W, H, 1.2, 0.55, 0.70, 1.20, False, 0.0, bnds)
+    assert opt["feasible"]
+    assert len(opt.get("alternatives", [])) >= 1, "should offer alternatives to pick from"
+    lo, hi, ratio = _length_span(opt["a"], opt["b"], opt["d"], opt["f"])
+    assert lo <= hi and ratio >= 1.0
+    assert abs(hi - opt["L_max"]) < 1e-2, "span helper must match the optimizer's L_max"
 
 
 def test_full_stroke_stays_inside_stroke_so_door_completes():
