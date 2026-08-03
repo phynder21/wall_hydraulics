@@ -272,6 +272,27 @@ def test_browse_view_renders():
     assert not at.exception, at.exception
 
 
+def test_reverse_units_convert_wall_and_have_fine_precision():
+    """Reverse: switching Imperial/Metric converts the Wall-tab inputs too (in <-> mm),
+    and a Fine-precision toggle exists (so a typed 20.25 isn't rounded to 20)."""
+    import browse
+    browse.TABLE_RES = 12
+    at = AppTest.from_file(APP_PATH, default_timeout=120)
+    at.run()
+    at.session_state["view"] = "Size from a cylinder"
+    at.session_state["rv_units"] = "Imperial"
+    at.run()
+    assert not at.exception, at.exception
+    assert any(t.key == "rv_fine" for t in at.toggle), "Reverse needs a fine-precision toggle"
+    imp = " ".join((w.label or "") for w in list(at.slider) + list(at.number_input))
+    assert "x_cg" in imp and "(in)" in imp, f"wall inputs should be inches in Imperial: {imp}"
+    at.session_state["rv_units"] = "Metric"
+    at.run()
+    assert not at.exception, at.exception
+    met = " ".join((w.label or "") for w in list(at.slider) + list(at.number_input))
+    assert "(mm)" in met and "(in)" not in met, f"wall inputs should be mm in Metric: {met}"
+
+
 def test_browse_imperial_units():
     """Browse honors the Imperial toggle: the results-table headers switch to inches /
     lbf-lb (no m / N/kg), and it renders without error."""

@@ -74,13 +74,29 @@ def render_reverse():
                     min(max(st.session_state[skey] * old_m / new_m, lo), hi))
     st.session_state["rv_units_prev"] = units
     len_fac, len_u = (39.37008, "in") if units == "Imperial" else (1000.0, "mm")
+    fine = st.sidebar.toggle(
+        "Fine precision", key="rv_fine",
+        help="Finer steps and decimals in the cylinder AND wall inputs, so you can type "
+             "exact sizes like a 20.25 in closed length instead of being rounded to 20.")
+    # The wall geometry shares the cylinder's length unit (in / mm) via len_fac/len_u,
+    # so switching Imperial/Metric converts the Wall tab too. Step/format track Fine.
+    if units == "Imperial":
+        geo_step, geo_fmt = (0.05, "%.2f") if fine else (0.5, "%.1f")
+    else:
+        geo_step, geo_fmt = (1.0, "%.1f") if fine else (5.0, "%.0f")
 
     # Sidebar tabs (like the Designer): the Cylinder you enter, and the Wall it lifts.
     tab_cyl, tab_wall = st.sidebar.tabs(["Cylinder", "Wall"])
 
     def _cyl(k, ctx):
-        """A cylinder input in the current units; returns (shown, base-unit value)."""
+        """A cylinder input in the current units; returns (shown, base-unit value).
+        With Fine precision on, use a 10x smaller step and an extra decimal so typed
+        decimals (e.g. 20.25) are kept rather than rounded to a whole number."""
         label, lo, hi, default, step, fmt, mult = cfg[k]
+        if fine:
+            step = step / 10.0
+            _dec = {"%.0f": 2, "%.1f": 2, "%.2f": 3, "%.3f": 3}.get(fmt, 2)
+            fmt = f"%.{_dec}f"
         val = _sb_linked(label, f"rv_{k}", lo, hi, default, step, fmt=fmt,
                          help=_HELP[k], ctx=ctx)
         return val, val * mult
@@ -117,12 +133,14 @@ def render_reverse():
     tab_wall.caption("**Internal (clear) dimensions** — the usable space inside the "
                      "container, not the outer shell.")
     width, height = CONTAINERS[size]
-    x_cg = _sb_linked("x_cg — along wall from hinge (m)", "rv_xcg", 0.0, HEIGHT_MAX,
-                      1.20, 0.01, ctx=tab_wall)
-    z_cg = _sb_linked("z_cg — off the wall (m)", "rv_zcg", 0.0, 1.5, 0.55, 0.01,
-                      ctx=tab_wall)
-    clearance = _sb_linked("Roof clearance (m)", "rv_clear", 0.0, 0.5, 0.0, 0.01,
-                           ctx=tab_wall)
+    x_cg = _sb_linked(f"x_cg — along wall from hinge ({len_u})", "rv_xcg", 0.0,
+                      HEIGHT_MAX, 1.20, 0.01, ctx=tab_wall, disp_factor=len_fac,
+                      disp_step=geo_step, fmt=geo_fmt)
+    z_cg = _sb_linked(f"z_cg — off the wall ({len_u})", "rv_zcg", 0.0, 1.5, 0.55, 0.01,
+                      ctx=tab_wall, disp_factor=len_fac, disp_step=geo_step, fmt=geo_fmt)
+    clearance = _sb_linked(f"Roof clearance ({len_u})", "rv_clear", 0.0, 0.5, 0.0, 0.01,
+                           ctx=tab_wall, disp_factor=len_fac, disp_step=geo_step,
+                           fmt=geo_fmt)
     # Optional half-container cap on the base `a` AND the bracket offset `d` (see the
     # Designer): both stay in the near half of the container when on.
     half_a = tab_wall.checkbox("Keep base and bracket within half the container",
@@ -132,23 +150,25 @@ def render_reverse():
                                     "Uncheck to allow the full width.")
     _half = WIDTH / 2
     if half_a:
-        tab_wall.caption(f"Active: **a ≤ {_half:.2f} m** and **d ≤ {_half:.2f} m** (half "
-                         f"the {WIDTH:.2f} m width).")
+        tab_wall.caption(f"Active: **a ≤ {_half * len_fac:.1f} {len_u}** and **d ≤ "
+                         f"{_half * len_fac:.1f} {len_u}** (half the "
+                         f"{WIDTH * len_fac:.1f} {len_u} width).")
     else:
-        tab_wall.caption(f"Off — **a** and **d** may use the full **{WIDTH:.2f} m** "
-                         f"width.")
+        tab_wall.caption(f"Off — **a** and **d** may use the full **{WIDTH * len_fac:.1f} "
+                         f"{len_u}** width.")
 
     # --- Constrain the OUTCOME geometry (advanced; expander inside the Wall tab) ---
     ranges = {
-        "a": (0.05, _half if half_a else WIDTH, "a — base along floor (m)"),
-        "b": (0.05, HEIGHT_MAX, "b — attachment along wall (m)"),
-        "d": (0.0, _half if half_a else WIDTH, "d — bracket length (m)"),
-        "f": (0.0, HEIGHT_MAX, "f — base height (m)"),
+        "a": (0.05, _half if half_a else WIDTH, f"a — base along floor ({len_u})"),
+        "b": (0.05, HEIGHT_MAX, f"b — attachment along wall ({len_u})"),
+        "d": (0.0, _half if half_a else WIDTH, f"d — bracket length ({len_u})"),
+        "f": (0.0, HEIGHT_MAX, f"f — base height ({len_u})"),
     }
     bounds = {}
     with tab_wall.expander("Restrict the output geometry (a, b, d, f)", expanded=False):
         for v, (lo, hi, label) in ranges.items():
-            bounds[v] = _sb_range(label, f"rv_rng_{v}", lo, hi)
+            bounds[v] = _sb_range(label, f"rv_rng_{v}", lo, hi, disp_factor=len_fac,
+                                  disp_step=geo_step, fmt=geo_fmt)
 
     # --- Solve: geometries whose cylinder length fits [L_ret, L_ext] ---
     res = lookup.cylinder_matches(table, height, x_cg, z_cg, L_ret, L_ext,
@@ -194,8 +214,8 @@ def render_reverse():
                    "figure is this ÷ your safety factor — use the safe one.")
     m3.metric("Peak force per cylinder", f"{peak / n_cyl:.2f} N/kg")
     st.markdown(
-        f"**Best database match:** a = {a:.3f}  b = {b:.3f}  d = {d:.3f}  f = {f:.3f} m "
-        f"— its cylinder runs "
+        f"**Best database match:** a = {a * len_fac:.1f}  b = {b * len_fac:.1f}  "
+        f"d = {d * len_fac:.1f}  f = {f * len_fac:.1f} {len_u} — its cylinder runs "
         f"**{res['L_min'][0] * len_fac:.1f}–{res['L_max'][0] * len_fac:.1f} {len_u}** "
         f"(inside your {L_ret * len_fac:.1f}–{L_ext * len_fac:.1f} {len_u} window). "
         f"{n if n < 5 else 'Many'} layouts fit; this is the lowest-force one **in the "
@@ -206,9 +226,12 @@ def render_reverse():
     stroke_ratio = float(res["stroke_ratio"][0])
     view_angle = st.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="rv_view")
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
-                           fig_height=560)
+                           fig_height=560, scale=len_fac, ulabel=len_u)
     st.plotly_chart(diag, width="stretch")
-    ff, fl = _force_length_figures(a, b, d, f, x_cg, z_cg, stroke_ratio)
+    # Length axis in the display unit; force per cylinder to match the metric/banner.
+    ff, fl = _force_length_figures(
+        a, b, d, f, x_cg, z_cg, stroke_ratio, u=len_fac, ulabel=len_u,
+        pu=1.0 / n_cyl, plabel=f"N/kg{' per cyl' if n_cyl > 1 else ''}")
     pf, pl = st.columns(2)
     pf.plotly_chart(ff, width="stretch")
     pl.plotly_chart(fl, width="stretch")
@@ -282,9 +305,10 @@ def render_reverse():
             st.success(
                 f"**Best-possible geometry for your parameters:** peak "
                 f"**{opt['peak_force'] / n_cyl:.2f} N/kg** per cylinder → safe max "
-                f"**{force_use / opt['peak_force'] * n_cyl:,.0f} kg** at a = {opt['a']:.3f} "
-                f"b = {opt['b']:.3f} d = {opt['d']:.3f} f = {opt['f']:.3f} m — the exact "
-                f"optimum for your exact cylinder (the database match above gave "
+                f"**{force_use / opt['peak_force'] * n_cyl:,.0f} kg** at "
+                f"a = {opt['a'] * len_fac:.1f} b = {opt['b'] * len_fac:.1f} "
+                f"d = {opt['d'] * len_fac:.1f} f = {opt['f'] * len_fac:.1f} {len_u} — the "
+                f"exact optimum for your exact cylinder (the database match above gave "
                 f"{max_mass:,.0f} kg).")
         else:
             st.warning("The optimizer couldn't find a geometry that fits the exact "
