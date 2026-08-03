@@ -438,6 +438,20 @@ def test_reverse_empty_reason_names_over_center():
     assert _empty_reason(wide, H, 0.0) == "limits"
 
 
+def test_reverse_nearest_window_is_one_real_layout():
+    """The no-fit 'closest layout' band must come from a SINGLE layout, not a mix of
+    min(L_min) and max(L_max) across different layouts (which overstates the need)."""
+    import numpy as np
+    from reverse import _nearest_window
+    # three layouts; window is 0.70-1.20. The mixed envelope would read 0.60-2.90, but
+    # the layout that pokes out least is #1 (0.75-1.35), a real, achievable band.
+    L_min = np.array([0.60, 0.75, 1.90])
+    L_max = np.array([2.90, 1.35, 2.10])
+    lo, hi, longer = _nearest_window(L_min, L_max, 0.70, 1.20)
+    assert (lo, hi) == (0.75, 1.35), "must report one layout's own band, not an envelope"
+    assert longer is True, "the miss (1.35 > 1.20) is at the extended end"
+
+
 def test_two_cylinder_mode_halves_designer_force():
     """With 2 cylinders sharing the load, the Designer peak-force metric is halved
     (per cylinder) and a banner states the count."""

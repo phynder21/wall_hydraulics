@@ -50,6 +50,18 @@ _HELP = {
 }
 
 
+def _nearest_window(L_min, L_max, L_ret, L_ext):
+    """Of the buildable layouts (arrays of each layout's shortest/longest cylinder length
+    over the swing), pick the ONE closest to fitting the cylinder's [L_ret, L_ext] window
+    and return (lo, hi, longer): its own length band and whether the miss is at the
+    extended end (needs a longer cylinder) rather than the closed end. Reporting
+    min(L_min)/max(L_max) instead would mix DIFFERENT layouts and overstate the need."""
+    short_low = np.maximum(0.0, L_ret - L_min)    # cylinder too long when closed
+    short_high = np.maximum(0.0, L_max - L_ext)    # can't reach far enough up
+    i = int(np.argmin(short_low + short_high))
+    return float(L_min[i]), float(L_max[i]), bool(short_high[i] >= short_low[i])
+
+
 def _empty_reason(bounds, height, clearance):
     """Why did the (over-center-pruned) table find NO layout at all? Sample the a/b/d/f
     box directly and check: returns 'over_center' if every layout that clears the roof
@@ -200,10 +212,13 @@ def render_reverse():
                                 roof_clearance=clearance, bounds=bounds, limit=1000000)
         st.error("### No geometry fits this cylinder")
         if allrows["peak_force"].size:
-            # Layouts exist — only the cylinder's length window doesn't overlap them.
-            lo = float(allrows["L_min"].min())
-            hi = float(allrows["L_max"].max())
-            _longer = hi > L_ext                    # they need a longer cylinder than yours
+            # Layouts exist — only the cylinder's length window doesn't contain them.
+            # Report the CLOSEST single layout: the one whose length band pokes least
+            # outside your window. (min(L_min) and max(L_max) would come from DIFFERENT
+            # layouts, overstating what any one real layout needs — e.g. the widest
+            # layout's reach, which is the opposite of the shortest one you'd want.)
+            lo, hi, _longer = _nearest_window(
+                allrows["L_min"], allrows["L_max"], L_ret, L_ext)
             _fix = ("a **longer** cylinder — raise the **stroke** and/or **closed "
                     "length**" if _longer else
                     "a **shorter** cylinder — lower the **closed length** and/or the "
@@ -211,11 +226,12 @@ def render_reverse():
             st.markdown(
                 f"Buildable layouts exist here, but none keep the cylinder length inside "
                 f"your **{L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u}** window the "
-                f"whole way up — they need lengths in "
-                f"**{lo * len_fac:.2f}–{hi * len_fac:.2f} {len_u}**. To reach them, use "
-                f"{_fix} until your window overlaps that range, or **loosen the a/b/d/f "
-                f"limits** / pick a **bigger container** so a layout with a length in your "
-                f"current window exists.")
+                f"whole way up. The closest one swings between "
+                f"**{lo * len_fac:.2f}** and **{hi * len_fac:.2f} {len_u}** — just outside "
+                f"your window. To catch it, use {_fix} until your window covers that band, "
+                f"or **loosen the a/b/d/f limits** (widening a range pulls in "
+                f"shorter-swing layouts) / pick a **bigger container** so a layout that "
+                f"fits your current window exists.")
         else:
             # Nothing buildable even before the cylinder. The table drops over-center
             # layouts, so an empty result can mean the whole region is over-center — check
