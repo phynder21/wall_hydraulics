@@ -1016,12 +1016,12 @@ def reverse_page():
         return fn, fn / max(r["safety"], 1e-6)
 
     def _window():
-        """Cylinder length window [retracted, extended] in metres."""
+        """Cylinder length window [retracted, extended] in meters."""
         L_ret = r["retracted"] * _mult("retracted")
         return L_ret, L_ret + r["stroke"] * _mult("stroke")
 
     def _len_disp():
-        """(factor, unit) to show a length in metres in the current units."""
+        """(factor, unit) to show a length in meters in the current units."""
         return (M_TO_IN, "in") if r["units"] == "Imperial" else (1000.0, "mm")
 
     def solve():

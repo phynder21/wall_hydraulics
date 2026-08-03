@@ -729,6 +729,10 @@ def test_reverse_shows_sensitivity_and_pdf_when_feasible():
     at.session_state["rv_stroke"] = 2.5     #   geometry in the tiny grid fits
     at.run()
     assert not at.exception, at.exception
+    # a, b, d, f shown as large metrics (like the Designer), not just buried in text
+    mlabels = [m.label or "" for m in at.metric]
+    for v in ("a — base", "b — attach", "d — bracket", "f — base"):
+        assert any(v in x for x in mlabels), f"Reverse should show {v} as a metric: {mlabels}"
     md = _all_markdown(at)
     assert "Sensitivity" in md, "sensitivity panel missing from Reverse"
     assert "Interaction map" in md, "2-D interaction map missing from Reverse"

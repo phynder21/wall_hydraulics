@@ -29,7 +29,7 @@ _CYL = {
         "ret":    ("Closed length — retracted (in)", 4.0, 140.0, 28.0, 0.25, "%.2f", 0.0254),
         "stroke": ("Stroke — rod travel (in)", 2.0, 120.0, 20.0, 0.25, "%.2f", 0.0254),
     },
-    "Metric": {   # all lengths in METRES (not mm), to match the rest of the app
+    "Metric": {   # all lengths in METERS (not mm), to match the rest of the app
         "bore":   ("Bore diameter (m)", 0.02, 0.2, 0.063, 0.001, "%.3f", 1000.0),
         "rod":    ("Rod diameter (m)", 0.01, 0.19, 0.036, 0.001, "%.3f", 1000.0),
         "press":  ("Max pressure (bar)", 50.0, 350.0, 160.0, 5.0, "%.0f", 1.0),
@@ -80,8 +80,8 @@ def render_reverse():
         "Fine precision", key="rv_fine",
         help="Finer steps and decimals in the cylinder AND wall inputs, so you can type "
              "exact sizes like a 20.25 in closed length instead of being rounded to 20.")
-    # ONE length unit for the whole view (metres / inches, like the Designer and Browse)
-    # — no mm anywhere. len_fac converts the base metres to the display unit; wall_fac is
+    # ONE length unit for the whole view (meters / inches, like the Designer and Browse)
+    # — no mm anywhere. len_fac converts the base meters to the display unit; wall_fac is
     # the same (kept as a name for the wall-geometry call sites).
     _u = Units(units, fine)
     len_fac, len_u = _u.U, _u.ULABEL
@@ -207,6 +207,18 @@ def render_reverse():
     max_mass = force_use / peak * n_cyl    # safe: force already ÷ safety factor
     abs_mass = force_n / peak * n_cyl      # absolute: cylinder flat out, no margin
 
+    # Geometry front and centre — the four numbers this cylinder sizes to, shown large
+    # (like the Designer), before the mass/force headline numbers.
+    g1, g2, g3, g4 = st.columns(4)
+    g1.metric("a — base along floor", f"{a * wall_fac:.3f} {wall_u}",
+              help="Cylinder base position along the floor, from the hinge.")
+    g2.metric("b — attach up wall", f"{b * wall_fac:.3f} {wall_u}",
+              help="Piston attachment point up the wall, from the hinge.")
+    g3.metric("d — bracket offset", f"{d * wall_fac:.3f} {wall_u}",
+              help="How far the attachment bracket sticks off the wall.")
+    g4.metric("f — base height", f"{f * wall_fac:.3f} {wall_u}",
+              help="Cylinder base height above the floor.")
+    st.divider()
     m1, m2, m3 = st.columns(3)
     m1.metric(f"Safe max wall mass ({n_cyl} cyl)", f"{max_mass:,.0f} kg",
               help="The most you should load it — WITH your safety factor applied, "
@@ -231,7 +243,7 @@ def render_reverse():
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
                            fig_height=560, scale=wall_fac, ulabel=wall_u)
     st.plotly_chart(diag, width="stretch")
-    # Wall diagram is in metres/in; the cylinder-length plot stays in the cylinder unit
+    # Wall diagram is in meters/in; the cylinder-length plot stays in the cylinder unit
     # (mm/in) to match the closed/extended window. Force per cylinder to match the metric.
     ff, fl = _force_length_figures(
         a, b, d, f, x_cg, z_cg, stroke_ratio, u=len_fac, ulabel=len_u,

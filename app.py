@@ -247,7 +247,7 @@ fmt_pk, fmt_total, fmt_mass = _u.pk, _u.total, _u.mass
 # ISO container dimensions (external)
 # Values are INTERNAL (clear) dimensions — the usable space inside the shell, which
 # is what constrains the mechanism (see optimize.CONTAINER_PRESETS). The 8'6"/9'6"
-# in the labels is the container's external name; the metres are the clear interior.
+# in the labels is the container's external name; the meters are the clear interior.
 CONTAINER_SIZES = {
     "Standard (8'6\") — 2.35 × 2.39 m internal": (2.352, 2.393),
     "High-Cube (9'6\") — 2.35 × 2.70 m internal": (2.352, 2.698),
