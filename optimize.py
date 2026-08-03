@@ -377,9 +377,11 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
                     and moment_arm >= MIN_MOMENT_ARM - MOMENT_ARM_TOL)
         if length_window is not None:
             L_ret, L_ext = length_window
-            if length_exact:            # both ends must land on the cylinder's hardstops
-                feasible = (feasible and abs(L_min - L_ret) <= LENGTH_EXACT_TOL
-                            and abs(L_max - L_ext) <= LENGTH_EXACT_TOL)
+            if length_exact:            # fill the stroke but stay INSIDE it (door
+                                        # completes): near each hardstop, never past it
+                feasible = (feasible
+                            and L_ret - LENGTH_TOL <= L_min <= L_ret + LENGTH_EXACT_TOL
+                            and L_ext - LENGTH_EXACT_TOL <= L_max <= L_ext + LENGTH_TOL)
             else:
                 feasible = (feasible and L_min >= L_ret - LENGTH_TOL
                             and L_max <= L_ext + LENGTH_TOL)

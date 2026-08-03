@@ -481,24 +481,30 @@ def test_reverse_nearest_window_exact_prefers_fullest_stroke():
     assert _nearest_window(L_min, L_max, 0.70, 1.20, exact=True)[:2] == (0.72, 1.18)
 
 
-def test_full_stroke_grid_and_optimizer_match_both_ends():
-    """The full-stroke toggle makes the geometry USE the whole stroke, not just fit
-    inside it: the grid match lands within tol of both ends and the continuous optimizer
-    hits L_min=retracted (90 deg, door up) and L_max=extended (0 deg, door flat)."""
+def test_full_stroke_stays_inside_stroke_so_door_completes():
+    """The full-stroke toggle must fill the stroke WITHOUT exceeding it: the swing has
+    to stay inside [retracted, extended] (L_min >= retracted, L_max <= extended) or the
+    cylinder bottoms out before the door reaches its end and the door stops short. Near-
+    full: within tol of each end. The continuous optimizer fills it to the last mm."""
     import lookup, lookup_build
     from optimize import optimize_actuator, CONTAINER_PRESETS
     table = lookup_build.build_table(res=40)[0]
     W, H = CONTAINER_PRESETS["standard"]
     L_ret, L_ext = 0.70, 1.20
+    tol = 0.02
     grid = lookup.cylinder_matches(table, H, 1.2, 0.55, L_ret, L_ext, roof_clearance=0.0,
-                                   limit=1, exact=True, exact_tol=0.02)
+                                   limit=1, exact=True, exact_tol=tol)
     assert grid["peak_force"].size, "an exact-match grid layout should exist here"
-    assert abs(float(grid["L_min"][0]) - L_ret) <= 0.02
-    assert abs(float(grid["L_max"][0]) - L_ext) <= 0.02
+    lmin, lmax = float(grid["L_min"][0]), float(grid["L_max"][0])
+    # CONTAINED (door completes): never below retracted, never above extended...
+    assert L_ret <= lmin <= L_ret + tol, f"L_min {lmin} must be inside [retracted, +tol]"
+    assert L_ext - tol <= lmax <= L_ext, f"L_max {lmax} must be inside [-tol, extended]"
     opt = optimize_actuator(W, H, 1.2, 0.55, length_window=(L_ret, L_ext),
                             length_exact=True, stroke_ratio_max=3.0, roof_clearance=0.0)
     assert opt["feasible"]
-    assert abs(opt["L_min"] - L_ret) <= 5e-3 and abs(opt["L_max"] - L_ext) <= 5e-3
+    # optimizer fills the stroke and stays inside it (door reaches both ends)
+    assert L_ret - 1e-3 <= opt["L_min"] <= L_ret + 5e-3
+    assert L_ext - 5e-3 <= opt["L_max"] <= L_ext + 1e-3
 
 
 def test_two_cylinder_mode_halves_designer_force():

@@ -222,15 +222,17 @@ def cylinder_matches(table, container_height, x_cg, z_cg, retracted, extended,
     Max wall mass a row supports = cylinder force / peak_force. The stroke-ratio
     limit is left open here -- the absolute length window is the real constraint.
 
-    With `exact`, require the geometry's OWN swing to match the cylinder's full
-    stroke instead of merely fitting inside it: L_min within `exact_tol` of the
-    retracted length AND L_max within `exact_tol` of the extended length. Since a
-    feasible swing is monotonic (longest at 0 deg / door flat, shortest at 90 deg /
-    door up), this lands the cylinder's two hardstops exactly on the door's down and
-    up positions -- so no travel sensor is needed."""
+    With `exact`, require the geometry's OWN swing to (nearly) fill the cylinder's
+    full stroke: L_min in [retracted, retracted + exact_tol] AND L_max in
+    [extended - exact_tol, extended]. The band is ONE-SIDED and stays INSIDE the
+    window -- the swing must never exceed the stroke, or the cylinder would bottom
+    out before the door reaches its end (the door would stop short). Since a feasible
+    swing is monotonic (longest at 0 deg / door flat, shortest at 90 deg / door up),
+    a near-full contained swing lands the cylinder's hardstops on the door's down and
+    up positions (within exact_tol), so the door completes its travel with no sensor."""
     if exact:
-        filters = {"L_min": (retracted - exact_tol, retracted + exact_tol),
-                   "L_max": (extended - exact_tol, extended + exact_tol)}
+        filters = {"L_min": (retracted, retracted + exact_tol),
+                   "L_max": (extended - exact_tol, extended)}
     else:
         filters = {"L_min": (retracted, None), "L_max": (None, extended)}
     return search(table, container_height, x_cg, z_cg, stroke_max=1e9,

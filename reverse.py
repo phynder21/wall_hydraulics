@@ -325,13 +325,14 @@ def render_reverse():
         f"your exact inputs, run **Get the exact optimum** below.")
     if full_stroke:
         st.info(
-            "**Full stroke — no sensor needed.** This geometry uses the cylinder's whole "
-            "travel: at **0° (door flat)** the cylinder is fully **extended** "
-            f"(**{L_ext * len_fac:.2f} {len_u}**), at **90° (door up)** fully "
-            f"**retracted** (**{L_ret * len_fac:.2f} {len_u}**). The cylinder bottoms out "
-            "against its own hardstops exactly as the door reaches each end, so the "
-            "natural stops set both positions. (The grid pick lands close; **Get the "
-            "exact optimum** below hits both ends exactly.)")
+            "**Full stroke — no sensor needed.** The geometry uses the cylinder's whole "
+            "travel while staying **inside** it, so the **door always reaches both ends**: "
+            f"near **0° (door flat)** the cylinder is fully **extended** "
+            f"(**{L_ext * len_fac:.2f} {len_u}**), near **90° (door up)** fully "
+            f"**retracted** (**{L_ret * len_fac:.2f} {len_u}**) — the hardstops set both "
+            "positions, no sensor needed. The grid pick sits a few mm inside the stroke "
+            "(so the door never stops short); **Get the exact optimum** below fills it to "
+            "the last millimetre.")
 
     # --- Plots: setup diagram large on top, curves small below ---
     stroke_ratio = float(res["stroke_ratio"][0])
