@@ -516,6 +516,23 @@ def test_reverse_optimizer_alternatives_and_length_span():
     assert abs(hi - opt["L_max"]) < 1e-2, "span helper must match the optimizer's L_max"
 
 
+def test_reverse_asks_for_many_alternatives_default_stays_small():
+    """Reverse asks the optimizer for a big spread of distinct layouts (~20) to pick
+    from, while the default (Designer/Browse) keeps a small set."""
+    from optimize import optimize_actuator, CONTAINER_PRESETS
+    W, H = CONTAINER_PRESETS["standard"]
+    bnds = {"a": (0.05, 1.176), "b": (0.05, 2.393), "d": (0.0, 1.176), "f": (0.0, 2.393)}
+    kw = dict(length_window=(0.70, 1.20), stroke_ratio_max=3.0, roof_clearance=0.0,
+              var_bounds=bnds)
+    many = optimize_actuator(W, H, 1.2, 0.55, n_alternatives=20, alt_min_sep=0.02,
+                             alt_target_sep=0.08, **kw)          # Reverse settings
+    few = optimize_actuator(W, H, 1.2, 0.55, **kw)               # default (other views)
+    assert len(many["alternatives"]) >= 15, len(many["alternatives"])
+    assert len(few["alternatives"]) <= 6, "default count must stay small for other views"
+    geoms = [(a["a"], a["b"], a["d"], a["f"]) for a in many["alternatives"]]
+    assert len(set(geoms)) == len(geoms), "the options must be distinct geometries"
+
+
 def test_full_stroke_stays_inside_stroke_so_door_completes():
     """The full-stroke toggle must fill the stroke WITHOUT exceeding it: the swing has
     to stay inside [retracted, extended] (L_min >= retracted, L_max <= extended) or the

@@ -273,7 +273,8 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
                       n_theta=200, m_cg=1.0, seed=0, maxiter=300,
                       n_starts=N_STARTS, popsize=None, alt_rel_tol=ALT_REL_TOL,
                       fast=False, length_window=None, length_exact=False,
-                      objective_mode="force", force_cap=None):
+                      objective_mode="force", force_cap=None, n_alternatives=None,
+                      alt_min_sep=None, alt_target_sep=None):
     """Search for the (a, b, d, f) minimizing peak piston force over 0-90 deg.
 
     Runs `n_starts` independent differential-evolution starts (fixed seeds, so the
@@ -307,7 +308,11 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     a geometrically DIVERSE set of near-optimal designs (each within
     `alt_rel_tol` of the best objective value, tagged with its `penalty_pct`), so
     you can trade a little of the objective for an easier-to-build geometry. The
-    optimum itself is always `alternatives[0]`.
+    optimum itself is always `alternatives[0]`. `n_alternatives` caps how many to
+    return (default N_ALTERNATIVES); `alt_min_sep` is the minimum normalized
+    geometry distance to accept one as distinct, and `alt_target_sep` is the
+    separation the repulsion search aims for — lower both to pack in MORE, closer
+    layouts (e.g. Reverse asks for ~20).
     """
     locked = dict(locked or {})
     if length_window is not None:
@@ -494,20 +499,24 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
         return {"geom": r["geom"], "peak": r["peak"], "L_max": r["L_max"],
                 "score": score(r)}
 
+    n_want = n_alternatives if n_alternatives is not None else N_ALTERNATIVES
+    min_sep = alt_min_sep if alt_min_sep is not None else ALT_MIN_SEP
+    target_sep = alt_target_sep if alt_target_sep is not None else ALT_TARGET_SEP
+
     selected = [_entry(best)]
 
     # First, reuse any feasible multi-start winners that are already distinct --
     # they're free (already computed) and capture separate basins.
     for r in sorted((r for r in runs if r["feasible"] and score(r) <= threshold),
                     key=lambda r: r["fun"]):
-        if len(selected) >= N_ALTERNATIVES:
+        if len(selected) >= n_want:
             break
-        if _min_sep(r["geom"], [s["geom"] for s in selected]) >= ALT_MIN_SEP:
+        if _min_sep(r["geom"], [s["geom"] for s in selected]) >= min_sep:
             selected.append(_entry(r))
 
     # Then top up by re-optimizing with a repulsion penalty away from the chosen
     # designs. Stop as soon as the best distinct design exceeds tolerance.
-    n_alt = 4 if fast else N_ALTERNATIVES        # fewer, cheaper alternatives in fast mode
+    n_alt = 4 if fast else n_want                # fewer, cheaper alternatives in fast mode
     if free and best["feasible"]:
         alt_de_kwargs = {"maxiter": 30 if fast else 80, "tol": 1e-7, "polish": True}
         while len(selected) < n_alt:
@@ -517,7 +526,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
                 geom = assemble(free_vals)
                 penalty = 0.0
                 for g in chosen:
-                    gap = ALT_TARGET_SEP - _norm_dist(geom, g)
+                    gap = target_sep - _norm_dist(geom, g)
                     if gap > 0.0:
                         penalty += ALT_REPEL * gap ** 2
                 return objective(free_vals) + penalty
@@ -529,7 +538,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
             if not (ev["feasible"] and np.isfinite(ev["peak"])
                     and score(ev) <= threshold):
                 break   # no distinct design left within tolerance
-            if _min_sep(geom, chosen) < ALT_MIN_SEP:
+            if _min_sep(geom, chosen) < min_sep:
                 break   # search could not get far enough from the chosen designs
             selected.append(_entry(ev))
 

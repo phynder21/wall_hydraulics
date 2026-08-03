@@ -312,14 +312,17 @@ def render_reverse():
     st.markdown(
         "The numbers above are a **fast, near-optimal** pick from a precomputed grid, so "
         "they update instantly as you tweak inputs. For the **true best for your exact "
-        "inputs** — usually a little better, plus a set of equally-good alternative "
-        "layouts to choose from — run the optimizer (~15 s):")
+        "inputs** — usually a little better, plus ~20 equally-good alternative layouts "
+        "to choose from — run the optimizer (~20 s):")
     if st.button("Get the exact optimum — run optimizer"):
         with st.spinner("Optimizing…"):
+            # Ask for a big spread of alternatives (up to 20) so there are many
+            # buildable layouts to pick from — a denser separation than the default.
             _opt = optimize_actuator(
                 width, height, x_cg, z_cg, length_window=(L_ret, L_ext),
                 length_exact=full_stroke, stroke_ratio_max=3.0,
-                roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=0.15)
+                roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=0.15,
+                n_alternatives=20, alt_min_sep=0.02, alt_target_sep=0.08)
         st.session_state["rv_opt"] = _opt if _opt["feasible"] else None
         st.session_state["rv_geo_choice"] = 0
         if not _opt["feasible"]:
@@ -341,10 +344,13 @@ def render_reverse():
                     f"{g['peak_force'] / n_cyl:.1f} N/kg  ({tag})")
 
         choice = st.selectbox(
-            "Exact optimum + equally-good alternatives (pick the easiest to build)",
+            f"Geometry — {len(alts)} options (optimum + alternatives); "
+            "pick the easiest to build",
             range(len(alts)), format_func=_glabel, key="rv_geo_choice",
-            help="Every option raises the same load with the same force and uses the same "
-                 "stroke — they are just different mounting layouts.")
+            help="Every option raises the load at (near) the same force and uses the same "
+                 "stroke — they are just different mounting layouts. The label shows each "
+                 "one's a/b/d/f, its per-cylinder force, and how far its force is from the "
+                 "optimum.")
         sel = alts[choice]
         source = "optimum" if choice == 0 else "alt"
     else:
