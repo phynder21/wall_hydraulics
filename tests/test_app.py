@@ -424,6 +424,20 @@ def test_reverse_view_renders():
     assert not at.exception, at.exception
 
 
+def test_reverse_empty_reason_names_over_center():
+    """The no-fit diagnosis tells an over-center (singular) region — where every layout
+    that clears the roof crosses the hinge — apart from an ordinary roof/limits block."""
+    from reverse import _empty_reason
+    H = 2.393
+    # a tight box on a known over-center geometry reads as the singularity...
+    oc = {"a": (0.049, 0.051), "b": (0.049, 0.051),
+          "d": (0.049, 0.051), "f": (0.173, 0.175)}
+    assert _empty_reason(oc, H, 0.0) == "over_center"
+    # ...while a wide, ordinary box (buildable layouts exist) does not.
+    wide = {"a": (0.1, 1.0), "b": (0.1, 2.0), "d": (0.0, 1.0), "f": (0.0, 1.0)}
+    assert _empty_reason(wide, H, 0.0) == "limits"
+
+
 def test_two_cylinder_mode_halves_designer_force():
     """With 2 cylinders sharing the load, the Designer peak-force metric is halved
     (per cylinder) and a banner states the count."""

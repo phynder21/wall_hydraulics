@@ -5,9 +5,11 @@ the cylinder's length window AND needs the least force, then reports the largest
 wall mass that cylinder can raise. Same precomputed table + optimizer as the
 other views; some cylinders simply won't fit any geometry, which is flagged.
 """
+import numpy as np
 import streamlit as st
 
-from optimize import optimize_actuator
+from optimize import optimize_actuator, MIN_MOMENT_ARM
+from lookup_build import geometry_metrics
 import lookup
 import report
 from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
@@ -46,6 +48,19 @@ _HELP = {
     "ret": "Pin-to-pin length with the rod all the way in.",
     "stroke": "Rod travel. Extended length = closed length + stroke.",
 }
+
+
+def _empty_reason(bounds, height, clearance):
+    """Why did the (over-center-pruned) table find NO layout at all? Sample the a/b/d/f
+    box directly and check: returns 'over_center' if every layout that clears the roof
+    and container height is over-center (a singularity — the cylinder line crosses the
+    hinge and the force diverges), else 'limits' (roof / ranges / container too tight)."""
+    axes = [np.linspace(bounds[v][0], bounds[v][1], 6) for v in ("a", "b", "d", "f")]
+    A, B, D, F = (g.ravel() for g in np.meshgrid(*axes, indexing="ij"))
+    m = geometry_metrics(A, B, D, F, np.linspace(0.0, np.pi / 2, 120))
+    fits = (B <= height) & (F <= height) & (m["max_ceiling"] <= height - clearance)
+    over = m["moment_arm"] < MIN_MOMENT_ARM          # over-center / near-singular
+    return "over_center" if (fits.any() and bool(over[fits].all())) else "limits"
 
 
 def render_reverse():
@@ -179,23 +194,58 @@ def render_reverse():
     n = res["peak_force"].size
 
     if n == 0:
+        # Buildable layouts ignoring the cylinder LENGTH window (still not over-center,
+        # under the roof, within the container and your a/b/d/f limits).
         allrows = lookup.search(table, height, x_cg, z_cg, stroke_max=1e9,
                                 roof_clearance=clearance, bounds=bounds, limit=1000000)
         st.error("### No geometry fits this cylinder")
         if allrows["peak_force"].size:
+            # Layouts exist — only the cylinder's length window doesn't overlap them.
             lo = float(allrows["L_min"].min())
             hi = float(allrows["L_max"].max())
+            _longer = hi > L_ext                    # they need a longer cylinder than yours
+            _fix = ("a **longer** cylinder — raise the **stroke** and/or **closed "
+                    "length**" if _longer else
+                    "a **shorter** cylinder — lower the **closed length** and/or the "
+                    "**stroke**")
             st.markdown(
-                f"No layout keeps the cylinder length inside your window "
-                f"**{L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u}** the whole "
-                f"way up. Feasible layouts here need lengths somewhere in "
-                f"**{lo * len_fac:.2f}–{hi * len_fac:.2f} {len_u}**. Try a longer "
-                f"**stroke**, a different **closed length**, a bigger container, or "
-                f"loosen the geometry limits.")
+                f"Buildable layouts exist here, but none keep the cylinder length inside "
+                f"your **{L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u}** window the "
+                f"whole way up — they need lengths in "
+                f"**{lo * len_fac:.2f}–{hi * len_fac:.2f} {len_u}**. To reach them, use "
+                f"{_fix} until your window overlaps that range, or **loosen the a/b/d/f "
+                f"limits** / pick a **bigger container** so a layout with a length in your "
+                f"current window exists.")
         else:
-            st.markdown("Even ignoring the cylinder, no layout satisfies the "
-                        "container + geometry limits. Loosen the geometry ranges "
-                        "or the roof clearance.")
+            # Nothing buildable even before the cylinder. The table drops over-center
+            # layouts, so an empty result can mean the whole region is over-center — check
+            # the geometry directly to tell that (a singularity) from a roof/limits block.
+            if _empty_reason(bounds, height, clearance) == "over_center":
+                st.markdown(
+                    "**Every layout in your limits is over-center.** Somewhere in the "
+                    "0–90° swing the cylinder's line of action crosses the hinge, so "
+                    "`sin(β − φ)` flips sign and the required force **diverges** — a "
+                    "singularity, so the layout can't be built. Over-center comes from "
+                    "*where the cylinder pushes*, so change that geometry — for example:\n\n"
+                    "- Move the **base a** further from the hinge, or **raise the base "
+                    "height f**, so the cylinder line stays on one side of the hinge.\n"
+                    "- **Increase the bracket offset d** (or lower the attachment **b**) "
+                    "so the push angle stays open across the whole swing.\n"
+                    "- Move the **center of gravity** — a smaller **x_cg** (cg nearer the "
+                    "hinge) or a larger **z_cg** (further off the wall).\n"
+                    "- **Widen the a / b / d / f ranges** in *Restrict the output geometry* "
+                    "so a non-over-center layout is reachable.")
+            else:
+                st.markdown(
+                    "No layout fits the **container + geometry limits**, even before the "
+                    "cylinder — the roof or the ranges are too tight. Try:\n\n"
+                    f"- **Lower the roof clearance** (now "
+                    f"{clearance * len_fac:.2f} {len_u}) so the attachment clears the "
+                    "ceiling.\n"
+                    "- **Widen the a / b / d / f ranges** in *Restrict the output "
+                    "geometry*.\n"
+                    "- Pick a **taller container** (High-Cube) so **b** and **f** can go "
+                    "higher.")
         return
 
     # --- Best geometry + the headline numbers ---
