@@ -173,7 +173,7 @@ cylinder, and it finds the best geometry and the **biggest wall it can raise**.
 3. Enter the cylinder's **length** — closed (retracted) length + stroke (in / mm).
    It shows the extended length. This is a **hard constraint** — the geometry's
    cylinder length must stay inside [closed, extended] the whole way up.
-   - **Use the full stroke (no sensor)** — an optional toggle that tightens the fit
+   - **Use the full stroke** — an optional toggle that tightens the fit
      into an exact match: the geometry uses the cylinder's *whole* travel, so fully
      extended = door flat (0°) and fully retracted = door up (90°). The cylinder
      bottoms out on its own hardstops exactly as the door reaches each end, so **no

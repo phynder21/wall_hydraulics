@@ -163,7 +163,7 @@ def render_reverse():
     tab_cyl.caption(f"Extended length **{L_ext * len_fac:.2f} {len_u}** "
                     f"(length ratio {L_ext / L_ret:.2f}).")
     full_stroke = tab_cyl.toggle(
-        "Use the full stroke (no sensor)", key="rv_full_stroke", value=False,
+        "Use the full stroke", key="rv_full_stroke", value=False,
         help="Size the geometry so the cylinder's own hardstops ARE the door's two end "
              "positions: fully extended = door flat/down (0°), fully retracted = door up "
              "(90°). The swing then uses the whole stroke, so no travel sensor is needed "
