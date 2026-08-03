@@ -12,6 +12,7 @@ import lookup
 import report
 from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
                     _diagram_figure, _force_length_figures, _sb_linked, _sb_range)
+from display_units import Units
 from sensitivity_panel import (render_sensitivity_panel, render_interaction_map,
                                selected_metric)
 from pdf_export import render_pdf_export
@@ -28,13 +29,13 @@ _CYL = {
         "ret":    ("Closed length — retracted (in)", 4.0, 140.0, 28.0, 0.25, "%.2f", 0.0254),
         "stroke": ("Stroke — rod travel (in)", 2.0, 120.0, 20.0, 0.25, "%.2f", 0.0254),
     },
-    "Metric": {
-        "bore":   ("Bore diameter (mm)", 20.0, 200.0, 63.0, 1.0, "%.0f", 1.0),
-        "rod":    ("Rod diameter (mm)", 10.0, 190.0, 36.0, 1.0, "%.0f", 1.0),
+    "Metric": {   # all lengths in METRES (not mm), to match the rest of the app
+        "bore":   ("Bore diameter (m)", 0.02, 0.2, 0.063, 0.001, "%.3f", 1000.0),
+        "rod":    ("Rod diameter (m)", 0.01, 0.19, 0.036, 0.001, "%.3f", 1000.0),
         "press":  ("Max pressure (bar)", 50.0, 350.0, 160.0, 5.0, "%.0f", 1.0),
         "frated": ("Rated push force (kN)", 1.0, 300.0, 50.0, 1.0, "%.1f", 1000.0),
-        "ret":    ("Closed length — retracted (mm)", 100.0, 3500.0, 700.0, 5.0, "%.1f", 0.001),
-        "stroke": ("Stroke — rod travel (mm)", 50.0, 3000.0, 500.0, 5.0, "%.1f", 0.001),
+        "ret":    ("Closed length — retracted (m)", 0.1, 3.5, 0.7, 0.01, "%.2f", 1.0),
+        "stroke": ("Stroke — rod travel (m)", 0.05, 3.0, 0.5, 0.01, "%.2f", 1.0),
     },
 }
 _HELP = {
@@ -60,7 +61,9 @@ def render_reverse():
     # --- Units switch — at the TOP of the sidebar (above the tabs) so it's visible from
     # both the Cylinder and Wall tabs; converts stored cylinder values on flip. ---
     st.sidebar.markdown("<u>Units</u>", unsafe_allow_html=True)
-    units = st.sidebar.radio("Units", ["Metric", "Imperial"], key="rv_units",
+    # UNIVERSAL units: shares the "units" key with the Designer and Browse, so the
+    # Metric/Imperial choice follows you across every view.
+    units = st.sidebar.radio("Units", ["Metric", "Imperial"], key="units",
                              horizontal=True, label_visibility="collapsed")
     cfg = _CYL[units]
     prev = st.session_state.get("rv_units_prev")
@@ -73,20 +76,17 @@ def render_reverse():
                 st.session_state[skey] = float(
                     min(max(st.session_state[skey] * old_m / new_m, lo), hi))
     st.session_state["rv_units_prev"] = units
-    len_fac, len_u = (39.37008, "in") if units == "Imperial" else (1000.0, "mm")
     fine = st.sidebar.toggle(
         "Fine precision", key="rv_fine",
         help="Finer steps and decimals in the cylinder AND wall inputs, so you can type "
              "exact sizes like a 20.25 in closed length instead of being rounded to 20.")
-    # The wall geometry uses METRES / inches — the same length unit as the Designer and
-    # Browse — so the Wall tab converts with the toggle but doesn't switch to the
-    # cylinder's mm. (The cylinder inputs stay in mm/in, as datasheets quote them.)
-    # Step/format track Fine.
-    wall_fac, wall_u = (39.3700787, "in") if units == "Imperial" else (1.0, "m")
-    if units == "Imperial":
-        geo_step, geo_fmt = (0.05, "%.2f") if fine else (0.5, "%.1f")
-    else:  # metres
-        geo_step, geo_fmt = (0.01, "%.3f") if fine else (0.05, "%.2f")
+    # ONE length unit for the whole view (metres / inches, like the Designer and Browse)
+    # — no mm anywhere. len_fac converts the base metres to the display unit; wall_fac is
+    # the same (kept as a name for the wall-geometry call sites).
+    _u = Units(units, fine)
+    len_fac, len_u = _u.U, _u.ULABEL
+    wall_fac, wall_u = _u.U, _u.ULABEL
+    geo_step, geo_fmt = _u.LEN_STEP, _u.LEN_FMT
 
     # Sidebar tabs (like the Designer): the Cylinder you enter, and the Wall it lifts.
     tab_cyl, tab_wall = st.sidebar.tabs(["Cylinder", "Wall"])
@@ -128,7 +128,7 @@ def render_reverse():
     _, L_ret = _cyl("ret", tab_cyl)
     _, stroke_m = _cyl("stroke", tab_cyl)
     L_ext = L_ret + stroke_m
-    tab_cyl.caption(f"Extended length **{L_ext * len_fac:.0f} {len_u}** "
+    tab_cyl.caption(f"Extended length **{L_ext * len_fac:.2f} {len_u}** "
                     f"(length ratio {L_ext / L_ret:.2f}).")
 
     # --- Wall / problem (Wall tab; the container and geometry are metric) ---
@@ -187,9 +187,9 @@ def render_reverse():
             hi = float(allrows["L_max"].max())
             st.markdown(
                 f"No layout keeps the cylinder length inside your window "
-                f"**{L_ret * len_fac:.1f}–{L_ext * len_fac:.1f} {len_u}** the whole "
+                f"**{L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u}** the whole "
                 f"way up. Feasible layouts here need lengths somewhere in "
-                f"**{lo * len_fac:.1f}–{hi * len_fac:.1f} {len_u}**. Try a longer "
+                f"**{lo * len_fac:.2f}–{hi * len_fac:.2f} {len_u}**. Try a longer "
                 f"**stroke**, a different **closed length**, a bigger container, or "
                 f"loosen the geometry limits.")
         else:
@@ -219,8 +219,8 @@ def render_reverse():
     st.markdown(
         f"**Best database match:** a = {a * wall_fac:.2f}  b = {b * wall_fac:.2f}  "
         f"d = {d * wall_fac:.2f}  f = {f * wall_fac:.2f} {wall_u} — its cylinder runs "
-        f"**{res['L_min'][0] * len_fac:.1f}–{res['L_max'][0] * len_fac:.1f} {len_u}** "
-        f"(inside your {L_ret * len_fac:.1f}–{L_ext * len_fac:.1f} {len_u} window). "
+        f"**{res['L_min'][0] * len_fac:.2f}–{res['L_max'][0] * len_fac:.2f} {len_u}** "
+        f"(inside your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} window). "
         f"{n if n < 5 else 'Many'} layouts fit; this is the lowest-force one **in the "
         f"precomputed grid** — a fast, only *near*-optimal pick. For the true best for "
         f"your exact inputs, run **Get the exact optimum** below.")
@@ -266,7 +266,7 @@ def render_reverse():
         ("Cylinder push force", report.dual_force(force_n)),
         ("Safety factor", f"{safety:g}x"),
         ("Cylinder length window",
-         f"{L_ret * len_fac:.1f}-{L_ext * len_fac:.1f} {len_u}"),
+         f"{L_ret * len_fac:.2f}-{L_ext * len_fac:.2f} {len_u}"),
     ]
     if mode == "Bore + pressure":
         _cyl_rows[1:1] = [                          # right after the push force

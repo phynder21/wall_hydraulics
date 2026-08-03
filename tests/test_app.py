@@ -281,7 +281,7 @@ def test_reverse_units_convert_wall_and_have_fine_precision():
     at = AppTest.from_file(APP_PATH, default_timeout=120)
     at.run()
     at.session_state["view"] = "Size from a cylinder"
-    at.session_state["rv_units"] = "Imperial"
+    at.session_state["units"] = "Imperial"
     at.run()
     assert not at.exception, at.exception
     assert any(t.key == "rv_fine" for t in at.toggle), "Reverse needs a fine-precision toggle"
@@ -295,7 +295,7 @@ def test_reverse_units_convert_wall_and_have_fine_precision():
     # closed length keeps a decimal when typed (2-decimal format, not %.0f)
     at.number_input(key="rv_ret__n").set_value(20.25).run()
     assert at.number_input(key="rv_ret__n").value == pytest.approx(20.25)
-    at.session_state["rv_units"] = "Metric"
+    at.session_state["units"] = "Metric"
     at.run()
     assert not at.exception, at.exception
     xcg = _label("x_cg")
@@ -418,8 +418,8 @@ def test_reverse_view_renders():
     at.run()
     assert not at.exception, at.exception
     # an impossible cylinder window must not error (shows the no-fit path)
-    at.session_state["rv_ret"] = 100.0
-    at.session_state["rv_stroke"] = 50.0
+    at.session_state["rv_ret"] = 0.1
+    at.session_state["rv_stroke"] = 0.05
     at.run()
     assert not at.exception, at.exception
 
@@ -724,9 +724,9 @@ def test_reverse_shows_sensitivity_and_pdf_when_feasible():
     at = AppTest.from_file(APP_PATH, default_timeout=180)
     at.run()
     at.session_state["view"] = "Size from a cylinder"
-    at.session_state["rv_units"] = "Metric"
-    at.session_state["rv_ret"] = 400.0        # wide window (0.4-2.9 m) so a
-    at.session_state["rv_stroke"] = 2500.0     #   geometry in the tiny grid fits
+    at.session_state["units"] = "Metric"
+    at.session_state["rv_ret"] = 0.4        # wide window (0.4-2.9 m) so a
+    at.session_state["rv_stroke"] = 2.5     #   geometry in the tiny grid fits
     at.run()
     assert not at.exception, at.exception
     md = _all_markdown(at)
