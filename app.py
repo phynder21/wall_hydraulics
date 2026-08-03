@@ -17,7 +17,7 @@ from browse import render_browse
 from reverse import render_reverse
 from lookup import force_bar, force_bar_html, BAR_NEUTRAL, cylinder_banner
 from sensitivity_panel import (render_sensitivity_panel, render_interaction_map,
-                               build_interaction_matrix, selected_metric)
+                               build_interaction_matrix)
 from display_units import Units
 from cylinder_panel import render_cylinder_sizing
 from pdf_export import render_pdf_export
@@ -93,8 +93,7 @@ mass is at least your actual wall + load** (with your safety factor).
 
 Under each result, the **sensitivity** charts show which dimension moves the result
 most and which way to nudge it, and the **interaction map** shows two dimensions at
-once. A **Color by** toggle switches all of them between **peak force** and **cylinder
-length**, so you can chase whichever you're minimizing. Everywhere: **blue = lower
+once. Both color by **peak force**. Everywhere: **blue = lower
 (better)**, **red = higher (worse)**, **black = a geometry that breaks a rule** (e.g.
 over-center, over the stroke ratio, or — in Reverse — outside your cylinder's length).
 """
@@ -1069,10 +1068,8 @@ render_pdf_export(
     fig_interactions=lambda: build_interaction_matrix(
         a, b, d, f, st.session_state["x_cg"], st.session_state["z_cg"], USER_BOUNDS,
         stroke_max=stroke_ratio, roof_clearance=roof_clearance,
-        width=container_width, height=container_height, template=PLOT_TEMPLATE,
-        metric=selected_metric()),
-    pressure_bar=pressure_bar, series=series, stroke_tol=STROKE_TOL,
-    sens_metric=selected_metric())
+        width=container_width, height=container_height, template=PLOT_TEMPLATE),
+    pressure_bar=pressure_bar, series=series, stroke_tol=STROKE_TOL)
 
 # --- Animation driver -------------------------------------------------------
 # Streamlit has no background loop, so we animate by advancing the sweep angle

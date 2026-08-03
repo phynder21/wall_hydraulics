@@ -15,8 +15,7 @@ import report
 from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
                     _diagram_figure, _force_length_figures, _sb_linked, _sb_range)
 from display_units import Units
-from sensitivity_panel import (render_sensitivity_panel, render_interaction_map,
-                               selected_metric)
+from sensitivity_panel import render_sensitivity_panel, render_interaction_map
 from pdf_export import render_pdf_export
 
 # Per-unit spec for each cylinder input: (label, lo, hi, default, step, fmt,
@@ -364,7 +363,6 @@ def render_reverse():
         extra_notes=["Safe max wall mass = cylinder push force / safety factor / "
                      "peak force per kg, summed over all cylinders. The absolute "
                      "max drops the safety factor — use the safe figure."],
-        sens_metric=selected_metric(),
         title="Container Wall Actuator - Cylinder Sizing Report",
         file_name="wall_actuator_sizing.pdf",
         caption="A one-page sheet: the cylinder you entered and the geometry it "

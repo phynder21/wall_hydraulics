@@ -95,7 +95,7 @@ def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_ma
                       roof_clearance, a, b, d, f, peak_pc, L_min, L_max,
                       fig_geom, fig_force, fig_len,
                       fig_sens_bar=None, fig_sens_strip=None, fig_interactions=None,
-                      pressure_bar=None, series=None, sens_metric="force",
+                      pressure_bar=None, series=None,
                       mass_label="Wall + load mass", extra_setup_rows=(),
                       extra_notes=(), stroke_tol=1e-9, show_stroke_ratio_max=True,
                       title="Container Wall Actuator - Design Report",
@@ -201,9 +201,8 @@ def render_pdf_export(*, key, size_key, n_cyl, x_cg, z_cg, mass, stroke_ratio_ma
                          clen.to_image(format="png", width=lw, height=lh, scale=2)),
                     ]
                     # Sensitivity charts (tornado + within-range strip), if provided.
-                    # `sens_metric` names what they color by (peak force / cylinder
-                    # length), kept in step with the on-screen 'Color by' toggle.
-                    mword = "cylinder length" if sens_metric == "length" else "peak force"
+                    # They color by peak force.
+                    mword = "peak force"
                     if fig_sens_bar is not None and fig_sens_strip is not None:
                         sb, sw, sh = _prep_panel(fig_sens_bar, height=300)
                         ss, ssw, ssh = _prep_panel(fig_sens_strip, height=360)

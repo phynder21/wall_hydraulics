@@ -13,8 +13,7 @@ import streamlit as st
 from wall import (compute_F_piston, compute_cylinder_length,
                   compute_geometry, STROKE_RATIO_MAX)
 from optimize import CONTAINER_PRESETS, optimize_actuator
-from sensitivity_panel import (render_sensitivity_panel, render_interaction_map,
-                               selected_metric)
+from sensitivity_panel import render_sensitivity_panel, render_interaction_map
 from cylinder_panel import render_cylinder_sizing
 from display_units import Units
 from pdf_export import render_pdf_export
@@ -413,7 +412,7 @@ def render_browse():
         L_min=float(res["L_min"][rank]), L_max=float(res["L_max"][rank]),
         fig_geom=diag, fig_force=ff, fig_len=fl,
         fig_sens_bar=sens_bar, fig_sens_strip=sens_strip,
-        pressure_bar=pressure_bar, series=series, sens_metric=selected_metric(),
+        pressure_bar=pressure_bar, series=series,
         file_name="wall_actuator_config.pdf")
 
     # --- Refine to the exact continuous optimum for this query ---
