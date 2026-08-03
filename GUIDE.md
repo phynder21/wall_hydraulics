@@ -181,15 +181,16 @@ cylinder, and it finds the best geometry and the **biggest wall it can raise**.
      stroke (it may stop short of an end).
 4. Set the **wall** (container, cg) and, optionally, **restrict the output
    geometry** (a, b, d, f ranges) — e.g. keep the base height f low.
-5. It runs the **optimizer** for your exact inputs (a few seconds; the result is
-   cached until you change something) and shows the **best geometry** up top with
-   two mass numbers — the **safe max wall mass** (your force ÷ safety factor) and the
-   **absolute cylinder max** (flat-out, no margin). Use the safe one. Because many
-   different mountings often tie for best, a **picker** right below lets you switch to
-   an equally-good **alternative** layout that may be easier to build. Under that are
-   the setup diagram + plots, the **sensitivity** panel, and an **Export design
-   (PDF)** — a one-page sizing sheet. (There's no bore-sizing card here: the cylinder
-   is the input, not an output.)
+5. It instantly shows the **best geometry** up top — a fast, near-optimal pick from a
+   precomputed grid, so it updates live as you tweak — with two mass numbers: the
+   **safe max wall mass** (your force ÷ safety factor) and the **absolute cylinder
+   max** (flat-out, no margin). Use the safe one. Right below is a **Get the exact
+   optimum** button: press it to run the real optimizer for your exact inputs (~15 s,
+   usually a little better). Because many different mountings often tie for best, that
+   also gives a **picker** to switch between the optimum and equally-good **alternative**
+   layouts that may be easier to build. Under that are the setup diagram + plots, the
+   **sensitivity** panel, and an **Export design (PDF)** — a one-page sizing sheet.
+   (There's no bore-sizing card here: the cylinder is the input, not an output.)
 
 Because the length window and geometry limits are hard constraints, **some
 cylinders simply won't fit any wall** — when that happens it says so and tells

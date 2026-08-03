@@ -50,19 +50,6 @@ _HELP = {
 }
 
 
-@st.cache_data(show_spinner="Finding the best geometry for your cylinder…")
-def _solve_exact(width, height, x_cg, z_cg, L_ret, L_ext, exact, clearance, bounds_items):
-    """The continuous OPTIMUM geometry for this exact cylinder. Cached, so it re-runs
-    only when an input changes (a few seconds) then stays instant. `alternatives` in the
-    result are diverse near-optimal layouts that raise the same load with the same force
-    — different mountings you can build instead. 8 restarts keeps it snappy for the
-    auto-run while still landing on the optimum (the near-optimal family is flat)."""
-    return optimize_actuator(
-        width, height, x_cg, z_cg, length_window=(L_ret, L_ext), length_exact=exact,
-        stroke_ratio_max=3.0, roof_clearance=clearance, var_bounds=dict(bounds_items),
-        n_starts=8, alt_rel_tol=0.15)
-
-
 def _length_span(a, b, d, f):
     """(L_min, L_max, stroke_ratio) of the cylinder length over the 0-90 deg swing."""
     L = compute_cylinder_length(np.linspace(0.0, np.pi / 2, 200), a=a, b=b, d=d, f=f)
@@ -107,6 +94,9 @@ def render_reverse():
     # raise n_cyl times the wall mass (and the per-cylinder peak force is 1/n_cyl).
     n_cyl = int(st.session_state.get("n_cyl", 1))
     st.info(lookup.cylinder_banner(n_cyl))
+
+    with st.spinner("Building the configuration database (first time only, ~15 s)…"):
+        table = _get_table(TABLE_RES)
 
     # --- Units switch — at the TOP of the sidebar (above the tabs) so it's visible from
     # both the Cylinder and Wall tabs; converts stored cylinder values on flip. ---
@@ -230,18 +220,18 @@ def render_reverse():
             bounds[v] = _sb_range(label, f"rv_rng_{v}", lo, hi, disp_factor=wall_fac,
                                   disp_step=geo_step, fmt=geo_fmt)
 
-    # --- Solve: the continuous OPTIMUM for this exact cylinder. Auto-run and cached,
-    # so it recomputes only when an input changes (a few seconds) then stays instant. ---
-    bounds_items = tuple(sorted((k, (float(v[0]), float(v[1]))) for k, v in bounds.items()))
-    opt = _solve_exact(width, height, x_cg, z_cg, L_ret, L_ext, full_stroke,
-                       clearance, bounds_items)
+    # --- Solve: geometries whose cylinder length fits (or, full-stroke, MATCHES)
+    # [L_ret, L_ext] in the precomputed grid — INSTANT and near-optimal, so the headline
+    # updates live as you tweak. The optimizer button below refines to the exact best. ---
+    exact_tol = max(0.04 * stroke_m, 0.025)
+    res = lookup.cylinder_matches(table, height, x_cg, z_cg, L_ret, L_ext,
+                                  bounds=bounds, roof_clearance=clearance, limit=5,
+                                  exact=full_stroke, exact_tol=exact_tol)
+    n = res["peak_force"].size
 
-    if not opt["feasible"]:
-        # Diagnose the no-fit from the grid (only built now — the feasible path uses the
-        # optimizer, not the table). Buildable layouts ignoring the cylinder LENGTH window
-        # (still not over-center, under the roof, within the container and a/b/d/f limits).
-        with st.spinner("Building the configuration database (first time only, ~15 s)…"):
-            table = _get_table(TABLE_RES)
+    if n == 0:
+        # Buildable layouts ignoring the cylinder LENGTH window (still not over-center,
+        # under the roof, within the container and your a/b/d/f limits).
         allrows = lookup.search(table, height, x_cg, z_cg, stroke_max=1e9,
                                 roof_clearance=clearance, bounds=bounds, limit=1000000)
         st.error("### No geometry fits this cylinder")
@@ -301,36 +291,66 @@ def render_reverse():
                     "higher.")
         return
 
-    # --- The optimum + its equally-good alternatives ---
-    alts = opt.get("alternatives") or [opt]
-    # Reset the alternative choice whenever any input changes, so a fresh solve shows its
-    # own optimum (index 0), not a stale index into a different family.
+    # --- Headline geometry: the INSTANT grid pick by default, or (after you press the
+    # optimizer button) the exact optimum / an alternative you pick from the dropdown. ---
+    grid = {"a": float(res["a"][0]), "b": float(res["b"][0]), "d": float(res["d"][0]),
+            "f": float(res["f"][0]), "peak_force": float(res["peak_force"][0])}
+
+    # A stored optimizer result only applies to the inputs it was run on — drop it (and
+    # reset the picker) whenever any input changes, so stale geometry never lingers.
+    bounds_items = tuple(sorted((k, (float(v[0]), float(v[1]))) for k, v in bounds.items()))
     _sig = (round(L_ret, 5), round(L_ext, 5), round(x_cg, 5), round(z_cg, 5),
             round(clearance, 5), bool(full_stroke), bounds_items, size, n_cyl)
-    if st.session_state.get("rv_geo_sig") != _sig:
-        st.session_state["rv_geo_sig"] = _sig
+    if st.session_state.get("rv_opt_sig") != _sig:
+        st.session_state["rv_opt_sig"] = _sig
+        st.session_state.pop("rv_opt", None)
         st.session_state["rv_geo_choice"] = 0
 
-    # Headline numbers render at the TOP (reserved here); the picker sits right below.
-    head = st.container()
+    head = st.container()      # headline metrics render here (top); the controls sit below
 
-    def _glabel(i):
-        g = alts[i]
-        tag = "optimum" if i == 0 else f"+{max(g.get('penalty_pct', 0.0), 0.0):.1f}% force"
-        return (f"a={g['a'] * wall_fac:.2f}  b={g['b'] * wall_fac:.2f}  "
-                f"d={g['d'] * wall_fac:.2f}  f={g['f'] * wall_fac:.2f} {wall_u}  ·  "
-                f"{g['peak_force'] / n_cyl:.1f} N/kg  ({tag})")
+    # The exact-optimum control, right under the headline and clearly explained.
+    st.markdown(
+        "The numbers above are a **fast, near-optimal** pick from a precomputed grid, so "
+        "they update instantly as you tweak inputs. For the **true best for your exact "
+        "inputs** — usually a little better, plus a set of equally-good alternative "
+        "layouts to choose from — run the optimizer (~15 s):")
+    if st.button("Get the exact optimum — run optimizer"):
+        with st.spinner("Optimizing…"):
+            _opt = optimize_actuator(
+                width, height, x_cg, z_cg, length_window=(L_ret, L_ext),
+                length_exact=full_stroke, stroke_ratio_max=3.0,
+                roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=0.15)
+        st.session_state["rv_opt"] = _opt if _opt["feasible"] else None
+        st.session_state["rv_geo_choice"] = 0
+        if not _opt["feasible"]:
+            st.warning("The optimizer couldn't improve on the grid pick for these inputs "
+                       "— keeping the grid geometry above.")
 
-    if len(alts) > 1:
+    opt = st.session_state.get("rv_opt")
+    if opt:                                # the optimizer has run for these exact inputs
+        alts = opt.get("alternatives") or [opt]
+        if st.session_state.get("rv_geo_choice", 0) >= len(alts):
+            st.session_state["rv_geo_choice"] = 0
+
+        def _glabel(i):
+            g = alts[i]
+            tag = ("optimum" if i == 0
+                   else f"+{max(g.get('penalty_pct', 0.0), 0.0):.1f}% force")
+            return (f"a={g['a'] * wall_fac:.2f}  b={g['b'] * wall_fac:.2f}  "
+                    f"d={g['d'] * wall_fac:.2f}  f={g['f'] * wall_fac:.2f} {wall_u}  ·  "
+                    f"{g['peak_force'] / n_cyl:.1f} N/kg  ({tag})")
+
         choice = st.selectbox(
-            "Geometry — the optimum, plus equally-good alternatives you can build instead",
+            "Exact optimum + equally-good alternatives (pick the easiest to build)",
             range(len(alts)), format_func=_glabel, key="rv_geo_choice",
             help="Every option raises the same load with the same force and uses the same "
-                 "stroke — they are just different mounting layouts. Pick whichever is "
-                 "easiest to build (mounting, clearance, base height).")
+                 "stroke — they are just different mounting layouts.")
+        sel = alts[choice]
+        source = "optimum" if choice == 0 else "alt"
     else:
-        choice = 0
-    sel = alts[choice]
+        sel = grid
+        source = "grid"
+
     a, b, d, f = float(sel["a"]), float(sel["b"]), float(sel["d"]), float(sel["f"])
     peak = float(sel["peak_force"])
     L_min, L_max, stroke_ratio = _length_span(a, b, d, f)
@@ -364,15 +384,16 @@ def render_reverse():
     _win = (f"filling your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} stroke "
             f"(full stroke)" if full_stroke else
             f"inside your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} window")
-    _which = ("the **exact optimum** for your inputs" if choice == 0 else
-              f"an **alternative** (+{max(sel.get('penalty_pct', 0.0), 0.0):.1f}% force "
-              "vs the optimum)")
+    _which = {
+        "grid": "a fast **near-optimal** pick from the grid (run the optimizer for the "
+                "true best)",
+        "optimum": "the **exact optimum** for your inputs",
+        "alt": f"an **alternative** (+{max(sel.get('penalty_pct', 0.0), 0.0):.1f}% force "
+               "vs the optimum) — same stroke, different mounting",
+    }[source]
     st.markdown(
-        f"This is {_which} — a = {a * wall_fac:.3f}  b = {b * wall_fac:.3f}  "
-        f"d = {d * wall_fac:.3f}  f = {f * wall_fac:.3f} {wall_u}, its cylinder running "
-        f"**{L_min * len_fac:.2f}–{L_max * len_fac:.2f} {len_u}** ({_win})."
-        + ("  Many mounting layouts tie for best — use the picker above to choose the "
-           "easiest to build." if len(alts) > 1 else ""))
+        f"Showing {_which}: its cylinder runs "
+        f"**{L_min * len_fac:.2f}–{L_max * len_fac:.2f} {len_u}** ({_win}).")
     if full_stroke:
         st.info(
             "**Full stroke.** The geometry uses the cylinder's whole travel while staying "

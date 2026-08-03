@@ -417,9 +417,10 @@ def test_advance_angle_stays_in_range(start, direction):
 
 
 def test_reverse_view_renders():
-    """The 'Size from a cylinder' view auto-runs the optimizer and renders the best
-    geometry up top with an alternatives picker — for a feasible cylinder AND an
-    impossible one (which shows the no-fit message). 'no sensor' wording is gone."""
+    """The 'Size from a cylinder' view shows the INSTANT grid pick up top with an
+    optimizer button (no picker until it's run); clicking the button reveals the exact
+    optimum + an alternatives picker. Also: 'no sensor' wording is gone, and an
+    impossible cylinder shows the no-fit message."""
     import browse
     browse.TABLE_RES = 12   # tiny grid so the build is fast in tests
     at = AppTest.from_file(APP_PATH, default_timeout=180)
@@ -427,16 +428,21 @@ def test_reverse_view_renders():
     at.session_state["view"] = "Size from a cylinder"
     at.run()
     assert not at.exception, at.exception
-    # the optimizer result is the headline: a/b/d/f + mass metrics at the top...
+    # instant grid headline: a/b/d/f + mass metrics on top...
     labels = [m.label or "" for m in at.metric]
     assert any("base along floor" in l for l in labels), "geometry metrics on top"
     assert any("Safe max wall mass" in l for l in labels), "mass metric on top"
-    # ...with an alternatives picker, and NO 'get the exact optimum' button
-    assert any(s.key == "rv_geo_choice" for s in at.selectbox), "alternatives picker"
-    assert not any("exact optimum" in (b.label or "").lower() for b in at.button)
-    blurb = " ".join(str(m.value) for m in at.markdown) \
-        + " ".join(str(i.value) for i in at.info)
+    # ...an optimizer button (explained), and NO picker until it's run
+    optbtns = [b for b in at.button if "exact optimum" in (b.label or "").lower()]
+    assert optbtns, "the exact-optimum button should be present near the top"
+    assert not any(s.key == "rv_geo_choice" for s in at.selectbox), "no picker before run"
+    blurb = " ".join(str(m.value) for m in at.markdown)
     assert "sensor" not in blurb.lower(), "the 'no sensor' wording must be gone"
+    assert "near-optimal" in blurb.lower(), "the button must explain the grid pick"
+    # running the optimizer reveals the picker + exact-optimum result
+    optbtns[0].click().run()
+    assert not at.exception, at.exception
+    assert any(s.key == "rv_geo_choice" for s in at.selectbox), "picker appears after run"
     # the full-stroke toggle renders and explains
     at.session_state["rv_full_stroke"] = True
     at.run()
@@ -492,16 +498,17 @@ def test_reverse_nearest_window_exact_prefers_fullest_stroke():
     assert _nearest_window(L_min, L_max, 0.70, 1.20, exact=True)[:2] == (0.72, 1.18)
 
 
-def test_reverse_solve_exact_returns_optimum_and_alternatives():
-    """The Reverse view now drives off the cached optimizer: it returns a feasible
-    optimum plus diverse near-optimal alternatives, and _length_span agrees with the
+def test_reverse_optimizer_alternatives_and_length_span():
+    """The Reverse optimizer button feeds the picker: the optimizer returns a feasible
+    optimum plus near-optimal alternatives, and reverse._length_span agrees with the
     optimizer's own L_max for the winning geometry."""
-    from reverse import _solve_exact, _length_span
-    from optimize import CONTAINER_PRESETS
+    from reverse import _length_span
+    from optimize import optimize_actuator, CONTAINER_PRESETS
     W, H = CONTAINER_PRESETS["standard"]
-    bnds = (("a", (0.05, 1.176)), ("b", (0.05, 2.393)),
-            ("d", (0.0, 1.176)), ("f", (0.0, 2.393)))
-    opt = _solve_exact(W, H, 1.2, 0.55, 0.70, 1.20, False, 0.0, bnds)
+    bnds = {"a": (0.05, 1.176), "b": (0.05, 2.393), "d": (0.0, 1.176), "f": (0.0, 2.393)}
+    opt = optimize_actuator(W, H, 1.2, 0.55, length_window=(0.70, 1.20),
+                            stroke_ratio_max=3.0, roof_clearance=0.0, var_bounds=bnds,
+                            alt_rel_tol=0.15)
     assert opt["feasible"]
     assert len(opt.get("alternatives", [])) >= 1, "should offer alternatives to pick from"
     lo, hi, ratio = _length_span(opt["a"], opt["b"], opt["d"], opt["f"])
