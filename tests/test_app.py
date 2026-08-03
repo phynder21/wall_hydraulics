@@ -300,6 +300,15 @@ def test_reverse_units_convert_wall_and_have_fine_precision():
     assert not at.exception, at.exception
     xcg = _label("x_cg")
     assert "(m)" in xcg and "(mm)" not in xcg, f"x_cg should be metres in Metric: {xcg}"
+    # With Fine on, the linked SLIDER must show the same decimals as its number box
+    # (else typing 1.125 displays 1.13 on the slider). Both should be %.3f.
+    at.session_state["rv_fine"] = True
+    at.run()
+    sfmt = {s.key: getattr(s, "format", None) for s in at.slider}
+    assert sfmt.get("rv_xcg__s") == "%.3f", f"slider should match the box format: {sfmt.get('rv_xcg__s')}"
+    at.number_input(key="rv_xcg__n").set_value(1.125).run()
+    assert at.number_input(key="rv_xcg__n").value == pytest.approx(1.125)
+    assert at.slider(key="rv_xcg__s").value == pytest.approx(1.125), "slider holds the exact value"
 
 
 def test_browse_imperial_units():

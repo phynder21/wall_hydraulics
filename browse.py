@@ -146,7 +146,7 @@ def _sb_linked(label, key, lo, hi, default, step, fmt="%.2f", help=None, ctx=Non
     ctx.markdown(f"**{label}**")
     c1, c2 = ctx.columns([2, 1])
     c1.slider(label, lo * Uf, hi * Uf, step=dstep, key=skey, on_change=_from_s,
-              help=help, label_visibility="collapsed")
+              help=help, format=fmt, label_visibility="collapsed")
     c2.number_input(label, min_value=lo * Uf, max_value=hi * Uf, step=dstep, key=nkey,
                     on_change=_from_n, format=fmt, label_visibility="collapsed")
     return st.session_state[key]
@@ -179,7 +179,7 @@ def _sb_range(label, key, full_lo, full_hi, step=0.01, fmt="%.2f", disp_factor=1
 
     st.markdown(f"**{label}**")
     st.slider(label, full_lo * Uf, full_hi * Uf, step=dstep, key=rk, on_change=_from_r,
-              label_visibility="collapsed")
+              format=fmt, label_visibility="collapsed")
     cc1, cc2 = st.columns(2)
     cc1.number_input("min", min_value=full_lo * Uf, max_value=full_hi * Uf, step=dstep,
                      key=lok, on_change=_from_box, format=fmt)

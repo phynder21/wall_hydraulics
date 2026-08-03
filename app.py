@@ -335,7 +335,7 @@ def linked_input(label, key, lo, hi, step=0.01, fmt="%.2f", help=None,
     else:
         c1, c2 = st.columns([2, 1])
     c1.slider(label, lo * U, hi * U, step=dstep, key=skey,
-              on_change=_from_sld, help=help)
+              on_change=_from_sld, help=help, format=fmt)
     c2.number_input(label, min_value=lo * U, max_value=hi * U, step=dstep,
                     key=nkey, on_change=_from_num, format=fmt,
                     label_visibility="collapsed")
@@ -400,7 +400,7 @@ def range_input(label, key, full_lo, full_hi, disp_factor=1.0, disp_step=0.01,
 
     st.markdown(f"**{label}**")
     st.slider(f"{key} range", full_lo * U, full_hi * U, step=disp_step, key=rk,
-              on_change=_from_slider, label_visibility="collapsed")
+              on_change=_from_slider, format=fmt, label_visibility="collapsed")
     c1, c2 = st.columns(2)
     c1.number_input("min", min_value=full_lo * U, max_value=full_hi * U,
                     step=disp_step, format=fmt, key=lo_w, on_change=_from_boxes)
