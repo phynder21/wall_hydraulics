@@ -273,8 +273,9 @@ def test_browse_view_renders():
 
 
 def test_reverse_units_convert_wall_and_have_fine_precision():
-    """Reverse: switching Imperial/Metric converts the Wall-tab inputs too (in <-> mm),
-    and a Fine-precision toggle exists (so a typed 20.25 isn't rounded to 20)."""
+    """Reverse: the Wall geometry uses metres/inches (like the Designer, NOT the
+    cylinder's mm) and converts with the toggle; a Fine-precision toggle exists; and the
+    closed-length input keeps typed decimals (%.2f, not rounded to a whole number)."""
     import browse
     browse.TABLE_RES = 12
     at = AppTest.from_file(APP_PATH, default_timeout=120)
@@ -284,13 +285,21 @@ def test_reverse_units_convert_wall_and_have_fine_precision():
     at.run()
     assert not at.exception, at.exception
     assert any(t.key == "rv_fine" for t in at.toggle), "Reverse needs a fine-precision toggle"
-    imp = " ".join((w.label or "") for w in list(at.slider) + list(at.number_input))
-    assert "x_cg" in imp and "(in)" in imp, f"wall inputs should be inches in Imperial: {imp}"
+
+    def _label(substr):
+        for w in list(at.slider) + list(at.number_input):
+            if substr in (w.label or ""):
+                return w.label
+        return ""
+    assert "(in)" in _label("x_cg"), f"x_cg should be inches in Imperial: {_label('x_cg')}"
+    # closed length keeps a decimal when typed (2-decimal format, not %.0f)
+    at.number_input(key="rv_ret__n").set_value(20.25).run()
+    assert at.number_input(key="rv_ret__n").value == pytest.approx(20.25)
     at.session_state["rv_units"] = "Metric"
     at.run()
     assert not at.exception, at.exception
-    met = " ".join((w.label or "") for w in list(at.slider) + list(at.number_input))
-    assert "(mm)" in met and "(in)" not in met, f"wall inputs should be mm in Metric: {met}"
+    xcg = _label("x_cg")
+    assert "(m)" in xcg and "(mm)" not in xcg, f"x_cg should be metres in Metric: {xcg}"
 
 
 def test_browse_imperial_units():
