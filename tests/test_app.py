@@ -417,7 +417,15 @@ def test_reverse_view_renders():
     at.session_state["view"] = "Size from a cylinder"
     at.run()
     assert not at.exception, at.exception
-    # an impossible cylinder window must not error (shows the no-fit path)
+    # the full-stroke toggle (use the whole stroke, no sensor) renders and explains
+    at.session_state["rv_full_stroke"] = True
+    at.run()
+    assert not at.exception, at.exception
+    assert any(t.key == "rv_full_stroke" for t in at.toggle), "full-stroke toggle exists"
+    blurb = " ".join(str(m.value) for m in at.markdown) \
+        + " ".join(str(i.value) for i in at.info)
+    assert "full stroke" in blurb.lower() and "no sensor" in blurb.lower()
+    # an impossible cylinder window must not error (shows the no-fit path), exact on
     at.session_state["rv_ret"] = 0.1
     at.session_state["rv_stroke"] = 0.05
     at.run()
@@ -450,6 +458,38 @@ def test_reverse_nearest_window_is_one_real_layout():
     lo, hi, longer = _nearest_window(L_min, L_max, 0.70, 1.20)
     assert (lo, hi) == (0.75, 1.35), "must report one layout's own band, not an envelope"
     assert longer is True, "the miss (1.35 > 1.20) is at the extended end"
+
+
+def test_reverse_nearest_window_exact_prefers_fullest_stroke():
+    """In full-stroke mode the closest layout is the one nearest to MATCHING the window
+    (both ends), not just any layout that fits inside it."""
+    import numpy as np
+    from reverse import _nearest_window
+    # both fit inside 0.70-1.20; A barely uses the stroke, B nearly fills it.
+    L_min = np.array([0.90, 0.72])
+    L_max = np.array([1.00, 1.18])
+    assert _nearest_window(L_min, L_max, 0.70, 1.20, exact=False)[:2] == (0.90, 1.00)
+    assert _nearest_window(L_min, L_max, 0.70, 1.20, exact=True)[:2] == (0.72, 1.18)
+
+
+def test_full_stroke_grid_and_optimizer_match_both_ends():
+    """The full-stroke toggle makes the geometry USE the whole stroke, not just fit
+    inside it: the grid match lands within tol of both ends and the continuous optimizer
+    hits L_min=retracted (90 deg, door up) and L_max=extended (0 deg, door flat)."""
+    import lookup, lookup_build
+    from optimize import optimize_actuator, CONTAINER_PRESETS
+    table = lookup_build.build_table(res=40)[0]
+    W, H = CONTAINER_PRESETS["standard"]
+    L_ret, L_ext = 0.70, 1.20
+    grid = lookup.cylinder_matches(table, H, 1.2, 0.55, L_ret, L_ext, roof_clearance=0.0,
+                                   limit=1, exact=True, exact_tol=0.02)
+    assert grid["peak_force"].size, "an exact-match grid layout should exist here"
+    assert abs(float(grid["L_min"][0]) - L_ret) <= 0.02
+    assert abs(float(grid["L_max"][0]) - L_ext) <= 0.02
+    opt = optimize_actuator(W, H, 1.2, 0.55, length_window=(L_ret, L_ext),
+                            length_exact=True, stroke_ratio_max=3.0, roof_clearance=0.0)
+    assert opt["feasible"]
+    assert abs(opt["L_min"] - L_ret) <= 5e-3 and abs(opt["L_max"] - L_ext) <= 5e-3
 
 
 def test_two_cylinder_mode_halves_designer_force():

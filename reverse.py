@@ -49,16 +49,22 @@ _HELP = {
 }
 
 
-def _nearest_window(L_min, L_max, L_ret, L_ext):
+def _nearest_window(L_min, L_max, L_ret, L_ext, exact=False):
     """Of the buildable layouts (arrays of each layout's shortest/longest cylinder length
-    over the swing), pick the ONE closest to fitting the cylinder's [L_ret, L_ext] window
-    and return (lo, hi, longer): its own length band and whether the miss is at the
-    extended end (needs a longer cylinder) rather than the closed end. Reporting
-    min(L_min)/max(L_max) instead would mix DIFFERENT layouts and overstate the need."""
-    short_low = np.maximum(0.0, L_ret - L_min)    # cylinder too long when closed
-    short_high = np.maximum(0.0, L_max - L_ext)    # can't reach far enough up
-    i = int(np.argmin(short_low + short_high))
-    return float(L_min[i]), float(L_max[i]), bool(short_high[i] >= short_low[i])
+    over the swing), pick the ONE closest to the cylinder's [L_ret, L_ext] window and
+    return (lo, hi, longer): its own length band and whether the miss is at the extended
+    end (needs a longer cylinder) rather than the closed end. With `exact` the band must
+    MATCH the window (both ends counted either way); otherwise it only has to fit inside
+    it (only the overhang counts). Reporting min(L_min)/max(L_max) instead would mix
+    DIFFERENT layouts and overstate the need."""
+    if exact:                                     # full-stroke: distance from each end
+        miss_low = np.abs(L_min - L_ret)
+        miss_high = np.abs(L_max - L_ext)
+    else:                                         # fit-inside: only the overhang misses
+        miss_low = np.maximum(0.0, L_ret - L_min)     # cylinder too long when closed
+        miss_high = np.maximum(0.0, L_max - L_ext)    # can't reach far enough up
+    i = int(np.argmin(miss_low + miss_high))
+    return float(L_min[i]), float(L_max[i]), bool(miss_high[i] >= miss_low[i])
 
 
 def _empty_reason(bounds, height, clearance):
@@ -156,6 +162,13 @@ def render_reverse():
     L_ext = L_ret + stroke_m
     tab_cyl.caption(f"Extended length **{L_ext * len_fac:.2f} {len_u}** "
                     f"(length ratio {L_ext / L_ret:.2f}).")
+    full_stroke = tab_cyl.toggle(
+        "Use the full stroke (no sensor)", key="rv_full_stroke", value=False,
+        help="Size the geometry so the cylinder's own hardstops ARE the door's two end "
+             "positions: fully extended = door flat/down (0°), fully retracted = door up "
+             "(90°). The swing then uses the whole stroke, so no travel sensor is needed "
+             "— the cylinder bottoms out exactly as the door reaches each end. Off: the "
+             "geometry only has to FIT inside the stroke (it may stop short of an end).")
 
     # --- Wall / problem (Wall tab; the container and geometry are metric) ---
     size = tab_wall.selectbox("Container", list(CONTAINERS), key="rv_size")
@@ -199,9 +212,12 @@ def render_reverse():
             bounds[v] = _sb_range(label, f"rv_rng_{v}", lo, hi, disp_factor=wall_fac,
                                   disp_step=geo_step, fmt=geo_fmt)
 
-    # --- Solve: geometries whose cylinder length fits [L_ret, L_ext] ---
+    # --- Solve: geometries whose cylinder length fits (or, full-stroke, MATCHES)
+    # [L_ret, L_ext]. The grid band is a fast preview; the optimizer below is exact. ---
+    exact_tol = max(0.04 * stroke_m, 0.025)
     res = lookup.cylinder_matches(table, height, x_cg, z_cg, L_ret, L_ext,
-                                  bounds=bounds, roof_clearance=clearance, limit=5)
+                                  bounds=bounds, roof_clearance=clearance, limit=5,
+                                  exact=full_stroke, exact_tol=exact_tol)
     n = res["peak_force"].size
 
     if n == 0:
@@ -211,26 +227,29 @@ def render_reverse():
                                 roof_clearance=clearance, bounds=bounds, limit=1000000)
         st.error("### No geometry fits this cylinder")
         if allrows["peak_force"].size:
-            # Layouts exist — only the cylinder's length window doesn't contain them.
-            # Report the CLOSEST single layout: the one whose length band pokes least
-            # outside your window. (min(L_min) and max(L_max) would come from DIFFERENT
-            # layouts, overstating what any one real layout needs — e.g. the widest
-            # layout's reach, which is the opposite of the shortest one you'd want.)
+            # Layouts exist — only the cylinder's length window doesn't contain (or, in
+            # full-stroke mode, match) them. Report the CLOSEST single layout: the one
+            # whose length band is nearest your window. (min(L_min) and max(L_max) would
+            # come from DIFFERENT layouts, overstating what any one real layout needs.)
             lo, hi, _longer = _nearest_window(
-                allrows["L_min"], allrows["L_max"], L_ret, L_ext)
+                allrows["L_min"], allrows["L_max"], L_ret, L_ext, exact=full_stroke)
             _fix = ("a **longer** cylinder — raise the **stroke** and/or **closed "
                     "length**" if _longer else
                     "a **shorter** cylinder — lower the **closed length** and/or the "
                     "**stroke**")
+            _need = ("none use the whole stroke — the closest swings"
+                     if full_stroke else
+                     "none keep the cylinder length inside your window the whole way up. "
+                     "The closest one swings")
             st.markdown(
-                f"Buildable layouts exist here, but none keep the cylinder length inside "
-                f"your **{L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u}** window the "
-                f"whole way up. The closest one swings between "
-                f"**{lo * len_fac:.2f}** and **{hi * len_fac:.2f} {len_u}** — just outside "
-                f"your window. To catch it, use {_fix} until your window covers that band, "
-                f"or **loosen the a/b/d/f limits** (widening a range pulls in "
-                f"shorter-swing layouts) / pick a **bigger container** so a layout that "
-                f"fits your current window exists.")
+                f"Buildable layouts exist here, but {_need} between "
+                f"**{lo * len_fac:.2f}** and **{hi * len_fac:.2f} {len_u}** vs your "
+                f"**{L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u}** window. To catch "
+                f"it, use {_fix} until your window "
+                f"{'matches' if full_stroke else 'covers'} that band, or **loosen the "
+                f"a/b/d/f limits** (widening a range pulls in more layouts) / pick a "
+                f"**bigger container** so a layout that "
+                f"{'matches' if full_stroke else 'fits'} your current window exists.")
         else:
             # Nothing buildable even before the cylinder. The table drops over-center
             # layouts, so an empty result can mean the whole region is over-center — check
@@ -293,14 +312,26 @@ def render_reverse():
               help="If every cylinder ran flat-out at 100% with no margin. The safe "
                    "figure is this ÷ your safety factor — use the safe one.")
     m3.metric("Peak force per cylinder", f"{peak / n_cyl:.2f} N/kg")
+    _win = (f"matching your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} window "
+            f"(full stroke)" if full_stroke else
+            f"inside your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} window")
     st.markdown(
         f"**Best database match:** a = {a * wall_fac:.2f}  b = {b * wall_fac:.2f}  "
         f"d = {d * wall_fac:.2f}  f = {f * wall_fac:.2f} {wall_u} — its cylinder runs "
         f"**{res['L_min'][0] * len_fac:.2f}–{res['L_max'][0] * len_fac:.2f} {len_u}** "
-        f"(inside your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} window). "
+        f"({_win}). "
         f"{n if n < 5 else 'Many'} layouts fit; this is the lowest-force one **in the "
         f"precomputed grid** — a fast, only *near*-optimal pick. For the true best for "
         f"your exact inputs, run **Get the exact optimum** below.")
+    if full_stroke:
+        st.info(
+            "**Full stroke — no sensor needed.** This geometry uses the cylinder's whole "
+            "travel: at **0° (door flat)** the cylinder is fully **extended** "
+            f"(**{L_ext * len_fac:.2f} {len_u}**), at **90° (door up)** fully "
+            f"**retracted** (**{L_ret * len_fac:.2f} {len_u}**). The cylinder bottoms out "
+            "against its own hardstops exactly as the door reaches each end, so the "
+            "natural stops set both positions. (The grid pick lands close; **Get the "
+            "exact optimum** below hits both ends exactly.)")
 
     # --- Plots: setup diagram large on top, curves small below ---
     stroke_ratio = float(res["stroke_ratio"][0])
@@ -351,6 +382,14 @@ def render_reverse():
             ("Rod diameter", report.dual_bore(rod_mm)),
             ("Design pressure", report.dual_pressure(press_bar)),
         ]
+    _notes = ["Safe max wall mass = cylinder push force / safety factor / "
+              "peak force per kg, summed over all cylinders. The absolute "
+              "max drops the safety factor — use the safe figure."]
+    if full_stroke:
+        _notes.append(
+            "Full stroke: the geometry uses the cylinder's whole travel — retracted at "
+            "90 deg (door up), extended at 0 deg (door flat) — so its hardstops set both "
+            "end positions and no travel sensor is needed.")
     render_pdf_export(
         key="reverse", size_key=size, n_cyl=n_cyl, x_cg=x_cg, z_cg=z_cg,
         mass=max_mass, stroke_ratio_max=stroke_ratio, roof_clearance=clearance,
@@ -360,9 +399,7 @@ def render_reverse():
         fig_sens_bar=sens_bar, fig_sens_strip=sens_strip,
         mass_label="Safe max wall mass", show_stroke_ratio_max=False,
         extra_setup_rows=_cyl_rows,
-        extra_notes=["Safe max wall mass = cylinder push force / safety factor / "
-                     "peak force per kg, summed over all cylinders. The absolute "
-                     "max drops the safety factor — use the safe figure."],
+        extra_notes=_notes,
         title="Container Wall Actuator - Cylinder Sizing Report",
         file_name="wall_actuator_sizing.pdf",
         caption="A one-page sheet: the cylinder you entered and the geometry it "
@@ -379,9 +416,15 @@ def render_reverse():
     if st.button("Get the exact optimum — run optimizer"):
         with st.spinner("Optimizing…"):
             opt = optimize_actuator(width, height, x_cg, z_cg,
-                                    length_window=(L_ret, L_ext), stroke_ratio_max=3.0,
+                                    length_window=(L_ret, L_ext),
+                                    length_exact=full_stroke, stroke_ratio_max=3.0,
                                     roof_clearance=clearance, var_bounds=bounds)
         if opt["feasible"]:
+            _fs = (f" It uses the **full stroke**: retracted "
+                   f"**{opt['L_min'] * len_fac:.2f} {len_u}** at 90° (door up), extended "
+                   f"**{opt['L_max'] * len_fac:.2f} {len_u}** at 0° (door flat) — both "
+                   f"ends on the cylinder's hardstops, no sensor needed."
+                   if full_stroke else "")
             st.success(
                 f"**Best-possible geometry for your parameters:** peak "
                 f"**{opt['peak_force'] / n_cyl:.2f} N/kg** per cylinder → safe max "
@@ -389,7 +432,9 @@ def render_reverse():
                 f"a = {opt['a'] * wall_fac:.2f} b = {opt['b'] * wall_fac:.2f} "
                 f"d = {opt['d'] * wall_fac:.2f} f = {opt['f'] * wall_fac:.2f} {wall_u} — "
                 f"the exact optimum for your exact cylinder (the database match above gave "
-                f"{max_mass:,.0f} kg).")
+                f"{max_mass:,.0f} kg).{_fs}")
         else:
-            st.warning("The optimizer couldn't find a geometry that fits the exact "
-                       "cylinder window here — the grid match above is the closest.")
+            _why = ("match the full stroke exactly" if full_stroke else
+                    "fits the exact cylinder window")
+            st.warning(f"The optimizer couldn't find a geometry that {_why} here — the "
+                       "grid match above is the closest.")

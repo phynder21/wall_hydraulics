@@ -173,6 +173,12 @@ cylinder, and it finds the best geometry and the **biggest wall it can raise**.
 3. Enter the cylinder's **length** — closed (retracted) length + stroke (in / mm).
    It shows the extended length. This is a **hard constraint** — the geometry's
    cylinder length must stay inside [closed, extended] the whole way up.
+   - **Use the full stroke (no sensor)** — an optional toggle that tightens the fit
+     into an exact match: the geometry uses the cylinder's *whole* travel, so fully
+     extended = door flat (0°) and fully retracted = door up (90°). The cylinder
+     bottoms out on its own hardstops exactly as the door reaches each end, so **no
+     travel sensor is needed** — the natural stops set both positions. Off, the
+     geometry only has to fit inside the stroke (it may stop short of an end).
 4. Set the **wall** (container, cg) and, optionally, **restrict the output
    geometry** (a, b, d, f ranges) — e.g. keep the base height f low.
 5. It reports two mass numbers — the **safe max wall mass** (your force ÷ safety

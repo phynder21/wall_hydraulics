@@ -76,6 +76,7 @@ ROOF_CLEARANCE = 0.0
 # margins (for a ceiling design margin, use ROOF_CLEARANCE above).
 STROKE_TOL = 1.0e-3          # stroke ratio (dimensionless)
 LENGTH_TOL = 1.0e-3          # cylinder length window (meters)
+LENGTH_EXACT_TOL = 5.0e-3    # full-stroke match: how close each end must land (meters)
 FORCE_CAP_TOL = 1.0e-2       # peak force cap (N/kg)
 CEILING_TOL = 1.0e-3         # meters
 MOMENT_ARM_TOL = 1.0e-3      # moment-arm clearance (dimensionless)
@@ -271,7 +272,7 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
                       roof_clearance=ROOF_CLEARANCE, locked=None, var_bounds=None,
                       n_theta=200, m_cg=1.0, seed=0, maxiter=300,
                       n_starts=N_STARTS, popsize=None, alt_rel_tol=ALT_REL_TOL,
-                      fast=False, length_window=None,
+                      fast=False, length_window=None, length_exact=False,
                       objective_mode="force", force_cap=None):
     """Search for the (a, b, d, f) minimizing peak piston force over 0-90 deg.
 
@@ -296,6 +297,11 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     the smallest actuator that still holds peak force at or below `force_cap`
     (in N per kg; None = no cap). Use "length" when force is cheap and physical
     size is what you pay for (e.g. an electromechanical actuator).
+
+    `length_window` (retracted, extended) constrains the cylinder length over the
+    swing: by default it must FIT inside the window; with `length_exact` it must
+    MATCH the full stroke (L_min = retracted, L_max = extended), landing the
+    cylinder's hardstops on the door's up/down positions so no sensor is needed.
 
     Returns a dict with the geometry and resulting metrics, plus `alternatives`:
     a geometrically DIVERSE set of near-optimal designs (each within
@@ -348,8 +354,12 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
             penalty += OVERCENTER_PENALTY * (MIN_MOMENT_ARM - moment_arm) ** 2
         if length_window is not None:   # cylinder length must fit [retracted, extended]
             L_ret, L_ext = length_window
-            penalty += LENGTH_PENALTY * max(L_ret - L_min, 0.0) ** 2
-            penalty += LENGTH_PENALTY * max(L_max - L_ext, 0.0) ** 2
+            if length_exact:            # ...or MATCH the full stroke exactly (both ends)
+                penalty += LENGTH_PENALTY * (L_min - L_ret) ** 2
+                penalty += LENGTH_PENALTY * (L_max - L_ext) ** 2
+            else:
+                penalty += LENGTH_PENALTY * max(L_ret - L_min, 0.0) ** 2
+                penalty += LENGTH_PENALTY * max(L_max - L_ext, 0.0) ** 2
         if objective_mode == "length":
             # Minimize the extended length; keep peak force at or below the cap.
             if force_cap is not None:
@@ -367,8 +377,12 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
                     and moment_arm >= MIN_MOMENT_ARM - MOMENT_ARM_TOL)
         if length_window is not None:
             L_ret, L_ext = length_window
-            feasible = (feasible and L_min >= L_ret - LENGTH_TOL
-                        and L_max <= L_ext + LENGTH_TOL)
+            if length_exact:            # both ends must land on the cylinder's hardstops
+                feasible = (feasible and abs(L_min - L_ret) <= LENGTH_EXACT_TOL
+                            and abs(L_max - L_ext) <= LENGTH_EXACT_TOL)
+            else:
+                feasible = (feasible and L_min >= L_ret - LENGTH_TOL
+                            and L_max <= L_ext + LENGTH_TOL)
         if objective_mode == "length" and force_cap is not None:
             feasible = feasible and peak <= force_cap + FORCE_CAP_TOL
         return {"geom": geom, "peak": peak, "ratio": ratio, "L_min": L_min,

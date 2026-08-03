@@ -215,12 +215,24 @@ def search(table, container_height, x_cg, z_cg, stroke_max=1.8, roof_clearance=0
 
 
 def cylinder_matches(table, container_height, x_cg, z_cg, retracted, extended,
-                     bounds=None, roof_clearance=0.0, limit=200):
+                     bounds=None, roof_clearance=0.0, limit=200, exact=False,
+                     exact_tol=0.02):
     """Geometries whose cylinder length stays ENTIRELY within a real cylinder's
     [retracted, extended] window (meters), ranked by peak force (lowest first).
     Max wall mass a row supports = cylinder force / peak_force. The stroke-ratio
-    limit is left open here -- the absolute length window is the real constraint."""
-    filters = {"L_min": (retracted, None), "L_max": (None, extended)}
+    limit is left open here -- the absolute length window is the real constraint.
+
+    With `exact`, require the geometry's OWN swing to match the cylinder's full
+    stroke instead of merely fitting inside it: L_min within `exact_tol` of the
+    retracted length AND L_max within `exact_tol` of the extended length. Since a
+    feasible swing is monotonic (longest at 0 deg / door flat, shortest at 90 deg /
+    door up), this lands the cylinder's two hardstops exactly on the door's down and
+    up positions -- so no travel sensor is needed."""
+    if exact:
+        filters = {"L_min": (retracted - exact_tol, retracted + exact_tol),
+                   "L_max": (extended - exact_tol, extended + exact_tol)}
+    else:
+        filters = {"L_min": (retracted, None), "L_max": (None, extended)}
     return search(table, container_height, x_cg, z_cg, stroke_max=1e9,
                   roof_clearance=roof_clearance, bounds=bounds, filters=filters,
                   sort_by="peak_force", ascending=True, limit=limit)
