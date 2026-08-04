@@ -326,18 +326,24 @@ def render_reverse():
                 length_exact=full_stroke, stroke_ratio_max=3.0,
                 roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=0.005,
                 n_alternatives=20, alt_min_sep=0.02, alt_target_sep=0.08)
-            # Always include the true smallest-f+d layout at the optimal force, even if
-            # it's close to a diverse alternative (the picker sorts by f+d, so it lands
-            # on top). Solved directly, so the diversity dedup can never drop it.
             if _opt["feasible"]:
+                opt_force = _opt["peak_force"]
+                # Keep ONLY optimal-force layouts — drop anything the optimizer padded
+                # in above the minimum force.
+                keep = [g for g in (_opt.get("alternatives") or [])
+                        if g["peak_force"] <= opt_force + 0.02]
+                # Always include the true smallest-f+d layout, solved AT the exact
+                # minimum force (never dropped by the diversity dedup).
                 lean = minimize_mount_material(
                     width, height, x_cg, z_cg, length_window=(L_ret, L_ext),
                     length_exact=full_stroke, roof_clearance=clearance,
-                    var_bounds=bounds, force_cap=_opt["peak_force"] * 1.001,
-                    stroke_ratio_max=3.0)
-                if lean is not None:
-                    _opt = dict(_opt)
-                    _opt["alternatives"] = [lean] + list(_opt.get("alternatives") or [])
+                    var_bounds=bounds, force_cap=opt_force, stroke_ratio_max=3.0)
+                if lean is not None and lean["peak_force"] <= opt_force + 0.02:
+                    lean["penalty_pct"] = max((lean["peak_force"] / opt_force - 1) * 100.0,
+                                              0.0)
+                    keep = [lean] + keep
+                _opt = dict(_opt)
+                _opt["alternatives"] = keep
         st.session_state["rv_opt"] = _opt if _opt["feasible"] else None
         st.session_state["rv_choice_idx"] = 0
         if not _opt["feasible"]:
@@ -349,15 +355,17 @@ def render_reverse():
         raw = opt.get("alternatives") or [opt]
         # Order by MOUNT MATERIAL, least first: f + d = base-post height + bracket offset,
         # a proxy for how much steel each layout's mounts need. Every option is at the
-        # same (optimal) force, so no force/tag is shown per option.
+        # optimal force (shown as +0.0%).
         alts = sorted(raw, key=lambda g: g["f"] + g["d"])
 
         def _glabel(i):
             g = alts[i]
             fd = (g["f"] + g["d"]) * wall_fac
+            pen = max(g.get("penalty_pct", 0.0), 0.0)
             return (f"f+d = {fd:.2f} {wall_u}  ·  a={g['a'] * wall_fac:.2f} "
                     f"b={g['b'] * wall_fac:.2f} d={g['d'] * wall_fac:.2f} "
-                    f"f={g['f'] * wall_fac:.2f} {wall_u}")
+                    f"f={g['f'] * wall_fac:.2f} {wall_u}  ·  "
+                    f"{g['peak_force'] / n_cyl:.1f} N/kg (+{pen:.1f}%)")
 
         # Drive the picker by OUR OWN integer index (rv_choice_idx), not the widget's
         # stored value: pass it as index= and read the selectbox's return. This avoids

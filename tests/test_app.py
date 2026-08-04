@@ -446,14 +446,14 @@ def test_reverse_view_renders():
     assert not at.exception, at.exception
     picker = _picker(at)
     assert picker, "picker appears after run"
-    # options are labeled with f+d and ordered by it (least mount material first);
-    # all are at the optimal force, so no per-option force/tag is shown
+    # options ordered by f+d (least mount material first); each shows its force and,
+    # since all are at the optimal force, +0.0%
     import re
     opts = list(picker[0].options)
     fds = [float(re.search(r"f\+d = ([\d.]+)", o).group(1)) for o in opts]
     assert fds == sorted(fds), f"options must be ordered by f+d ascending: {fds}"
-    assert not any("least force" in o or "% force" in o for o in opts), \
-        "no force tag on options (all at the optimal force)"
+    assert all("N/kg" in o for o in opts), "each option shows its force"
+    assert all("(+0.0%)" in o for o in opts), "all options at the optimal force (+0.0%)"
     # changing a NON-geometry input (bore) after optimizing must not error and must
     # keep the stored result (regression: the picker index used to be read from the
     # widget and compared as the wrong type).
