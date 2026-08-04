@@ -8,7 +8,7 @@ other views; some cylinders simply won't fit any geometry, which is flagged.
 import numpy as np
 import streamlit as st
 
-from optimize import optimize_actuator, MIN_MOMENT_ARM
+from optimize import optimize_actuator, minimize_mount_material, MIN_MOMENT_ARM
 from lookup_build import geometry_metrics
 from wall import compute_cylinder_length
 import lookup
@@ -309,7 +309,8 @@ def render_reverse():
 
     # The exact-optimum control, right under the headline.
     st.caption("The numbers above are a fast, near-optimal grid pick. For the exact best "
-               "+ alternatives, run the optimizer (~20 s).")
+               "+ alternatives (including the leanest-mount layout), run the optimizer "
+               "(~30 s).")
     if st.button("Get the exact optimum — run optimizer",
                  help="The headline updates instantly from a precomputed grid, so it's "
                       "only near-optimal. This runs the real optimizer for your exact "
@@ -325,6 +326,18 @@ def render_reverse():
                 length_exact=full_stroke, stroke_ratio_max=3.0,
                 roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=0.005,
                 n_alternatives=20, alt_min_sep=0.02, alt_target_sep=0.08)
+            # Always include the true smallest-f+d layout at the optimal force, even if
+            # it's close to a diverse alternative (the picker sorts by f+d, so it lands
+            # on top). Solved directly, so the diversity dedup can never drop it.
+            if _opt["feasible"]:
+                lean = minimize_mount_material(
+                    width, height, x_cg, z_cg, length_window=(L_ret, L_ext),
+                    length_exact=full_stroke, roof_clearance=clearance,
+                    var_bounds=bounds, force_cap=_opt["peak_force"] * 1.001,
+                    stroke_ratio_max=3.0)
+                if lean is not None:
+                    _opt = dict(_opt)
+                    _opt["alternatives"] = [lean] + list(_opt.get("alternatives") or [])
         st.session_state["rv_opt"] = _opt if _opt["feasible"] else None
         st.session_state["rv_choice_idx"] = 0
         if not _opt["feasible"]:

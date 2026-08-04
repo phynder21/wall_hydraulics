@@ -305,3 +305,27 @@ def test_fast_length_matches_slow_optimizer():
         assert fast["feasible"] and slow["feasible"]
         assert fast["peak_force"] <= cap + 0.5
         assert abs(fast["L_max"] - slow["L_max"]) / slow["L_max"] < 0.01
+
+
+def test_minimize_mount_material_is_leanest_at_optimal_force():
+    """minimize_mount_material returns a feasible, buildable geometry whose f + d is at
+    least as small as the diverse alternatives' leanest, at (essentially) the optimal
+    force, and it respects the given var_bounds."""
+    from optimize import minimize_mount_material
+    W, H = CONTAINER_PRESETS["standard"]
+    bnds = {"a": (0.13, 1.010), "b": (0.13, 1.650), "d": (0.13, 1.000), "f": (0.13, 0.790)}
+    lw = (0.667, 1.073)
+    o = optimize_actuator(W, H, 1.20, 0.55, length_window=lw, length_exact=True,
+                          stroke_ratio_max=3.0, roof_clearance=0.0, var_bounds=bnds,
+                          alt_rel_tol=0.005, n_alternatives=20, alt_min_sep=0.02,
+                          alt_target_sep=0.08)
+    lean = minimize_mount_material(W, H, 1.20, 0.55, length_window=lw, length_exact=True,
+                                   roof_clearance=0.0, var_bounds=bnds,
+                                   force_cap=o["peak_force"] * 1.001, stroke_ratio_max=3.0)
+    assert lean is not None
+    diverse_leanest = min(g["f"] + g["d"] for g in o["alternatives"])
+    assert lean["f"] + lean["d"] <= diverse_leanest + 1e-6, \
+        "must be at least as lean as the diverse alternatives"
+    assert lean["peak_force"] <= o["peak_force"] * 1.01, "at essentially the optimal force"
+    assert bnds["f"][0] - 1e-6 <= lean["f"] <= bnds["f"][1] + 1e-6, "respects f bounds"
+    assert bnds["d"][0] - 1e-6 <= lean["d"] <= bnds["d"][1] + 1e-6, "respects d bounds"

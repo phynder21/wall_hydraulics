@@ -573,6 +573,79 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
     }
 
 
+def minimize_mount_material(container_width, container_height, x_cg, z_cg,
+                            length_window, length_exact=False,
+                            roof_clearance=ROOF_CLEARANCE, var_bounds=None,
+                            force_cap=None, stroke_ratio_max=STROKE_RATIO_MAX,
+                            n_theta=200, seed=0, n_starts=8):
+    """The single geometry that minimizes MOUNT MATERIAL, f + d (base-post height +
+    bracket offset), subject to the same buildability rules as optimize_actuator: the
+    cylinder length fits (or, with `length_exact`, matches) `length_window`, no
+    over-center, under the roof, within the stroke-ratio cap and `var_bounds`; and, if
+    `force_cap` is given, peak force <= force_cap (pass the optimum's force to get the
+    leanest mount AT the minimum force). Returns a dict shaped like an
+    optimize_actuator alternative (a, b, d, f, peak_force, L_max, penalty_pct), or None
+    if nothing feasible is found."""
+    theta = np.linspace(0.0, np.pi / 2, n_theta)
+    L_ret, L_ext = length_window
+    full_bounds = {"a": (0.05, container_width / 2), "b": (0.05, container_height),
+                   "d": (0.00, container_width / 2), "f": (0.00, container_height)}
+    if var_bounds:
+        full_bounds.update({k: tuple(v) for k, v in var_bounds.items()})
+    bounds = [full_bounds[v] for v in VAR_NAMES]
+
+    def metrics(x):
+        return _metrics(tuple(x), theta, x_cg, z_cg, 1.0, container_width,
+                        container_height, roof_clearance)
+
+    def length_penalty(L_min, L_max):
+        if length_exact:
+            return LENGTH_PENALTY * ((L_min - L_ret) ** 2 + (L_max - L_ext) ** 2)
+        return LENGTH_PENALTY * (max(L_ret - L_min, 0.0) ** 2 + max(L_max - L_ext, 0.0) ** 2)
+
+    def objective(x):
+        _, d, f = x[0], x[2], x[3]              # material = f + d
+        peak, ratio, L_min, L_max, ceiling, moment_arm = metrics(x)
+        pen = length_penalty(L_min, L_max)
+        if moment_arm < 0.0:
+            pen += OVERCENTER_HARD
+        if moment_arm < MIN_MOMENT_ARM:
+            pen += OVERCENTER_PENALTY * (MIN_MOMENT_ARM - moment_arm) ** 2
+        if ratio > stroke_ratio_max:
+            pen += STROKE_PENALTY * (ratio - stroke_ratio_max) ** 2
+        if ceiling > 0.0:
+            pen += CEILING_PENALTY * ceiling ** 2
+        if force_cap is not None:
+            pen += FORCE_CAP_PENALTY * max(peak - force_cap, 0.0) ** 2
+        return (f + d) + pen
+
+    best = None
+    for s in range(max(1, n_starts)):
+        r = differential_evolution(objective, bounds, seed=seed + s, maxiter=200,
+                                   tol=1e-9, polish=True)
+        a, b, d, f = r.x
+        peak, ratio, L_min, L_max, ceiling, moment_arm = metrics(r.x)
+        feasible = (moment_arm >= MIN_MOMENT_ARM - MOMENT_ARM_TOL
+                    and ratio <= stroke_ratio_max + STROKE_TOL
+                    and ceiling <= CEILING_TOL)
+        if length_exact:
+            feasible = (feasible and abs(L_min - L_ret) <= LENGTH_EXACT_TOL
+                        and abs(L_max - L_ext) <= LENGTH_EXACT_TOL)
+        else:
+            feasible = (feasible and L_min >= L_ret - LENGTH_TOL
+                        and L_max <= L_ext + LENGTH_TOL)
+        if force_cap is not None:
+            feasible = feasible and peak <= force_cap + FORCE_CAP_TOL
+        if feasible and (best is None or (f + d) < best[0]):
+            best = (f + d, (float(a), float(b), float(d), float(f)), float(peak),
+                    float(L_max))
+    if best is None:
+        return None
+    _, (a, b, d, f), peak, L_max = best
+    return {"a": a, "b": b, "d": d, "f": f, "peak_force": peak, "L_max": L_max,
+            "penalty_pct": 0.0}
+
+
 def _build_parser():
     p = argparse.ArgumentParser(
         description="Optimize container-wall actuator geometry for minimum "
