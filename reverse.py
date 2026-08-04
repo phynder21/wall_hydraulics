@@ -317,11 +317,13 @@ def render_reverse():
                       "alternative layouts to pick from."):
         with st.spinner("Optimizing…"):
             # Ask for a big spread of alternatives (up to 20) so there are many
-            # buildable layouts to pick from — a denser separation than the default.
+            # buildable layouts to pick from — a denser separation than the default. The
+            # tight alt_rel_tol keeps them all at (essentially) the optimal force, so the
+            # picker never pads with higher-force layouts.
             _opt = optimize_actuator(
                 width, height, x_cg, z_cg, length_window=(L_ret, L_ext),
                 length_exact=full_stroke, stroke_ratio_max=3.0,
-                roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=0.15,
+                roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=0.005,
                 n_alternatives=20, alt_min_sep=0.02, alt_target_sep=0.08)
         st.session_state["rv_opt"] = _opt if _opt["feasible"] else None
         st.session_state["rv_choice_idx"] = 0
@@ -332,20 +334,17 @@ def render_reverse():
     opt = st.session_state.get("rv_opt")
     if opt:                                # the optimizer has run for these exact inputs
         raw = opt.get("alternatives") or [opt]
-        best = min(raw, key=lambda g: g["peak_force"])   # the lowest-force design
         # Order by MOUNT MATERIAL, least first: f + d = base-post height + bracket offset,
-        # a proxy for how much steel each layout's mounts need.
+        # a proxy for how much steel each layout's mounts need. Every option is at the
+        # same (optimal) force, so no force/tag is shown per option.
         alts = sorted(raw, key=lambda g: g["f"] + g["d"])
 
         def _glabel(i):
             g = alts[i]
             fd = (g["f"] + g["d"]) * wall_fac
-            tag = ("least force" if g is best
-                   else f"+{max(g.get('penalty_pct', 0.0), 0.0):.1f}% force")
             return (f"f+d = {fd:.2f} {wall_u}  ·  a={g['a'] * wall_fac:.2f} "
                     f"b={g['b'] * wall_fac:.2f} d={g['d'] * wall_fac:.2f} "
-                    f"f={g['f'] * wall_fac:.2f}  ·  {g['peak_force'] / n_cyl:.1f} N/kg  "
-                    f"({tag})")
+                    f"f={g['f'] * wall_fac:.2f} {wall_u}")
 
         # Drive the picker by OUR OWN integer index (rv_choice_idx), not the widget's
         # stored value: pass it as index= and read the selectbox's return. This avoids
@@ -354,16 +353,16 @@ def render_reverse():
         prev = st.session_state.get("rv_choice_idx", 0)
         prev = prev if isinstance(prev, int) and 0 <= prev < len(alts) else 0
         choice = st.selectbox(
-            f"Geometry — {len(alts)} options, ordered by least mount material (f + d) first",
+            f"Geometry — {len(alts)} options, all at the optimal force, ordered by "
+            "least mount material (f + d) first",
             range(len(alts)), index=prev, format_func=_glabel,
-            help="Every option raises the load at (near) the same force and uses the same "
+            help="Every option raises the load at the optimal force and uses the same "
                  "stroke — they are just different mounting layouts. Ordered by **f + d** "
                  "(base-post height + bracket offset), a proxy for how much mount material "
-                 "each needs; the top option needs the least. The label also shows a/b/d/f "
-                 "and the per-cylinder force.")
+                 "each needs; the top option needs the least.")
         st.session_state["rv_choice_idx"] = choice
         sel = alts[choice]
-        source = "optimum" if sel is best else "alt"
+        source = "opt"
     else:
         sel = grid
         source = "grid"
@@ -402,13 +401,9 @@ def render_reverse():
             f"(full stroke)" if full_stroke else
             f"inside your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} window")
     _fd = f"; mount material **f + d = {(f + d) * wall_fac:.2f} {wall_u}**" if source != "grid" else ""
-    _which = {
-        "grid": "a fast **near-optimal** pick from the grid (run the optimizer for the "
-                "true best)",
-        "optimum": "the **lowest-force** option",
-        "alt": f"an **alternative** layout (+{max(sel.get('penalty_pct', 0.0), 0.0):.1f}% "
-               "force vs the lowest) — same stroke, different mounting",
-    }[source]
+    _which = ("a fast **near-optimal** pick from the grid (run the optimizer for the "
+              "true best)" if source == "grid" else
+              "the optimizer result at the **optimal force**")
     st.markdown(
         f"Showing {_which}{_fd}: its cylinder runs "
         f"**{L_min * len_fac:.2f}–{L_max * len_fac:.2f} {len_u}** ({_win}).")
