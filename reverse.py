@@ -306,11 +306,9 @@ def render_reverse():
         st.session_state["rv_choice_idx"] = 0
 
     head = st.container()      # headline metrics render here (top); the controls sit below
+    caption_slot = st.empty()  # filled below once we know grid vs optimizer result
 
     # The exact-optimum control, right under the headline.
-    st.caption("The numbers above are a fast, near-optimal grid pick. For the exact best "
-               "+ alternatives (including the leanest-mount layout), run the optimizer "
-               "(~30 s).")
     if st.button("Get the exact optimum — run optimizer",
                  help="The headline updates instantly from a precomputed grid, so it's "
                       "only near-optimal. This runs the real optimizer for your exact "
@@ -387,6 +385,17 @@ def render_reverse():
     else:
         sel = grid
         source = "grid"
+
+    # Caption reflects what the headline actually shows now (grid pick vs optimizer).
+    if source == "grid":
+        caption_slot.caption(
+            "The numbers above are a fast, near-optimal grid pick. For the exact best "
+            "+ alternatives (including the leanest-mount layout), run the optimizer "
+            "(~30 s).")
+    else:
+        caption_slot.caption(
+            "The numbers above are the exact optimizer result — pick a layout below "
+            "(ordered by least mount material).")
 
     a, b, d, f = float(sel["a"]), float(sel["b"]), float(sel["d"]), float(sel["f"])
     peak = float(sel["peak_force"])
