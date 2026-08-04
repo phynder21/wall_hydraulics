@@ -434,7 +434,7 @@ def test_reverse_view_renders():
     assert any("Safe max wall mass" in l for l in labels), "mass metric on top"
     # ...an optimizer button (explained), and NO picker until it's run
     def _picker(a):
-        return [s for s in a.selectbox if "optimum + alternatives" in (s.label or "")]
+        return [s for s in a.selectbox if "mount material" in (s.label or "")]
     optbtns = [b for b in at.button if "exact optimum" in (b.label or "").lower()]
     assert optbtns, "the exact-optimum button should be present near the top"
     assert not _picker(at), "no picker before the optimizer is run"
@@ -444,7 +444,14 @@ def test_reverse_view_renders():
     # running the optimizer reveals the picker + exact-optimum result
     optbtns[0].click().run()
     assert not at.exception, at.exception
-    assert _picker(at), "picker appears after run"
+    picker = _picker(at)
+    assert picker, "picker appears after run"
+    # options are labeled with f+d and ordered by it (least mount material first)
+    import re
+    opts = list(picker[0].options)
+    fds = [float(re.search(r"f\+d = ([\d.]+)", o).group(1)) for o in opts]
+    assert fds == sorted(fds), f"options must be ordered by f+d ascending: {fds}"
+    assert sum("least force" in o for o in opts) == 1, "exactly one lowest-force option"
     # changing a NON-geometry input (bore) after optimizing must not error and must
     # keep the stored result (regression: the picker index used to be read from the
     # widget and compared as the wrong type).

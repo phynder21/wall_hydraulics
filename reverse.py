@@ -331,15 +331,21 @@ def render_reverse():
 
     opt = st.session_state.get("rv_opt")
     if opt:                                # the optimizer has run for these exact inputs
-        alts = opt.get("alternatives") or [opt]
+        raw = opt.get("alternatives") or [opt]
+        best = min(raw, key=lambda g: g["peak_force"])   # the lowest-force design
+        # Order by MOUNT MATERIAL, least first: f + d = base-post height + bracket offset,
+        # a proxy for how much steel each layout's mounts need.
+        alts = sorted(raw, key=lambda g: g["f"] + g["d"])
 
         def _glabel(i):
             g = alts[i]
-            tag = ("optimum" if i == 0
+            fd = (g["f"] + g["d"]) * wall_fac
+            tag = ("least force" if g is best
                    else f"+{max(g.get('penalty_pct', 0.0), 0.0):.1f}% force")
-            return (f"a={g['a'] * wall_fac:.2f}  b={g['b'] * wall_fac:.2f}  "
-                    f"d={g['d'] * wall_fac:.2f}  f={g['f'] * wall_fac:.2f} {wall_u}  ·  "
-                    f"{g['peak_force'] / n_cyl:.1f} N/kg  ({tag})")
+            return (f"f+d = {fd:.2f} {wall_u}  ·  a={g['a'] * wall_fac:.2f} "
+                    f"b={g['b'] * wall_fac:.2f} d={g['d'] * wall_fac:.2f} "
+                    f"f={g['f'] * wall_fac:.2f}  ·  {g['peak_force'] / n_cyl:.1f} N/kg  "
+                    f"({tag})")
 
         # Drive the picker by OUR OWN integer index (rv_choice_idx), not the widget's
         # stored value: pass it as index= and read the selectbox's return. This avoids
@@ -348,16 +354,16 @@ def render_reverse():
         prev = st.session_state.get("rv_choice_idx", 0)
         prev = prev if isinstance(prev, int) and 0 <= prev < len(alts) else 0
         choice = st.selectbox(
-            f"Geometry — {len(alts)} options (optimum + alternatives); "
-            "pick the easiest to build",
+            f"Geometry — {len(alts)} options, ordered by least mount material (f + d) first",
             range(len(alts)), index=prev, format_func=_glabel,
             help="Every option raises the load at (near) the same force and uses the same "
-                 "stroke — they are just different mounting layouts. The label shows each "
-                 "one's a/b/d/f, its per-cylinder force, and how far its force is from the "
-                 "optimum.")
+                 "stroke — they are just different mounting layouts. Ordered by **f + d** "
+                 "(base-post height + bracket offset), a proxy for how much mount material "
+                 "each needs; the top option needs the least. The label also shows a/b/d/f "
+                 "and the per-cylinder force.")
         st.session_state["rv_choice_idx"] = choice
         sel = alts[choice]
-        source = "optimum" if choice == 0 else "alt"
+        source = "optimum" if sel is best else "alt"
     else:
         sel = grid
         source = "grid"
@@ -395,15 +401,16 @@ def render_reverse():
     _win = (f"filling your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} stroke "
             f"(full stroke)" if full_stroke else
             f"inside your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} window")
+    _fd = f"; mount material **f + d = {(f + d) * wall_fac:.2f} {wall_u}**" if source != "grid" else ""
     _which = {
         "grid": "a fast **near-optimal** pick from the grid (run the optimizer for the "
                 "true best)",
-        "optimum": "the **exact optimum** for your inputs",
-        "alt": f"an **alternative** (+{max(sel.get('penalty_pct', 0.0), 0.0):.1f}% force "
-               "vs the optimum) — same stroke, different mounting",
+        "optimum": "the **lowest-force** option",
+        "alt": f"an **alternative** layout (+{max(sel.get('penalty_pct', 0.0), 0.0):.1f}% "
+               "force vs the lowest) — same stroke, different mounting",
     }[source]
     st.markdown(
-        f"Showing {_which}: its cylinder runs "
+        f"Showing {_which}{_fd}: its cylinder runs "
         f"**{L_min * len_fac:.2f}–{L_max * len_fac:.2f} {len_u}** ({_win}).")
     if full_stroke:
         st.caption(
