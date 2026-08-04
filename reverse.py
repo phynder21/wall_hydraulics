@@ -304,7 +304,7 @@ def render_reverse():
     if st.session_state.get("rv_opt_sig") != _sig:
         st.session_state["rv_opt_sig"] = _sig
         st.session_state.pop("rv_opt", None)
-        st.session_state["rv_geo_choice"] = 0
+        st.session_state["rv_choice_idx"] = 0
 
     head = st.container()      # headline metrics render here (top); the controls sit below
 
@@ -324,7 +324,7 @@ def render_reverse():
                 roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=0.15,
                 n_alternatives=20, alt_min_sep=0.02, alt_target_sep=0.08)
         st.session_state["rv_opt"] = _opt if _opt["feasible"] else None
-        st.session_state["rv_geo_choice"] = 0
+        st.session_state["rv_choice_idx"] = 0
         if not _opt["feasible"]:
             st.warning("The optimizer couldn't improve on the grid pick for these inputs "
                        "— keeping the grid geometry above.")
@@ -332,8 +332,6 @@ def render_reverse():
     opt = st.session_state.get("rv_opt")
     if opt:                                # the optimizer has run for these exact inputs
         alts = opt.get("alternatives") or [opt]
-        if st.session_state.get("rv_geo_choice", 0) >= len(alts):
-            st.session_state["rv_geo_choice"] = 0
 
         def _glabel(i):
             g = alts[i]
@@ -343,14 +341,21 @@ def render_reverse():
                     f"d={g['d'] * wall_fac:.2f}  f={g['f'] * wall_fac:.2f} {wall_u}  ·  "
                     f"{g['peak_force'] / n_cyl:.1f} N/kg  ({tag})")
 
+        # Drive the picker by OUR OWN integer index (rv_choice_idx), not the widget's
+        # stored value: pass it as index= and read the selectbox's return. This avoids
+        # ever comparing/indexing a widget value whose type can vary across Streamlit
+        # versions. Clamp in case the option count shrank since last run.
+        prev = st.session_state.get("rv_choice_idx", 0)
+        prev = prev if isinstance(prev, int) and 0 <= prev < len(alts) else 0
         choice = st.selectbox(
             f"Geometry — {len(alts)} options (optimum + alternatives); "
             "pick the easiest to build",
-            range(len(alts)), format_func=_glabel, key="rv_geo_choice",
+            range(len(alts)), index=prev, format_func=_glabel,
             help="Every option raises the load at (near) the same force and uses the same "
                  "stroke — they are just different mounting layouts. The label shows each "
                  "one's a/b/d/f, its per-cylinder force, and how far its force is from the "
                  "optimum.")
+        st.session_state["rv_choice_idx"] = choice
         sel = alts[choice]
         source = "optimum" if choice == 0 else "alt"
     else:

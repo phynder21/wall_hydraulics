@@ -433,16 +433,25 @@ def test_reverse_view_renders():
     assert any("base along floor" in l for l in labels), "geometry metrics on top"
     assert any("Safe max wall mass" in l for l in labels), "mass metric on top"
     # ...an optimizer button (explained), and NO picker until it's run
+    def _picker(a):
+        return [s for s in a.selectbox if "optimum + alternatives" in (s.label or "")]
     optbtns = [b for b in at.button if "exact optimum" in (b.label or "").lower()]
     assert optbtns, "the exact-optimum button should be present near the top"
-    assert not any(s.key == "rv_geo_choice" for s in at.selectbox), "no picker before run"
+    assert not _picker(at), "no picker before the optimizer is run"
     blurb = " ".join(str(m.value) for m in at.markdown)
     assert "sensor" not in blurb.lower(), "the 'no sensor' wording must be gone"
     assert "near-optimal" in blurb.lower(), "the button must explain the grid pick"
     # running the optimizer reveals the picker + exact-optimum result
     optbtns[0].click().run()
     assert not at.exception, at.exception
-    assert any(s.key == "rv_geo_choice" for s in at.selectbox), "picker appears after run"
+    assert _picker(at), "picker appears after run"
+    # changing a NON-geometry input (bore) after optimizing must not error and must
+    # keep the stored result (regression: the picker index used to be read from the
+    # widget and compared as the wrong type).
+    at.session_state["rv_bore"] = 0.08
+    at.run()
+    assert not at.exception, at.exception
+    assert _picker(at), "the optimizer result persists across a bore change"
     # the full-stroke toggle renders and explains
     at.session_state["rv_full_stroke"] = True
     at.run()
