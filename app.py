@@ -52,11 +52,10 @@ _GUIDE_INTRO = """
 It sizes the **hydraulic cylinder that raises a hinged shipping-container sidewall**
 — or, going the other way, finds the geometry a cylinder you already have can drive.
 The aim is a design that needs the **least force** — or the **shortest cylinder** — so
-you can use a smaller, cheaper actuator. (You pick which to minimize in the Designer,
-and the sensitivity charts can be switched to track either one.)
+you can use a smaller, cheaper actuator. (You pick which to minimize in the Designer.)
 
 The wall pivots on a hinge and swings from flat (0°) to upright (90°) while the
-cylinder pushes it up. Four numbers place the cylinder (see the diagram below):
+cylinder drives it. Four numbers place the cylinder (see the diagram below):
 
 - **a** — base position along the floor
 - **b** — attachment point up the wall
@@ -438,12 +437,12 @@ tab_geometry, tab_setup, tab_optimize, tab_compare = st.sidebar.tabs(
 
 with tab_setup:
     st.subheader("Container")
-    size_key = st.selectbox("Container size", list(CONTAINER_SIZES.keys()),
-                            key="size_key")
+    size_key = st.selectbox(
+        "Container size", list(CONTAINER_SIZES.keys()), key="size_key",
+        help="Internal (clear) dimensions, not the outer shell: the wall panel spans "
+             "this clear opening and the moving parts must clear the internal roof.")
     container_width, container_height = CONTAINER_SIZES[size_key]
-    st.caption("**These are internal (clear) dimensions** — the usable space *inside* "
-               "the container, not the outer shell. The wall panel spans this clear "
-               "opening and the moving parts must clear the internal roof.")
+    st.caption("Internal (clear) dimensions — the usable space inside the shell.")
 
     # Half-container cap on the cylinder base position `a` (keep it in the near half of
     # the floor). The toggle WIDGET lives in the Geometry tab, next to the variable

@@ -13,7 +13,7 @@ version (deployed on Render). Both have the same three views.
 ## What the numbers mean
 
 The wall pivots on a hinge and swings from **flat (0°)** to **fully upright
-(90°)**. A cylinder pushes on it. Four numbers describe the setup:
+(90°)**. A cylinder drives it. Four numbers describe the setup:
 
 | Symbol | Meaning |
 |--------|---------|
@@ -63,15 +63,12 @@ total force.
    for your setup, and lists a few near-optimal alternatives you can click to load.
 
 **Sensitivity — which dimension moves the result most, and how much better or worse
-each spot is.** Two aligned charts below the plots, for your *current* design. A
-**Color by** toggle at the top switches every part of the sensitivity — these charts,
-the interaction map, and the PDF — between **peak force** and **cylinder length**, so
-you can chase whichever the optimizer is minimizing (lower is better for both, so
-**blue = better** either way). **Top (tornado bars):** how much the peak force (or
-cylinder length) swings as each of `a, b, d, f` sweeps its allowed range (others
+each spot is.** Two aligned charts below the plots, for your *current* design, colored
+by **peak force**. **Top (tornado bars):** how much the peak force
+swings as each of `a, b, d, f` sweeps its allowed range (others
 fixed) — longer / redder = more impact overall (e.g. base height `f` usually
 dominates). **Bottom (strip):** move that dimension to any position and the color is
-the peak force (or length) *there* as a **percent of your current value** — so **200%
+the peak force *there* as a **percent of your current value** — so **200%
 means double, 50% means half**. **White (100%) = same
 as now** (the **white dot** is your current value), **red = higher (worse)**,
 **blue = lower (better)**, **black = a spot the optimizer would reject** (over-center,
@@ -211,7 +208,7 @@ stroke, a different retracted length, or a bigger container).
   actual cylinder. Pick a **bore standard** (ISO metric, NFPA inch, or exact) and
   a **design pressure**; it shows the **required bore** — the barrel's inner
   diameter (`bore = √(4·force / π·pressure)`,
-  full-bore *push* area, since raising the wall extends the cylinder), rounds up to
+  from the full-bore area), rounds up to
   the **next standard size**, and reports the **pressure that size actually needs**
   and how far that sits below your design pressure (headroom). If the force needs a
   bore bigger than the largest standard, it says so — raise the pressure or split

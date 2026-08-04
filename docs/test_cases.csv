@@ -1,19 +1,19 @@
 Point,Limiting factor (input you select),Setting,Optimized peak force (N/kg)
-B0,"Baseline: Standard container, x_cg=1.2 m, z_cg=0.55 m, stroke<=1.8, no other limit",none,12.94
-C1,Container size,Standard (2.44 x 2.59 m),12.94
-C2,Container size,High-Cube (2.44 x 2.90 m),11.79
-S1,Max stroke ratio (L_max/L_min),1.6,15.40
-S2,Max stroke ratio (L_max/L_min),1.8,12.94
-S3,Max stroke ratio (L_max/L_min),2.0,11.47
-S4,Max stroke ratio (L_max/L_min),2.5,9.54
-G1,CG offset off the wall (z_cg),0.30 m,12.10
-G2,CG offset off the wall (z_cg),0.55 m,12.94
-G3,CG offset off the wall (z_cg),1.00 m,14.37
-G4,CG offset off the wall (z_cg),1.50 m,17.49
-F0,Base-height mounting cap (f max),none (base free; lands at 2.59 m),12.94
-F1,Base-height mounting cap (f max),<= 0.8 m,14.30
-F2,Base-height mounting cap (f max),<= 0.5 m,18.45
-R1,Roof clearance (base capped <= 1.0 m so it binds),0.00 m,14.30
-R2,Roof clearance (base capped <= 1.0 m so it binds),0.05 m,14.58
-R3,Roof clearance (base capped <= 1.0 m so it binds),0.15 m,15.18
-L1,Fixed base height (lock f),f = 0.40 m,20.06
+B0,"Baseline: Standard container (internal 2.352 x 2.393 m), x_cg=1.2 m, z_cg=0.55 m, stroke<=1.8, no other limit",none,13.90
+C1,Container size,Standard (internal 2.352 x 2.393 m),13.90
+C2,Container size,High-Cube (internal 2.352 x 2.698 m),12.59
+S1,Max stroke ratio (L_max/L_min),1.6,16.54
+S2,Max stroke ratio (L_max/L_min),1.8,13.90
+S3,Max stroke ratio (L_max/L_min),2.0,12.32
+S4,Max stroke ratio (L_max/L_min),2.5,10.24
+G1,CG offset off the wall (z_cg),0.30 m,12.99
+G2,CG offset off the wall (z_cg),0.55 m,13.90
+G3,CG offset off the wall (z_cg),1.00 m,15.43
+G4,CG offset off the wall (z_cg),1.50 m,18.93
+F0,Base-height mounting cap (f max),none (base free; lands at 2.393 m),13.90
+F1,Base-height mounting cap (f max),<= 0.8 m,15.48
+F2,Base-height mounting cap (f max),<= 0.5 m,17.69
+R1,"Roof clearance (base a capped <= 1.0 m; at internal dims the clearance no longer binds, so R1-R3 match)",0.00 m,14.29
+R2,Roof clearance (base a capped <= 1.0 m),0.05 m,14.29
+R3,Roof clearance (base a capped <= 1.0 m),0.15 m,14.29
+L1,Fixed base height (lock f),f = 0.40 m,19.24

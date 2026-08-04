@@ -231,8 +231,8 @@ The **Cylinder sizing** card (below the metrics) turns the total force into a
 buyable cylinder. **Bore** here means the barrel's inner **diameter**. A hydraulic
 cylinder makes `force = pressure × piston area`, so for a chosen system pressure
 the required bore diameter is `bore = √(4·force / π·P)`
-— using the full-bore **push** area, since raising the wall *extends* the
-cylinder. Pick a **bore standard** — *ISO metric* (40, 50, 63 mm…), *NFPA inch*
+— using the full-bore **push** area (the peak holding force is a push, near the
+flat position). Pick a **bore standard** — *ISO metric* (40, 50, 63 mm…), *NFPA inch*
 (1.5, 2, 2.5 in…), or *Exact* (no rounding) — and a **design pressure**. It
 reports:
 
@@ -310,8 +310,8 @@ the candidate with the smallest peak.
 A single `differential_evolution` run can settle into a good-but-not-best
 valley — its answer depends on the random seed. For some geometries the best
 design sits in a **narrow basin that most seeds miss**: on the standard
-container, the default seed lands on 14.30 N/kg while the true optimum is
-**12.94 N/kg (~10% lower)**. So `optimize_actuator` runs **`N_STARTS`
+container, a single seed tends to land in a higher local basin (~14.3+ N/kg)
+while the true optimum is **13.90 N/kg**. So `optimize_actuator` runs **`N_STARTS`
 (default 20) independent starts from fixed seeds and keeps the best** — at a
 ~28% per-seed hit rate, 20 starts finds the global basin ~99.9% of the time,
 and *fixed* seeds keep the result reproducible (so shared URLs stay stable).

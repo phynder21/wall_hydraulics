@@ -122,8 +122,8 @@ def peak_force_feasible(a, b, d, f, x_cg=1.2, z_cg=0.55, n_theta=200, cap=50.0,
                         stroke_max=None, roof_clearance=0.0, width=None, height=None,
                         length_window=None):
     """(peak, L_max, feasible) for one geometry. `peak` is peak_force and `L_max` the
-    extended (longest) cylinder length over the swing — the two metrics the sensitivity
-    panel can color by; both are NaN if over-center. `feasible` is False if over-center
+    extended (longest) cylinder length over the swing; both are NaN if over-center.
+    `feasible` is False if over-center
     OR any provided rule is broken over the swing:
 
       * stroke ratio L_max / L_min > stroke_max,
@@ -172,8 +172,7 @@ def force_feasibility_profiles(a, b, d, f, x_cg, z_cg, bounds, n=41, stroke_max=
     cylinder length and a feasibility mask (the optimizer's rules, see
     peak_force_feasible). Returns {var: (values, forces, lengths, feasible)} where
     forces/lengths are NaN at over-center samples and feasible is False wherever a
-    rule is broken. `lengths` lets the sensitivity panel color by cylinder length
-    instead of force."""
+    rule is broken."""
     base = dict(a=a, b=b, d=d, f=f)
     feas = dict(stroke_max=stroke_max, roof_clearance=roof_clearance, width=width,
                 height=height, length_window=length_window)

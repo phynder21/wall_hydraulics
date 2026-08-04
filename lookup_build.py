@@ -27,9 +27,9 @@ from wall import g
 from optimize import MIN_MOMENT_ARM, CONTAINER_PRESETS
 
 # The grid spans the full physical design space, sized to the *tallest* container
-# (High-Cube) so one table serves both — Standard is just a b,f <= 2.591 filter.
-CONTAINER_WIDTH = CONTAINER_PRESETS["highcube"][0]   # 2.438 m (same for both)
-HEIGHT_MAX = CONTAINER_PRESETS["highcube"][1]        # 2.896 m
+# (High-Cube) so one table serves both — Standard is just a b,f <= 2.393 filter.
+CONTAINER_WIDTH = CONTAINER_PRESETS["highcube"][0]   # 2.352 m internal (same for both)
+HEIGHT_MAX = CONTAINER_PRESETS["highcube"][1]        # 2.698 m internal
 
 # Geometry-only feasibility gates applied at build time (query-independent).
 STROKE_RATIO_CAP = 3.0        # largest stroke ratio the app's slider allows

@@ -35,14 +35,14 @@ The CSV holds the **optimizer** points; the **physics** anchors are §6 below; t
 The reference numbers below were produced with:
 
 - Python **3.14.5**, NumPy **2.4.6**, SciPy **1.18.0**
-- `g = 9.81 m/s²`, container presets: Standard **2.438 × 2.591 m**, High-Cube **2.438 × 2.896 m**
+- `g = 9.81 m/s²`, container presets (internal clear): Standard **2.352 × 2.393 m**, High-Cube **2.352 × 2.698 m**
 - Optimizer defaults: `N_STARTS = 20`, `n_theta = 200`, `maxiter = 300`, `seed = 0`, stroke-ratio limit `1.8`
 
 **Reproducibility note.** *Physics* cases are exact from the equations and are
 version-independent. *Optimizer* cases are deterministic for a given SciPy
 version because the seeds are fixed; a **different SciPy version may shift a
 local basin slightly**, so compare optimizer values within the stated tolerance,
-not bit-for-bit. The **global** optimum (e.g. 12.94 N/kg on the standard
+not bit-for-bit. The **global** optimum (e.g. 13.90 N/kg on the standard
 container) is robust across versions; the exact *alternatives* are the most
 version-sensitive. Always report the versions you used.
 
@@ -77,7 +77,7 @@ everything else at the baseline (`B0`), and read the optimized peak force.
   does not expose. Use the app's **Mounting limits** (F-rows: set the `f` range,
   e.g. `[0, 0.5]`; R-rows: set `f` to `[0, 1.0]` *and* the **Roof clearance**
   slider), or call the function directly, e.g.
-  `optimize_actuator(2.438, 2.591, 1.2, 0.55, var_bounds={'f': (0.0, 1.0)}, roof_clearance=0.05)`.
+  `optimize_actuator(2.352, 2.393, 1.2, 0.55, var_bounds={'f': (0.0, 1.0)}, roof_clearance=0.05)`.
 - **App (any row):** dial the same setting in the sidebar and press **Optimize**;
   read the peak off the result banner or the force plot.
 - **All at once (regression):** `pytest` runs an automated mirror of these

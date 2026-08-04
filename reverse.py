@@ -153,8 +153,7 @@ def render_reverse():
         _, rod_mm = _cyl("rod", tab_cyl)
         _, press_bar = _cyl("press", tab_cyl)
         push, pull = lookup.cylinder_force(bore_mm, min(rod_mm, bore_mm - 0.1), press_bar)
-        tab_cyl.caption(f"Push **{push / 1000:.1f} kN** · Pull {pull / 1000:.1f} kN. "
-                        "Raising the wall extends the cylinder, so push is used.")
+        tab_cyl.caption(f"Push **{push / 1000:.1f} kN** · Pull {pull / 1000:.1f} kN.")
         force_n = push
     else:
         _, force_n = _cyl("frated", tab_cyl)
@@ -308,13 +307,14 @@ def render_reverse():
 
     head = st.container()      # headline metrics render here (top); the controls sit below
 
-    # The exact-optimum control, right under the headline and clearly explained.
-    st.markdown(
-        "The numbers above are a **fast, near-optimal** pick from a precomputed grid, so "
-        "they update instantly as you tweak inputs. For the **true best for your exact "
-        "inputs** — usually a little better, plus ~20 equally-good alternative layouts "
-        "to choose from — run the optimizer (~20 s):")
-    if st.button("Get the exact optimum — run optimizer"):
+    # The exact-optimum control, right under the headline.
+    st.caption("The numbers above are a fast, near-optimal grid pick. For the exact best "
+               "+ alternatives, run the optimizer (~20 s).")
+    if st.button("Get the exact optimum — run optimizer",
+                 help="The headline updates instantly from a precomputed grid, so it's "
+                      "only near-optimal. This runs the real optimizer for your exact "
+                      "inputs (usually a little better) and returns ~20 equally-good "
+                      "alternative layouts to pick from."):
         with st.spinner("Optimizing…"):
             # Ask for a big spread of alternatives (up to 20) so there are many
             # buildable layouts to pick from — a denser separation than the default.
@@ -406,12 +406,10 @@ def render_reverse():
         f"Showing {_which}: its cylinder runs "
         f"**{L_min * len_fac:.2f}–{L_max * len_fac:.2f} {len_u}** ({_win}).")
     if full_stroke:
-        st.info(
-            "**Full stroke.** The geometry uses the cylinder's whole travel while staying "
-            "**inside** it, so the **door reaches both ends**: near **0° (door flat)** the "
-            f"cylinder is fully **extended** (**{L_ext * len_fac:.2f} {len_u}**), near "
-            f"**90° (door up)** fully **retracted** (**{L_ret * len_fac:.2f} {len_u}**) — "
-            "the hardstops set both positions.")
+        st.caption(
+            f"**Full stroke:** extended **{L_ext * len_fac:.2f} {len_u}** = door flat "
+            f"(0°), retracted **{L_ret * len_fac:.2f} {len_u}** = door up (90°) — the "
+            "hardstops set both ends.")
 
     # --- Plots: setup diagram large on top, curves small below ---
     view_angle = st.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="rv_view")

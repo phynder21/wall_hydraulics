@@ -2,9 +2,9 @@ ID,Section,Scenario,Inputs,What to check,Expected result
 D1,Designer (manual),Read live metrics for a fixed geometry,"Standard; x_cg=1.2, z_cg=0.55; a=0.6, b=1.8, d=0.1, f=0.4",Peak force / Stroke / Stroke ratio,peak=36.50 N/kg; stroke=0.932 m; ratio=1.63
 D2,Designer (manual),Read live metrics for a fixed geometry,"High-Cube; x_cg=1.45, z_cg=0.6; a=0.8, b=2.0, d=0.15, f=0.5",Peak force / Stroke / Stroke ratio,peak=35.84 N/kg; stroke=1.187 m; ratio=1.73
 D3,Designer (manual),Over-center / singular geometry,"Standard; x_cg=1.2, z_cg=0.55; a=1.1, b=0.3, d=0.0, f=0.0",Force plot should BREAK (gap at the pole); peak may be capped,singularity=YES; capped peak~49.49 N/kg
-O1,Designer (Optimize),"Optimize, default limits","Standard; x_cg=1.2, z_cg=0.55; defaults","peak / a,b,d,f / feasible",peak=12.94 N/kg; a=1.219 b=1.063 d=0.205 f=2.591; feasible=True
-O2,Designer (Optimize),"Optimize, high-cube","High-Cube; x_cg=1.0, z_cg=0.4; defaults","peak / a,b,d,f / feasible",peak=9.65 N/kg; a=1.219 b=1.172 d=0.213 f=2.896; feasible=True
-O3,Designer (Optimize),Optimize with f locked at 0,"Standard; x_cg=1.2, z_cg=0.55; locked={'f': 0.0}","peak / a,b,d,f / feasible",peak=29.80 N/kg; a=1.219 b=1.700 d=1.000 f=0.000; feasible=True
+O1,Designer (Optimize),"Optimize, default limits","Standard; x_cg=1.2, z_cg=0.55; defaults","peak / a,b,d,f / feasible",peak=13.90 N/kg; a=1.176 b=0.986 d=0.208 f=2.393; feasible=True
+O2,Designer (Optimize),"Optimize, high-cube","High-Cube; x_cg=1.0, z_cg=0.4; defaults","peak / a,b,d,f / feasible",peak=10.30 N/kg; a=1.176 b=1.095 d=0.213 f=2.698; feasible=True
+O3,Designer (Optimize),Optimize with f locked at 0,"Standard; x_cg=1.2, z_cg=0.55; locked={'f': 0.0}","peak / a,b,d,f / feasible",peak=26.87 N/kg; a=1.176 b=1.754 d=1.176 f=0.000; feasible=True
 O4,Designer (Optimize),OVER-RESTRICT mounting box (tiny ranges),"Standard; x_cg=1.2, z_cg=0.55; a,b,d,f each pinned to a tiny range","Over-restriction may stay 'buildable' (green) but peak force explodes vs the optimum — the tell is the number, not a warning",feasible=True; over_center=False; peak=588.60 N/kg (best effort)
 B1,Browse,"Search, default filters","Standard; x_cg=1.2, z_cg=0.55; stroke_max=1.8",Match count (approx) / best peak force,"~259,382 matches; best peak=13.77 N/kg"
 B2,Browse,"Search, high-cube, ratio<=2.0","High-Cube; x_cg=1.45, z_cg=0.6; stroke_max=2.0",Match count (approx) / best peak force,"~432,850 matches; best peak=12.90 N/kg"

@@ -339,9 +339,7 @@ def render_browse():
     df.index.name = "rank"
     capped = f" — showing the top {n}" if total > n else ""
     st.markdown(f"**{total:,} matching configurations**{capped} (best "
-                f"`{columns[sort_by]}` first). Every Problem, Mounting-limit and "
-                f"filter setting changes this count. Peak force is shaded "
-                f"green (low / good) → red (high).")
+                f"`{columns[sort_by]}` first). Peak force shaded green (low) → red (high).")
     styler = df.style.format(precision=3)
     peak_label = columns["peak_force"]
     if peak_label in df.columns:                   # green->red shade on peak force

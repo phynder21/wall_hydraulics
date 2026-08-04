@@ -185,12 +185,14 @@ def test_diverse_alternatives_surface_for_standard_container():
 
 
 def test_finds_known_standard_optimum():
-    """The full multi-start search on the standard container reaches the known
-    global optimum (~12.94 N/kg), well below the local basin (~14.30) a single
-    start tends to find. Guards against a regression that breaks multi-start."""
+    """The full multi-start search on the standard container reaches its global
+    optimum (~13.90 N/kg for the internal clear dimensions), below the ~14.3+ local
+    basin a single start tends to find. Guards against a regression that breaks
+    multi-start. (The old ~12.94 target was for the larger external dimensions and a
+    wider `a` range, both since tightened.)"""
     res = optimize_actuator(*STANDARD, x_cg=1.20, z_cg=0.55)  # full default budget
     assert res["feasible"]
-    assert res["peak_force"] < 13.5, f"peak {res['peak_force']:.2f} — multi-start regressed?"
+    assert res["peak_force"] < 14.2, f"peak {res['peak_force']:.2f} — multi-start regressed?"
 
 
 def test_fast_mode_reaches_the_optimum():
@@ -199,7 +201,7 @@ def test_fast_mode_reaches_the_optimum():
     res = optimize_actuator(*STANDARD, x_cg=1.20, z_cg=0.55, fast=True)
     assert_result_invariants(res, "fast")
     assert res["feasible"]
-    assert res["peak_force"] < 13.3          # essentially the 12.94 global
+    assert res["peak_force"] < 14.2          # the ~13.90 internal-dimensions optimum
 
 
 @pytest.mark.slow
