@@ -141,8 +141,8 @@ def test_half_container_toggle_controls_a_and_d_bounds():
 
 
 def test_overlay_two_designs_renders():
-    """Save A, change geometry, save B, then overlay — the plots must render both
-    designs without error."""
+    """Save A, change geometry, save B, then overlay — the diagram AND the force/length
+    curves must render both designs (the overlay branch runs) without error."""
     at = fresh_app()
     save_a = next(b for b in at.button if b.label == "Save as A")
     save_a.click()
@@ -156,6 +156,9 @@ def test_overlay_two_designs_renders():
     at.session_state["overlay"] = True
     run_ok(at, "overlay on")
     assert "design_A" in at.session_state and "design_B" in at.session_state
+    # the overlay summary caption shares the `overlay` gate with the diagram/curve
+    # overlays, so its presence confirms all three overlays rendered.
+    assert any("Overlay" in str(c.value) for c in at.caption), "overlay did not render"
 
 
 def test_malformed_url_params_fall_back():

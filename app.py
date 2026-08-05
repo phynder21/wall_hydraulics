@@ -923,6 +923,26 @@ with diag_area:
         xref="x", yref="y", axref="x", ayref="y",
         showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2, arrowcolor="blue")
 
+    # Compare overlay: A and B mountings (cylinder + bracket + points) at this angle,
+    # so the side view compares the two geometries, not just the force/length curves.
+    if overlay:
+        for _lab, _dd, _col in (("A", design_A, "green"), ("B", design_B, "darkorange")):
+            _g = compute_geometry(theta, a=_dd["a"], b=_dd["b"], d=_dd["d"], f=_dd["f"],
+                                  x_cg=_dd["x_cg"], z_cg=_dd["z_cg"])
+            _ax, _az = float(_g["attachment"][0]) * U, float(_g["attachment"][1]) * U
+            _bx, _bz = -_dd["a"] * U, _dd["f"] * U
+            _tbx, _tbz = (float(v) * U for v in _g["wall_axis_at_b"])
+            fig_geom.add_trace(go.Scatter(          # cylinder base -> attachment
+                x=[_bx, _ax], y=[_bz, _az], mode="lines",
+                line=dict(color=_col, width=2.5, dash="dash"), name=f"cylinder {_lab}"))
+            fig_geom.add_trace(go.Scatter(          # bracket door -> attachment
+                x=[_tbx, _ax], y=[_tbz, _az], mode="lines",
+                line=dict(color=_col, width=1.5, dash="dot"),
+                hoverinfo="skip", showlegend=False))
+            fig_geom.add_trace(go.Scatter(          # base + attachment points
+                x=[_bx, _ax], y=[_bz, _az], mode="markers",
+                marker=dict(size=8, color=_col), hoverinfo="skip", showlegend=False))
+
     fig_geom.update_layout(
         template=PLOT_TEMPLATE, font=PLOT_FONT,
         title=f"Side view (theta = {theta_deg:.0f} deg)",
