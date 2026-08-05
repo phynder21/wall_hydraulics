@@ -516,9 +516,12 @@ def optimize_actuator(container_width, container_height, x_cg, z_cg,
 
     # Then top up by re-optimizing with a repulsion penalty away from the chosen
     # designs. Stop as soon as the best distinct design exceeds tolerance.
-    n_alt = 4 if fast else n_want                # fewer, cheaper alternatives in fast mode
+    # Fewer, cheaper alternatives in fast mode -- unless the caller asked for a specific
+    # count, which is honored even in fast mode.
+    n_alt = 4 if (fast and n_alternatives is None) else n_want
     if free and best["feasible"]:
-        alt_de_kwargs = {"maxiter": 30 if fast else 80, "tol": 1e-7, "polish": True}
+        _fast_alts = fast and n_alternatives is None   # cheap alternatives only by default
+        alt_de_kwargs = {"maxiter": 30 if _fast_alts else 80, "tol": 1e-7, "polish": True}
         while len(selected) < n_alt:
             chosen = [s["geom"] for s in selected]
 

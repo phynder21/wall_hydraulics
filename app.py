@@ -585,6 +585,7 @@ with tab_optimize:
                     roof_clearance=st.session_state["roof_clearance"],
                     locked=locked, var_bounds=USER_BOUNDS,
                     alt_rel_tol=st.session_state["alt_pct"] / 100.0,
+                    n_alternatives=10, alt_min_sep=0.03, alt_target_sep=0.10,
                     fast=True,
                     objective_mode=("length" if opt_mode == "Cylinder length"
                                     else "force"),
