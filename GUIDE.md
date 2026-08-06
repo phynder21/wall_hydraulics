@@ -142,7 +142,7 @@ instant results, no waiting.
      rows with a = 0.05), the lowest-force design is listed first — and the column
      you sorted by jumps to just right of Peak force so you can read the pair
      together (it's added automatically even if you hadn't ticked it in *Columns to
-     show*). **Max rows per sorted value** caps how many of each value appear
+     show*). **Max rows per repeated value** caps how many of each value appear
      (default 20), so one value (like f = 0) can't flood the list — you see the
      best few at each value and a wide spread of values instead.
 3. Click a row's **rank** to inspect it: its exact diagram (scrub the view angle),

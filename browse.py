@@ -308,10 +308,11 @@ def render_browse():
                  "geometry itself (a, b, d, f), use the Mounting-limits sliders in "
                  "the sidebar — each sets that dimension's min and max.")
         group_cap = st.number_input(
-            "Max rows per sorted value (0 = no cap)", 0, 1000, 20, 5, key="lk_gcap",
-            help="When you sort by a column with repeats (like f), show at most "
-                 "this many of the best (lowest-force) rows per distinct value, so "
-                 "one value can't flood the list.")
+            "Max rows per repeated value (0 = show all)", 0, 1000, 20, 5, key="lk_gcap",
+            help="When you sort by a column where many rows share the same value (e.g. "
+                 "lots of designs with the same a), this keeps only the best "
+                 "(lowest-force) few of each — so the table shows a spread of values "
+                 "instead of dozens of near-identical rows.")
 
     filters = {}
     if max_force_disp > 0:
