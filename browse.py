@@ -359,11 +359,13 @@ def render_browse():
 
     # --- Inspect one configuration (exact physics) ---
     st.subheader("Inspect a configuration")
-    ic1, ic2 = st.columns([1, 1])
+    ic1, _ic2 = st.columns([1, 1])
     rank = ic1.number_input("Rank to inspect (1 = top of the list)", 1, n, 1, 1,
                             key="lk_rank") - 1
     rank = int(np.clip(rank, 0, n - 1))   # guard if a filter shrank the list
-    view_angle = ic2.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="lk_view")
+    # The view-angle slider lives directly under the diagram (below); read its
+    # stored value here so the figure builds with the current angle each rerun.
+    view_angle = int(st.session_state.get("lk_view", 45))
     a, b, d, f = (float(res["a"][rank]), float(res["b"][rank]),
                   float(res["d"][rank]), float(res["f"][rank]))
     peak_pc = float(res["peak_force"][rank]) / n_cyl        # per cylinder
@@ -383,6 +385,9 @@ def render_browse():
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
                            fig_height=560, scale=U, ulabel=ULABEL)
     st.plotly_chart(diag, width="stretch")
+    vc, _vc2 = st.columns([1, 1])
+    vc.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="lk_view",
+              help="Rotates the wall in the diagram above (0° = flat, 90° = fully up).")
     # Force is shown PER CYLINDER (pu carries the ÷ n_cyl) to match the readout/banner.
     ff, fl = _force_length_figures(
         a, b, d, f, x_cg, z_cg, stroke_max, u=U, ulabel=ULABEL, pu=PU / n_cyl,
