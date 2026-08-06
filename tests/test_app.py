@@ -435,6 +435,7 @@ def test_reverse_view_renders():
     labels = [m.label or "" for m in at.metric]
     assert any("base along floor" in l for l in labels), "geometry metrics on top"
     assert any("Safe max wall mass" in l for l in labels), "mass metric on top"
+    assert any("Force at current angle" in l for l in labels), "force-at-angle metric"
     # ...an optimizer button (explained), and NO picker until it's run
     def _picker(a):
         return [s for s in a.selectbox if "mount material" in (s.label or "")]

@@ -10,7 +10,7 @@ import streamlit as st
 
 from optimize import optimize_actuator, minimize_mount_material, MIN_MOMENT_ARM
 from lookup_build import geometry_metrics
-from wall import compute_cylinder_length
+from wall import compute_cylinder_length, compute_F_piston
 import lookup
 import report
 from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
@@ -405,6 +405,12 @@ def render_reverse():
     max_mass = force_use / peak * n_cyl    # safe: force already ÷ safety factor
     abs_mass = force_n / peak * n_cyl      # absolute: cylinder flat out, no margin
 
+    # Force one cylinder supplies at the angle set by the diagram view-angle slider
+    # (defined below); read its stored value so the headline metric follows it.
+    view_angle = int(st.session_state.get("rv_view", 45))
+    F_here_pc = float(compute_F_piston(np.radians(view_angle), a=a, b=b, d=d, f=f,
+                                       x_cg=x_cg, z_cg=z_cg)) / n_cyl
+
     with head:
         g1, g2, g3, g4 = st.columns(4)
         g1.metric("a — base along floor", f"{a * wall_fac:.3f} {wall_u}",
@@ -417,7 +423,7 @@ def render_reverse():
         g4.metric("f — base height", f"{f * wall_fac:.3f} {wall_u}",
                   help="Cylinder base height above the hinge.")
         st.divider()
-        m1, m2, m3 = st.columns(3)
+        m1, m2, m3, m4 = st.columns(4)
         m1.metric(f"Safe max wall mass ({n_cyl} cyl)", f"{max_mass:,.0f} kg",
                   help="The most you should load it — WITH your safety factor applied, "
                        "summed over all cylinders (n × cylinder force ÷ safety factor ÷ "
@@ -426,6 +432,10 @@ def render_reverse():
                   help="If every cylinder ran flat-out at 100% with no margin. The safe "
                        "figure is this ÷ your safety factor — use the safe one.")
         m3.metric("Peak force per cylinder", f"{peak / n_cyl:.2f} N/kg")
+        m4.metric(f"Force at current angle ({view_angle}°)", f"{F_here_pc:.2f} N/kg",
+                  help="Force one cylinder must supply at the wall angle set by the "
+                       "'Diagram view angle' slider below. Positive = pull/retract, "
+                       "negative = push/extend; the worst case is the peak at left.")
 
     _win = (f"filling your {L_ret * len_fac:.2f}–{L_ext * len_fac:.2f} {len_u} stroke "
             f"(full stroke)" if full_stroke else
