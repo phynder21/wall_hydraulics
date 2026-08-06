@@ -822,9 +822,9 @@ with st.container(border=True):
     m1.metric("Peak force (worst case)", fmt_pk(peak_pc),
               help="Largest force over the full 0–90° swing, per cylinder — the "
                    "number to size the cylinder by.")
-    m2.metric(f"Force at θ = {theta_deg:.0f}°", fmt_pk(F_here_pc),
-              help="Force at the current wall angle (red marker on the plots), "
-                   "per cylinder.")
+    m2.metric("Force at current angle", fmt_pk(F_here_pc),
+              help=f"Force at the current wall angle (θ = {theta_deg:.0f}°, the red marker "
+                   "on the plots — set with the θ slider), per cylinder.")
     m3.metric("Stroke", f"{(L_max - L_min) * U:.2f} {ULABEL}",
               help="Rod travel you order a cylinder by (L_max − L_min).")
     m4.metric("Stroke ratio", f"{L_ratio:.2f}",
