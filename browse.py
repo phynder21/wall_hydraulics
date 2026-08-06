@@ -218,7 +218,7 @@ def render_browse():
     # results (b, f must fit under its height).
     # Browse's controls are few enough to sit in one section (not tabs); the optional
     # mounting limits stay in a collapsible expander below.
-    st.sidebar.header("Problem")
+    st.sidebar.header("Setup")
     size = st.sidebar.selectbox("Container", list(CONTAINERS), key="lk_size")
     st.sidebar.caption("**Internal (clear) dimensions** — the usable space inside the "
                        "container, not the outer shell.")

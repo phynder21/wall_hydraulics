@@ -132,7 +132,7 @@ configuration.
 Instead of optimizing, this searches a **precomputed database** of geometries —
 instant results, no waiting.
 
-1. Set your **Problem** (container, x_cg, z_cg, stroke ratio, roof clearance) and
+1. Fill in the **Setup** (container, x_cg, z_cg, stroke ratio, roof clearance) and
    the **Mounting limits** (the min–max range each of a, b, d, f may occupy).
 2. The table lists every matching geometry, **best (lowest peak force) first**.
    The **Peak force** column is shaded **green (low / good) → red (high / bad)**

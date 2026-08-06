@@ -422,7 +422,7 @@ requires SciPy (already in `requirements.txt`).
 
 The optimizer takes ~20 s per run. The **Browse configurations** view (the
 sidebar view switch at the top) trades that for *instant* search over a
-**precomputed database** of geometries. Set your problem (container, cg, stroke
+**precomputed database** of geometries. Set your Setup (container, cg, stroke
 limit, roof clearance) and mounting limits, then filter and sort by any
 attribute — peak force, base height `f`, bracket length `d`, stroke — to find a
 buildable design, not just the single force-optimal one.
