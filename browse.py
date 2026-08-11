@@ -252,7 +252,7 @@ def render_browse():
         f"Roof clearance ({ULABEL})", "lk_clear", 0.0, 0.5, 0.0, 0.01,
         disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT,
         help="Keep the piston attachment this far below the roof.")
-    mass = _sb_linked(f"Wall + load mass ({MLABEL})", "lk_mass", 50.0, 20000.0, 500.0,
+    mass = _sb_linked(f"Wall + load mass ({MLABEL})", "lk_mass", 1.0, 20000.0, 500.0,
                       10.0, disp_factor=MU, disp_step=10.0, fmt="%.0f",
                       help="Converts the per-mass peak force into the real cylinder "
                            "force (shown for the inspected design).")

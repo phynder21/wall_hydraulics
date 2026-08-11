@@ -287,7 +287,7 @@ if st.session_state["size_key"] not in CONTAINER_SIZES:
     st.session_state["size_key"] = DEFAULTS["size_key"]
 
 # Mass has no other clamp; keep a URL-supplied value inside its slider range.
-st.session_state["mass"] = float(min(max(st.session_state["mass"], 50.0), 20000.0))
+st.session_state["mass"] = float(min(max(st.session_state["mass"], 1.0), 20000.0))
 
 
 def _clamp(key, lo, hi):
@@ -476,7 +476,7 @@ with tab_setup:
                         fmt=LEN_FMT)
     z_cg = linked_input(f"z_cg — perpendicular off wall [{ULABEL}]", "z_cg",
                         0.0, 1.5, disp_factor=U, disp_step=LEN_STEP, fmt=LEN_FMT)
-    mass = linked_input(f"Wall + load mass ({MLABEL})", "mass", 50.0, 20000.0,
+    mass = linked_input(f"Wall + load mass ({MLABEL})", "mass", 1.0, 20000.0,
                         step=10.0, disp_factor=MU, disp_step=10.0, fmt="%.0f",
                         help="Total mass of the wall plus anything mounted on it. "
                              "Peak force per unit mass × this = the real cylinder force.")
