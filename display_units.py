@@ -40,9 +40,16 @@ class Units:
         return f"{nkg * self.PU:.2f} {self.PLABEL}"
 
     def total(self, newtons):
-        """A total force (base newtons) as a labelled display string (lbf or kN)."""
-        return (f"{newtons * 0.224809:,.0f} lbf" if self.imperial
-                else f"{newtons / 1000:.1f} kN")
+        """A total force (base newtons) as a labelled display string (lbf or kN).
+        Decimals scale with magnitude so small values (light scale-model walls)
+        keep useful precision while large values stay readable."""
+        if self.imperial:
+            v = newtons * 0.224809
+            dp = 0 if abs(v) >= 100 else 1 if abs(v) >= 10 else 2
+            return f"{v:,.{dp}f} lbf"
+        v = newtons / 1000
+        dp = 1 if abs(v) >= 100 else 2 if abs(v) >= 10 else 3
+        return f"{v:,.{dp}f} kN"
 
     def mass(self, kg):
         """A mass (base kg) as a labelled display string (lb or kg)."""
