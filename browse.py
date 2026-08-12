@@ -381,13 +381,14 @@ def render_browse():
     # Same bore & pressure sizing card as the Designer, tied to the units toggle.
     pressure_bar, series = render_cylinder_sizing(peak_pc, mass, key_prefix="lk_",
                                                   imperial=_u.imperial)
-    # The setup diagram is the main thing to read — show it large, on top.
+    # The setup diagram is the main thing to read — show it large, on top, with
+    # the view-angle slider directly above it (uniform with the other tabs).
+    vc, _vc2 = st.columns([1, 1])
+    vc.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="lk_view",
+              help="Rotates the wall in the diagram below (0° = flat, 90° = fully up).")
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
                            fig_height=560, scale=U, ulabel=ULABEL)
     st.plotly_chart(diag, width="stretch")
-    vc, _vc2 = st.columns([1, 1])
-    vc.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="lk_view",
-              help="Rotates the wall in the diagram above (0° = flat, 90° = fully up).")
     # Force is shown PER CYLINDER (pu carries the ÷ n_cyl) to match the readout/banner.
     ff, fl = _force_length_figures(
         a, b, d, f, x_cg, z_cg, stroke_max, u=U, ulabel=ULABEL, pu=PU / n_cyl,

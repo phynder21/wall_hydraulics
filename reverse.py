@@ -453,8 +453,12 @@ def render_reverse():
             f"(0°), retracted **{L_ret * len_fac:.2f} {len_u}** = door up (90°) — the "
             "hardstops set both ends.")
 
-    # --- Plots: setup diagram large on top, curves small below ---
-    view_angle = st.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="rv_view")
+    # --- Plots: setup diagram large on top, curves small below. View-angle
+    # slider sits directly above the diagram (uniform with the other tabs). ---
+    vc, _vc2 = st.columns([1, 1])
+    view_angle = vc.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="rv_view",
+                           help="Rotates the wall in the diagram below "
+                                "(0° = flat, 90° = fully up).")
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
                            fig_height=560, scale=wall_fac, ulabel=wall_u)
     st.plotly_chart(diag, width="stretch")

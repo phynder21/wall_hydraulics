@@ -698,22 +698,33 @@ with tab_geometry:
     f = linked_input(f"f — cylinder base height above floor [{ULABEL}]", "f",
                      *USER_BOUNDS["f"], **_geom)
 
-    st.subheader("Wall angle")
-    animating = st.toggle(
-        "Sweep θ (0 → 90 → 0)", key="animating",
-        help="Continuously animate the wall opening and closing. "
-             "Toggle off to scrub the angle manually.")
+    # Wall-angle STATE only. The visible control (sweep toggle + θ slider) renders
+    # right above the diagram — see _render_wall_angle() below — so its placement
+    # matches the Browse and Reverse tabs. theta_deg is the URL-persisted source of
+    # truth, so we can read it here (for the metric/plots) and render the widget
+    # later; its edit callbacks run before the rerun, so there is no lag.
+    animating = bool(st.session_state.get("animating", False))
     st.session_state.setdefault("anim_theta", float(st.session_state["theta_deg"]))
     st.session_state.setdefault("anim_dir", 1)
     if animating:
-        # Drive the angle from the sweep state; the slider below follows along.
+        # Drive the angle from the sweep state; the slider follows along.
         st.session_state["theta_deg"] = st.session_state["anim_theta"]
     else:
         # Idle: keep the sweep ready to resume from the current manual angle.
         st.session_state["anim_theta"] = float(st.session_state["theta_deg"])
-    theta_deg = linked_input("theta (degrees)", "theta_deg", 0.0, 90.0,
-                             step=1.0, fmt="%.0f")
+    theta_deg = float(st.session_state["theta_deg"])
     theta = np.radians(theta_deg)
+
+
+def _render_wall_angle():
+    """The visible wall-angle control — rendered right above the side-view diagram
+    so it lines up with the Browse/Reverse view-angle sliders. Reads/writes the same
+    theta_deg / animating state seeded in the Geometry tab above."""
+    st.subheader("Wall angle")
+    st.toggle("Sweep θ (0 → 90 → 0)", key="animating",
+              help="Continuously animate the wall opening and closing. "
+                   "Toggle off to scrub the angle manually.")
+    linked_input("theta (degrees)", "theta_deg", 0.0, 90.0, step=1.0, fmt="%.0f")
 
 
 def _fmt_design(design):
@@ -857,6 +868,7 @@ diag_area = st.container()
 col_force, col_len = st.columns(2)
 
 with diag_area:
+    _render_wall_angle()
     fig_geom = go.Figure()
 
     # Ground (the door lies on it when open)
