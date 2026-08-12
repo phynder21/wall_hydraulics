@@ -454,11 +454,11 @@ def render_reverse():
             "hardstops set both ends.")
 
     # --- Plots: setup diagram large on top, curves small below. View-angle
-    # slider sits directly above the diagram (uniform with the other tabs). ---
-    vc, _vc2 = st.columns([1, 1])
-    view_angle = vc.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="rv_view",
-                           help="Rotates the wall in the diagram below "
-                                "(0° = flat, 90° = fully up).")
+    # control (draggable slider + typeable number box) sits directly above the
+    # diagram, so you can type an exact angle just like the Designer tab. ---
+    view_angle = int(_sb_linked(
+        "Diagram view angle (deg)", "rv_view", 0.0, 90.0, 45.0, 1.0, fmt="%.0f",
+        ctx=st, help="Rotates the wall in the diagram below (0° = flat, 90° = fully up)."))
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
                            fig_height=560, scale=wall_fac, ulabel=wall_u)
     st.plotly_chart(diag, width="stretch")

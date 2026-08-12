@@ -382,10 +382,11 @@ def render_browse():
     pressure_bar, series = render_cylinder_sizing(peak_pc, mass, key_prefix="lk_",
                                                   imperial=_u.imperial)
     # The setup diagram is the main thing to read — show it large, on top, with
-    # the view-angle slider directly above it (uniform with the other tabs).
-    vc, _vc2 = st.columns([1, 1])
-    vc.slider("Diagram view angle (deg)", 0, 90, 45, 5, key="lk_view",
-              help="Rotates the wall in the diagram below (0° = flat, 90° = fully up).")
+    # the view-angle control (draggable slider + typeable number box) directly
+    # above it, so you can type an exact angle just like the Designer tab.
+    view_angle = int(_sb_linked(
+        "Diagram view angle (deg)", "lk_view", 0.0, 90.0, 45.0, 1.0, fmt="%.0f",
+        ctx=st, help="Rotates the wall in the diagram below (0° = flat, 90° = fully up)."))
     diag = _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, view_angle,
                            fig_height=560, scale=U, ulabel=ULABEL)
     st.plotly_chart(diag, width="stretch")
