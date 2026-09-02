@@ -213,23 +213,35 @@ def render_reverse():
         "d": (0.0, _half if half_a else WIDTH, f"d — bracket length ({wall_u})"),
         "f": (0.0, HEIGHT_MAX, f"f — base height ({wall_u})"),
     }
-    bounds = {}
+    bounds = {}          # exact per-variable bounds for the OPTIMIZER (a Lock -> (v, v))
+    preview_bounds = {}  # bounds for the instant grid preview; a locked value is widened
+    #                      by ~one grid cell so the coarse grid can still show a near match
     with tab_wall.expander("Restrict the output geometry (a, b, d, f)", expanded=False):
-        st.caption("Set a min and max for any variable — or **lock** one by making its "
-                   "min = max. Note: a very tight (or locked) range can show **No "
-                   "geometry** in the instant preview even when a valid layout exists — "
-                   "the preview only checks a coarse grid, so press **Get the exact "
-                   "optimum** to search your exact range.")
+        st.caption("Set a min/max for any variable, or tick **Lock** to fix it at a single "
+                   "value the optimizer holds. The instant preview only checks a coarse "
+                   "grid, so for a locked value it shows the *nearest* grid layout — press "
+                   "**Get the exact optimum** to apply your locks exactly.")
         for v, (lo, hi, label) in ranges.items():
-            bounds[v] = _sb_range(label, f"rv_rng_{v}", lo, hi, disp_factor=wall_fac,
-                                  disp_step=geo_step, fmt=geo_fmt)
+            if st.checkbox(f"Lock {v}", key=f"rv_lock_{v}",
+                           help=f"Fix {v} at one value; the optimizer holds it there and "
+                                "solves the other variables around it."):
+                val = _sb_linked(f"{label} — locked", f"rv_lockval_{v}", lo, hi,
+                                 (lo + hi) / 2, geo_step, fmt=geo_fmt,
+                                 disp_factor=wall_fac, disp_step=geo_step)
+                bounds[v] = (val, val)
+                tol = (hi - lo) / (TABLE_RES - 1)      # ~one grid cell, for the preview
+                preview_bounds[v] = (max(lo, val - tol), min(hi, val + tol))
+            else:
+                bounds[v] = _sb_range(label, f"rv_rng_{v}", lo, hi, disp_factor=wall_fac,
+                                      disp_step=geo_step, fmt=geo_fmt)
+                preview_bounds[v] = bounds[v]
 
     # --- Solve: geometries whose cylinder length fits (or, full-stroke, MATCHES)
     # [L_ret, L_ext] in the precomputed grid — INSTANT and near-optimal, so the headline
     # updates live as you tweak. The optimizer button below refines to the exact best. ---
     exact_tol = max(0.04 * stroke_m, 0.025)
     res = lookup.cylinder_matches(table, height, x_cg, z_cg, L_ret, L_ext,
-                                  bounds=bounds, roof_clearance=clearance, limit=5,
+                                  bounds=preview_bounds, roof_clearance=clearance, limit=5,
                                   exact=full_stroke, exact_tol=exact_tol)
     n = res["peak_force"].size
 
@@ -341,7 +353,8 @@ def render_reverse():
         # Buildable layouts ignoring the cylinder LENGTH window (still not over-center,
         # under the roof, within the container and your a/b/d/f limits).
         allrows = lookup.search(table, height, x_cg, z_cg, stroke_max=1e9,
-                                roof_clearance=clearance, bounds=bounds, limit=1000000)
+                                roof_clearance=clearance, bounds=preview_bounds,
+                                limit=1000000)
         already_ran = st.session_state.get("rv_opt_ran_sig") == _sig
         if already_ran:
             # They already pressed the optimizer for these exact inputs and it too found
@@ -386,7 +399,7 @@ def render_reverse():
             # Nothing buildable even before the cylinder. The table drops over-center
             # layouts, so an empty result can mean the whole region is over-center — check
             # the geometry directly to tell that (a singularity) from a roof/limits block.
-            if _empty_reason(bounds, height, clearance) == "over_center":
+            if _empty_reason(preview_bounds, height, clearance) == "over_center":
                 st.markdown(
                     "**Every layout in your limits is over-center.** Somewhere in the "
                     "0–90° swing the cylinder's line of action crosses the hinge, so "

@@ -545,6 +545,35 @@ def test_reverse_empty_grid_then_infeasible_optimizer_is_not_contradictory():
         "must NOT show the 'instant preview / press it above' caveat after running"
 
 
+def test_reverse_lock_fixes_a_variable_exactly():
+    """Each of a, b, d, f has a Lock checkbox in the restrict-geometry expander; locking
+    one fixes it at a single value the optimizer holds exactly (like the Designer)."""
+    import browse
+    browse.TABLE_RES = 12
+    at = AppTest.from_file(APP_PATH, default_timeout=300)
+    at.run()
+    at.session_state["view"] = "Size from a cylinder"
+    at.run()
+    at.session_state["rv_ret"] = 1.5
+    at.session_state["rv_stroke"] = 1.5
+    # every geometry variable exposes a Lock checkbox
+    locks = {c.key for c in at.checkbox if (c.key or "").startswith("rv_lock_")}
+    assert locks == {"rv_lock_a", "rv_lock_b", "rv_lock_d", "rv_lock_f"}, locks
+    # lock f at 0.91
+    at.session_state["rv_lock_f"] = True
+    at.run()
+    at.session_state["rv_lockval_f"] = 0.91
+    at.run()
+    assert not at.exception, at.exception
+    # run the optimizer -> f is held exactly at the locked value
+    btn = [b for b in at.button if "exact optimum" in (b.label or "").lower()][0]
+    btn.click().run()
+    assert not at.exception, at.exception
+    opt = at.session_state["rv_opt"] if "rv_opt" in at.session_state else None
+    assert opt is not None, "optimizer feasible with the lock applied"
+    assert abs(opt["f"] - 0.91) < 1e-6, f"optimizer must hold locked f exactly, got {opt['f']}"
+
+
 def test_reverse_empty_reason_names_over_center():
     """The no-fit diagnosis tells an over-center (singular) region — where every layout
     that clears the roof crosses the hinge — apart from an ordinary roof/limits block."""
