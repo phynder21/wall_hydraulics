@@ -216,23 +216,26 @@ def render_reverse():
     bounds = {}          # per-variable search box for the OPTIMIZER (a Lock -> (v, v))
     preview_bounds = {}  # bounds for the instant grid preview; a locked value is widened
     #                      by ~one grid cell so the coarse grid can still show a near match
-    with tab_wall.expander("Lock output geometry (a, b, d, f)", expanded=False):
-        st.caption("Each variable shows a value with a **Lock** — exactly like the "
-                   "Designer. Tick Lock to hold that value fixed; leave it unticked to let "
-                   "the optimizer choose it. (The instant preview checks a coarse grid, so "
-                   "a locked value shows the *nearest* grid layout — press **Get the exact "
-                   "optimum** to apply your locks exactly.)")
-        for v, (lo, hi, label) in ranges.items():
-            val, is_locked = _sb_linked(label, f"rv_g_{v}", lo, hi, (lo + hi) / 2,
-                                        geo_step, fmt=geo_fmt, disp_factor=wall_fac,
-                                        disp_step=geo_step, lockable=True)
-            if is_locked:
-                bounds[v] = (val, val)
-                tol = (hi - lo) / (TABLE_RES - 1)      # ~one grid cell, for the preview
-                preview_bounds[v] = (max(lo, val - tol), min(hi, val + tol))
-            else:
-                bounds[v] = (lo, hi)                    # free: optimizer chooses
-                preview_bounds[v] = (lo, hi)
+    # Render EVERYTHING into the Wall-tab expander explicitly (ctx=exp). _sb_linked
+    # defaults its target to st.sidebar, which would escape the expander, so the ctx must
+    # be passed — same as the cylinder inputs pass ctx=tab_cyl.
+    exp = tab_wall.expander("Lock output geometry (a, b, d, f)", expanded=False)
+    exp.caption("Each variable shows a value with a **Lock** — exactly like the Designer. "
+                "Tick Lock to hold that value fixed; leave it unticked to let the optimizer "
+                "choose it. (The instant preview checks a coarse grid, so a locked value "
+                "shows the *nearest* grid layout — press **Get the exact optimum** to apply "
+                "your locks exactly.)")
+    for v, (lo, hi, label) in ranges.items():
+        val, is_locked = _sb_linked(label, f"rv_g_{v}", lo, hi, (lo + hi) / 2, geo_step,
+                                    fmt=geo_fmt, disp_factor=wall_fac, disp_step=geo_step,
+                                    lockable=True, ctx=exp)
+        if is_locked:
+            bounds[v] = (val, val)
+            tol = (hi - lo) / (TABLE_RES - 1)      # ~one grid cell, for the preview
+            preview_bounds[v] = (max(lo, val - tol), min(hi, val + tol))
+        else:
+            bounds[v] = (lo, hi)                    # free: optimizer chooses
+            preview_bounds[v] = (lo, hi)
 
     # --- Solve: geometries whose cylinder length fits (or, full-stroke, MATCHES)
     # [L_ret, L_ext] in the precomputed grid — INSTANT and near-optimal, so the headline
