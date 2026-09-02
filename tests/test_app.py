@@ -601,6 +601,29 @@ def test_reverse_range_restricts_the_optimizer():
     assert 0.30 - 1e-6 <= opt["f"] <= 0.50 + 1e-6, f"f must stay in the range, got {opt['f']}"
 
 
+def test_reverse_lock_survives_half_container_toggle():
+    """Regression: locking a/d at a large value with the half-container cap OFF, then
+    turning the cap ON, shrinks the max below the locked value — the stored value must
+    clamp instead of crashing the view (StreamlitValueAboveMaxError)."""
+    import browse
+    browse.TABLE_RES = 12
+    at = AppTest.from_file(APP_PATH, default_timeout=120)
+    at.run()
+    at.session_state["view"] = "Size from a cylinder"
+    at.run()
+    at.session_state["rv_half_a"] = False       # allow a up to the full width
+    at.run()
+    at.session_state["lock_rv_g_a"] = True
+    at.run()
+    at.session_state["rv_g_a"] = 2.0            # near full width
+    at.run()
+    assert not at.exception, at.exception
+    at.session_state["rv_half_a"] = True        # max shrinks below 2.0
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["rv_g_a"] <= 1.18, "locked a clamps to the half-width max"
+
+
 def test_reverse_empty_reason_names_over_center():
     """The no-fit diagnosis tells an over-center (singular) region — where every layout
     that clears the roof crosses the hinge — apart from an ordinary roof/limits block."""

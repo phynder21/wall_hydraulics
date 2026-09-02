@@ -136,6 +136,10 @@ def _sb_linked(label, key, lo, hi, default, step, fmt="%.2f", help=None, ctx=Non
     dstep = disp_step if disp_step is not None else step
     if key not in st.session_state:
         st.session_state[key] = float(default)
+    # Clamp the stored value into the CURRENT [lo, hi]. lo/hi can shift (e.g. the
+    # half-container toggle changes a/d's max), and a stale out-of-range value would
+    # otherwise make the slider/number widget raise a value-out-of-bounds error.
+    st.session_state[key] = float(min(max(st.session_state[key], lo), hi))
     skey, nkey = f"{key}__s", f"{key}__n"
     st.session_state[skey] = st.session_state[key] * Uf
     st.session_state[nkey] = st.session_state[key] * Uf
