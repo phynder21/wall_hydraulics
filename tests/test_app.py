@@ -651,18 +651,6 @@ def test_reverse_optimizer_result_survives_cylinder_count_change():
     assert geom1 == geom2, "the optimized geometry is unchanged by n_cyl"
 
 
-def test_reverse_dedup_layouts_removes_near_identical():
-    """The picker must not show duplicate rows: the injected leanest-mount layout can
-    coincide with an optimizer alternative, and near-identical (a,b,d,f) collapse to one."""
-    from reverse import _dedup_layouts
-    g1 = {"a": 0.944, "b": 0.117, "d": 0.277, "f": 0.116}
-    g1b = {"a": 0.945, "b": 0.117, "d": 0.278, "f": 0.116}   # within ~5 mm -> duplicate
-    g2 = {"a": 0.280, "b": 0.590, "d": 0.740, "f": 0.116}    # genuinely different
-    out = _dedup_layouts([g1, g1b, g2])
-    assert len(out) == 2, out
-    assert out[0] is g1 and out[1] is g2, "keeps the first of a near-identical pair"
-
-
 def test_reverse_empty_reason_names_over_center():
     """The no-fit diagnosis tells an over-center (singular) region — where every layout
     that clears the roof crosses the hinge — apart from an ordinary roof/limits block."""

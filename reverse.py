@@ -88,18 +88,6 @@ def _empty_reason(bounds, height, clearance):
     return "over_center" if (fits.any() and bool(over[fits].all())) else "limits"
 
 
-def _dedup_layouts(layouts, tol=0.005):
-    """Drop geometries that are near-identical in (a, b, d, f), keeping the first. The
-    injected leanest-mount layout can coincide with an optimizer alternative, which would
-    otherwise show as a duplicate row in the picker. tol is in meters (~5 mm), well below
-    the alternatives' own separation, so it only removes true coincidences."""
-    out = []
-    for g in layouts:
-        if not any(all(abs(g[k] - h[k]) <= tol for k in ("a", "b", "d", "f")) for h in out):
-            out.append(g)
-    return out
-
-
 def render_reverse():
     st.header("Size from a cylinder")
     # You enter ONE cylinder's spec; with n_cyl of them sharing the load they can
@@ -321,9 +309,6 @@ def render_reverse():
                     lean["penalty_pct"] = max((lean["peak_force"] / opt_force - 1) * 100.0,
                                               0.0)
                     keep = [lean] + keep
-                # The leanest-mount layout can land on an optimizer alternative; drop such
-                # near-identical geometries so the picker never shows a duplicate row.
-                keep = _dedup_layouts(keep)
                 _opt = dict(_opt)
                 _opt["alternatives"] = keep
         st.session_state["rv_opt"] = _opt if _opt["feasible"] else None
@@ -348,9 +333,11 @@ def render_reverse():
             g = alts[i]
             fd = (g["f"] + g["d"]) * wall_fac
             pen = max(g.get("penalty_pct", 0.0), 0.0)
-            return (f"f+d = {fd:.2f} {wall_u}  ·  a={g['a'] * wall_fac:.2f} "
-                    f"b={g['b'] * wall_fac:.2f} d={g['d'] * wall_fac:.2f} "
-                    f"f={g['f'] * wall_fac:.2f} {wall_u}  ·  "
+            # 3 decimals so layouts that differ only in the thousandths (e.g. the
+            # leanest-mount vs the force-optimum) read as distinct rows, not identical.
+            return (f"f+d = {fd:.3f} {wall_u}  ·  a={g['a'] * wall_fac:.3f} "
+                    f"b={g['b'] * wall_fac:.3f} d={g['d'] * wall_fac:.3f} "
+                    f"f={g['f'] * wall_fac:.3f} {wall_u}  ·  "
                     f"{g['peak_force'] / n_cyl:.1f} N/kg (+{pen:.1f}%)")
 
         # Drive the picker by OUR OWN integer index (rv_choice_idx), not the widget's
