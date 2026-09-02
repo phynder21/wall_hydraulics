@@ -14,7 +14,7 @@ from wall import compute_cylinder_length, compute_F_piston
 import lookup
 import report
 from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
-                    _diagram_figure, _force_length_figures, _sb_linked)
+                    _diagram_figure, _force_length_figures, _sb_linked, _sb_range)
 from display_units import Units
 from sensitivity_panel import render_sensitivity_panel, render_interaction_map
 from pdf_export import render_pdf_export
@@ -216,15 +216,23 @@ def render_reverse():
     bounds = {}          # per-variable search box for the OPTIMIZER (a Lock -> (v, v))
     preview_bounds = {}  # bounds for the instant grid preview; a locked value is widened
     #                      by ~one grid cell so the coarse grid can still show a near match
-    # Render EVERYTHING into the Wall-tab expander explicitly (ctx=exp). _sb_linked
-    # defaults its target to st.sidebar, which would escape the expander, so the ctx must
-    # be passed — same as the cylinder inputs pass ctx=tab_cyl.
+    # Two Wall-tab dropdowns: RESTRICT to a min/max range, and LOCK to a single value
+    # (a lock overrides that variable's range). _sb_range uses bare st, so a `with` block
+    # routes it into its expander; _sb_linked needs ctx= to stay inside its expander
+    # (it defaults to st.sidebar, which would otherwise escape the expander).
+    _rng = {}
+    with tab_wall.expander("Restrict output geometry (a, b, d, f)", expanded=False):
+        st.caption("Give any variable a **min/max range** to bound the optimizer's search. "
+                   "Leave a range at its full width to let the optimizer choose freely. "
+                   "(Locking a variable below overrides its range.)")
+        for v, (lo, hi, label) in ranges.items():
+            _rng[v] = _sb_range(label, f"rv_rng_{v}", lo, hi, disp_factor=wall_fac,
+                                disp_step=geo_step, fmt=geo_fmt)
     exp = tab_wall.expander("Lock output geometry (a, b, d, f)", expanded=False)
-    exp.caption("Each variable shows a value with a **Lock** — exactly like the Designer. "
-                "Tick Lock to hold that value fixed; leave it unticked to let the optimizer "
-                "choose it. (The instant preview checks a coarse grid, so a locked value "
-                "shows the *nearest* grid layout — press **Get the exact optimum** to apply "
-                "your locks exactly.)")
+    exp.caption("Each variable shows a value with a **Lock** — like the Designer. Tick Lock "
+                "to hold it fixed at that value (overriding its range above). The instant "
+                "preview checks a coarse grid, so a locked value shows the *nearest* grid "
+                "layout — press **Get the exact optimum** to apply your locks exactly.")
     for v, (lo, hi, label) in ranges.items():
         val, is_locked = _sb_linked(label, f"rv_g_{v}", lo, hi, (lo + hi) / 2, geo_step,
                                     fmt=geo_fmt, disp_factor=wall_fac, disp_step=geo_step,
@@ -234,8 +242,8 @@ def render_reverse():
             tol = (hi - lo) / (TABLE_RES - 1)      # ~one grid cell, for the preview
             preview_bounds[v] = (max(lo, val - tol), min(hi, val + tol))
         else:
-            bounds[v] = (lo, hi)                    # free: optimizer chooses
-            preview_bounds[v] = (lo, hi)
+            bounds[v] = _rng[v]                     # not locked: use the min/max range
+            preview_bounds[v] = _rng[v]
 
     # --- Solve: geometries whose cylinder length fits (or, full-stroke, MATCHES)
     # [L_ret, L_ext] in the precomputed grid — INSTANT and near-optimal, so the headline

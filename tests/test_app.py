@@ -574,6 +574,33 @@ def test_reverse_lock_fixes_a_variable_exactly():
     assert abs(opt["f"] - 0.91) < 1e-6, f"optimizer must hold locked f exactly, got {opt['f']}"
 
 
+def test_reverse_range_restricts_the_optimizer():
+    """The Restrict-output-geometry dropdown is back alongside Lock: it bounds a variable
+    to a min/max range the optimizer must respect (a Lock would override it)."""
+    import browse
+    browse.TABLE_RES = 12
+    at = AppTest.from_file(APP_PATH, default_timeout=300)
+    at.run()
+    at.session_state["view"] = "Size from a cylinder"
+    at.run()
+    # both a range control and a lock checkbox exist for every variable
+    rng = {s.key.rsplit("__", 1)[0] for s in at.slider if (s.key or "").startswith("rv_rng_")}
+    locks = {c.key for c in at.checkbox if (c.key or "").startswith("lock_rv_g_")}
+    assert rng == {"rv_rng_a", "rv_rng_b", "rv_rng_d", "rv_rng_f"}, rng
+    assert locks == {"lock_rv_g_a", "lock_rv_g_b", "lock_rv_g_d", "lock_rv_g_f"}, locks
+    # restrict f to [0.30, 0.50] (unlocked) and optimize -> the optimizer's f obeys it
+    at.session_state["rv_ret"] = 1.5
+    at.session_state["rv_stroke"] = 1.5
+    at.session_state["rv_rng_f"] = (0.30, 0.50)
+    at.run()
+    assert not at.exception, at.exception
+    btn = [b for b in at.button if "exact optimum" in (b.label or "").lower()][0]
+    btn.click().run()
+    opt = at.session_state["rv_opt"] if "rv_opt" in at.session_state else None
+    assert opt is not None, "optimizer feasible within the range"
+    assert 0.30 - 1e-6 <= opt["f"] <= 0.50 + 1e-6, f"f must stay in the range, got {opt['f']}"
+
+
 def test_reverse_empty_reason_names_over_center():
     """The no-fit diagnosis tells an over-center (singular) region — where every layout
     that clears the roof crosses the hinge — apart from an ordinary roof/limits block."""

@@ -176,11 +176,12 @@ cylinder, and it finds the best geometry and the **biggest wall it can raise**.
      bottoms out on its own hardstops exactly as the door reaches each end — the
      natural stops set both positions. Off, the geometry only has to fit inside the
      stroke (it may stop short of an end).
-4. Set the **wall** (container, cg) and, optionally, **lock output geometry** — each of
-   a, b, d, f shows a value with a **Lock**, exactly like the Designer. Tick Lock to hold
-   that variable at its value; leave it unticked to let the optimizer choose. The instant
+4. Set the **wall** (container, cg) and, optionally, constrain the output geometry two
+   ways: **Restrict output geometry** gives any of a, b, d, f a **min/max range** the
+   optimizer must stay within, and **Lock output geometry** fixes a variable at a single
+   value (like the Designer — a lock overrides that variable's range). The instant
    preview only checks a coarse grid, so a locked value shows the *nearest* grid layout —
-   press **Get the exact optimum** to apply your locks exactly.
+   press **Get the exact optimum** to apply your locks and ranges exactly.
 5. It instantly shows the **best geometry** up top — a fast, near-optimal pick from a
    precomputed grid, so it updates live as you tweak — with two mass numbers: the
    **safe max wall mass** (your force ÷ safety factor) and the **absolute cylinder
