@@ -256,9 +256,13 @@ def render_reverse():
 
     # A stored optimizer result only applies to the inputs it was run on — drop it (and
     # reset the picker) whenever any input changes, so stale geometry never lingers.
+    # n_cyl is deliberately NOT in the signature: the optimizer solves the geometry in
+    # force-per-kg over the WHOLE wall, which is independent of how many cylinders share
+    # the load. n_cyl only rescales the per-cylinder force / max-mass shown below (live),
+    # so changing it must keep the optimizer result rather than discard it.
     bounds_items = tuple(sorted((k, (float(v[0]), float(v[1]))) for k, v in bounds.items()))
     _sig = (round(L_ret, 5), round(L_ext, 5), round(x_cg, 5), round(z_cg, 5),
-            round(clearance, 5), bool(full_stroke), bounds_items, size, n_cyl)
+            round(clearance, 5), bool(full_stroke), bounds_items, size)
     if st.session_state.get("rv_opt_sig") != _sig:
         st.session_state["rv_opt_sig"] = _sig
         st.session_state.pop("rv_opt", None)

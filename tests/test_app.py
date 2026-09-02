@@ -624,6 +624,33 @@ def test_reverse_lock_survives_half_container_toggle():
     assert at.session_state["rv_g_a"] <= 1.18, "locked a clamps to the half-width max"
 
 
+def test_reverse_optimizer_result_survives_cylinder_count_change():
+    """Regression: changing the cylinder count must NOT discard the optimizer result. The
+    geometry is solved in force-per-kg over the whole wall (independent of n_cyl); n_cyl
+    only rescales the per-cylinder numbers shown."""
+    import browse
+    browse.TABLE_RES = 12
+    at = AppTest.from_file(APP_PATH, default_timeout=300)
+    at.run()
+    at.session_state["view"] = "Size from a cylinder"
+    at.run()
+    at.session_state["rv_ret"] = 1.5
+    at.session_state["rv_stroke"] = 1.5
+    at.run()
+    btn = [b for b in at.button if "exact optimum" in (b.label or "").lower()][0]
+    btn.click().run()
+    assert "rv_opt" in at.session_state and at.session_state["rv_opt"] is not None
+    geom1 = {k: at.session_state["rv_opt"][k] for k in ("a", "b", "d", "f")}
+    # switch to two cylinders -> result must persist, geometry unchanged
+    at.session_state["n_cyl"] = 2
+    at.run()
+    assert not at.exception, at.exception
+    assert "rv_opt" in at.session_state and at.session_state["rv_opt"] is not None, \
+        "optimizer result must survive an n_cyl change"
+    geom2 = {k: at.session_state["rv_opt"][k] for k in ("a", "b", "d", "f")}
+    assert geom1 == geom2, "the optimized geometry is unchanged by n_cyl"
+
+
 def test_reverse_empty_reason_names_over_center():
     """The no-fit diagnosis tells an over-center (singular) region — where every layout
     that clears the roof crosses the hinge — apart from an ordinary roof/limits block."""
