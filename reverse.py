@@ -14,7 +14,7 @@ from wall import compute_cylinder_length, compute_F_piston
 import lookup
 import report
 from browse import (_get_table, TABLE_RES, CONTAINERS, WIDTH, HEIGHT_MAX,
-                    _diagram_figure, _force_length_figures, _sb_linked, _sb_range)
+                    _diagram_figure, _force_length_figures, _sb_linked)
 from display_units import Units
 from sensitivity_panel import render_sensitivity_panel, render_interaction_map
 from pdf_export import render_pdf_export
@@ -213,28 +213,26 @@ def render_reverse():
         "d": (0.0, _half if half_a else WIDTH, f"d — bracket length ({wall_u})"),
         "f": (0.0, HEIGHT_MAX, f"f — base height ({wall_u})"),
     }
-    bounds = {}          # exact per-variable bounds for the OPTIMIZER (a Lock -> (v, v))
+    bounds = {}          # per-variable search box for the OPTIMIZER (a Lock -> (v, v))
     preview_bounds = {}  # bounds for the instant grid preview; a locked value is widened
     #                      by ~one grid cell so the coarse grid can still show a near match
-    with tab_wall.expander("Restrict the output geometry (a, b, d, f)", expanded=False):
-        st.caption("Set a min/max for any variable, or tick **Lock** to fix it at a single "
-                   "value the optimizer holds. The instant preview only checks a coarse "
-                   "grid, so for a locked value it shows the *nearest* grid layout — press "
-                   "**Get the exact optimum** to apply your locks exactly.")
+    with tab_wall.expander("Lock output geometry (a, b, d, f)", expanded=False):
+        st.caption("Each variable shows a value with a **Lock** — exactly like the "
+                   "Designer. Tick Lock to hold that value fixed; leave it unticked to let "
+                   "the optimizer choose it. (The instant preview checks a coarse grid, so "
+                   "a locked value shows the *nearest* grid layout — press **Get the exact "
+                   "optimum** to apply your locks exactly.)")
         for v, (lo, hi, label) in ranges.items():
-            if st.checkbox(f"Lock {v}", key=f"rv_lock_{v}",
-                           help=f"Fix {v} at one value; the optimizer holds it there and "
-                                "solves the other variables around it."):
-                val = _sb_linked(f"{label} — locked", f"rv_lockval_{v}", lo, hi,
-                                 (lo + hi) / 2, geo_step, fmt=geo_fmt,
-                                 disp_factor=wall_fac, disp_step=geo_step)
+            val, is_locked = _sb_linked(label, f"rv_g_{v}", lo, hi, (lo + hi) / 2,
+                                        geo_step, fmt=geo_fmt, disp_factor=wall_fac,
+                                        disp_step=geo_step, lockable=True)
+            if is_locked:
                 bounds[v] = (val, val)
                 tol = (hi - lo) / (TABLE_RES - 1)      # ~one grid cell, for the preview
                 preview_bounds[v] = (max(lo, val - tol), min(hi, val + tol))
             else:
-                bounds[v] = _sb_range(label, f"rv_rng_{v}", lo, hi, disp_factor=wall_fac,
-                                      disp_step=geo_step, fmt=geo_fmt)
-                preview_bounds[v] = bounds[v]
+                bounds[v] = (lo, hi)                    # free: optimizer chooses
+                preview_bounds[v] = (lo, hi)
 
     # --- Solve: geometries whose cylinder length fits (or, full-stroke, MATCHES)
     # [L_ret, L_ext] in the precomputed grid — INSTANT and near-optimal, so the headline

@@ -123,11 +123,14 @@ def _diagram_figure(a, b, d, f, x_cg, z_cg, width, height, theta_deg=45.0,
 
 
 def _sb_linked(label, key, lo, hi, default, step, fmt="%.2f", help=None, ctx=None,
-               disp_factor=1.0, disp_step=None):
+               disp_factor=1.0, disp_step=None, lockable=False):
     """Slider + typeable number box bound to one canonical value in
     st.session_state[key] (kept in BASE units). Renders into `ctx` (default the
     sidebar). `disp_factor` scales the canonical value for display (e.g. m->in): the
-    widgets show value*factor and lo/hi*factor, converting edits back by dividing."""
+    widgets show value*factor and lo/hi*factor, converting edits back by dividing.
+
+    With `lockable`, a **Lock** checkbox (state under `lock_<key>`) is shown beside the
+    value and the return becomes `(value, locked_bool)` — mirroring the Designer."""
     ctx = ctx if ctx is not None else st.sidebar
     Uf = disp_factor
     dstep = disp_step if disp_step is not None else step
@@ -144,11 +147,19 @@ def _sb_linked(label, key, lo, hi, default, step, fmt="%.2f", help=None, ctx=Non
         st.session_state[key] = float(min(max(st.session_state[nkey] / Uf, lo), hi))
 
     ctx.markdown(f"**{label}**")
-    c1, c2 = ctx.columns([2, 1])
+    if lockable:
+        st.session_state.setdefault(f"lock_{key}", False)
+        c1, c2, c3 = ctx.columns([2, 1, 0.9])
+    else:
+        c1, c2 = ctx.columns([2, 1])
     c1.slider(label, lo * Uf, hi * Uf, step=dstep, key=skey, on_change=_from_s,
               help=help, format=fmt, label_visibility="collapsed")
     c2.number_input(label, min_value=lo * Uf, max_value=hi * Uf, step=dstep, key=nkey,
                     on_change=_from_n, format=fmt, label_visibility="collapsed")
+    if lockable:
+        locked = c3.checkbox("Lock", key=f"lock_{key}",
+                             help="Hold this value fixed when you run the optimizer.")
+        return st.session_state[key], locked
     return st.session_state[key]
 
 

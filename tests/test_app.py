@@ -481,21 +481,20 @@ def test_reverse_view_renders():
 
 
 def test_reverse_optimizer_available_when_grid_preview_empty():
-    """Regression: a tightly restricted (or locked) a/b/d/f can fall between the coarse
-    grid's points, so the INSTANT preview finds nothing — but the optimizer button must
-    stay available, and running it finds a valid geometry the grid missed. (Verified
-    offline: window [1.5, 3.0] m with f in [0.90, 0.92] gives 0 grid matches yet the
-    continuous optimizer is feasible at f ~= 0.903.)"""
+    """Regression: a narrow cylinder window can fall between the coarse grid's points, so
+    the INSTANT preview finds nothing — but the optimizer button must stay available, and
+    running it finds a valid geometry the grid missed. (Verified offline: the window
+    [2.55, 2.65] m gives 0 grid matches at res=12 yet the continuous optimizer is
+    feasible.)"""
     import browse
-    browse.TABLE_RES = 12   # coarse grid, so the narrow f range definitely misses
+    browse.TABLE_RES = 12   # coarse grid, so the narrow window definitely misses
     at = AppTest.from_file(APP_PATH, default_timeout=300)
     at.run()
     at.session_state["view"] = "Size from a cylinder"
     at.run()
-    # generous cylinder window (meters) + a narrow f range between grid nodes
-    at.session_state["rv_ret"] = 1.5
-    at.session_state["rv_stroke"] = 1.5
-    at.session_state["rv_rng_f"] = (0.90, 0.92)
+    # a narrow cylinder window the coarse grid steps right over
+    at.session_state["rv_ret"] = 2.55
+    at.session_state["rv_stroke"] = 0.10
     at.run()
     assert not at.exception, at.exception
     # the instant preview finds nothing and says so (with the coarse-grid caveat)...
@@ -546,8 +545,9 @@ def test_reverse_empty_grid_then_infeasible_optimizer_is_not_contradictory():
 
 
 def test_reverse_lock_fixes_a_variable_exactly():
-    """Each of a, b, d, f has a Lock checkbox in the restrict-geometry expander; locking
-    one fixes it at a single value the optimizer holds exactly (like the Designer)."""
+    """Each of a, b, d, f shows a value with a Lock checkbox (like the Designer); locking
+    one fixes it at that value the optimizer holds exactly — even at a between-grid value
+    the coarse grid can't represent, which the continuous optimizer nails."""
     import browse
     browse.TABLE_RES = 12
     at = AppTest.from_file(APP_PATH, default_timeout=300)
@@ -556,13 +556,13 @@ def test_reverse_lock_fixes_a_variable_exactly():
     at.run()
     at.session_state["rv_ret"] = 1.5
     at.session_state["rv_stroke"] = 1.5
-    # every geometry variable exposes a Lock checkbox
-    locks = {c.key for c in at.checkbox if (c.key or "").startswith("rv_lock_")}
-    assert locks == {"rv_lock_a", "rv_lock_b", "rv_lock_d", "rv_lock_f"}, locks
-    # lock f at 0.91
-    at.session_state["rv_lock_f"] = True
+    # every geometry variable exposes a Lock checkbox (state under lock_rv_g_<var>)
+    locks = {c.key for c in at.checkbox if (c.key or "").startswith("lock_rv_g_")}
+    assert locks == {"lock_rv_g_a", "lock_rv_g_b", "lock_rv_g_d", "lock_rv_g_f"}, locks
+    # lock f at 0.91 (a value that falls between the grid's f nodes)
+    at.session_state["lock_rv_g_f"] = True
     at.run()
-    at.session_state["rv_lockval_f"] = 0.91
+    at.session_state["rv_g_f"] = 0.91
     at.run()
     assert not at.exception, at.exception
     # run the optimizer -> f is held exactly at the locked value
