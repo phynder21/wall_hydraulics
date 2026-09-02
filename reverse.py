@@ -19,6 +19,10 @@ from display_units import Units
 from sensitivity_panel import render_sensitivity_panel, render_interaction_map
 from pdf_export import render_pdf_export
 
+# The picker shows a spread of near-optimal layouts within this force budget of the
+# optimum (a small penalty buys a leaner / differently-shaped mount). Ordered by f + d.
+REV_FORCE_TOL = 0.02   # +2% of the optimal force
+
 # Per-unit spec for each cylinder input: (label, lo, hi, default, step, fmt,
 # to_base) where to_base converts the shown value to the physics base unit —
 # bore/rod -> mm, pressure -> bar, force -> N, closed/stroke -> m.
@@ -284,31 +288,30 @@ def render_reverse():
                       "checks a coarse grid, so a narrow or locked range can miss a "
                       "layout the optimizer still finds."):
         with st.spinner("Optimizing…"):
-            # Ask for a big spread of alternatives (up to 20) so there are many
-            # buildable layouts to pick from — a denser separation than the default. The
-            # tight alt_rel_tol keeps them all at (essentially) the optimal force, so the
-            # picker never pads with higher-force layouts.
+            # Ask for a big, well-separated spread of DISTINCT layouts within the force
+            # budget, so the picker shows many genuinely different mounts (varying a/b/d/f)
+            # — not near-copies of one geometry.
             _opt = optimize_actuator(
                 width, height, x_cg, z_cg, length_window=(L_ret, L_ext),
                 length_exact=full_stroke, stroke_ratio_max=3.0,
-                roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=0.005,
-                n_alternatives=20, alt_min_sep=0.02, alt_target_sep=0.08)
+                roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=REV_FORCE_TOL,
+                n_alternatives=24, alt_min_sep=0.04, alt_target_sep=0.12)
             if _opt["feasible"]:
                 opt_force = _opt["peak_force"]
-                # Keep ONLY optimal-force layouts — drop anything the optimizer padded
-                # in above the minimum force.
+                cap = opt_force * (1.0 + REV_FORCE_TOL)   # keep layouts within +tol force
                 keep = [g for g in (_opt.get("alternatives") or [])
-                        if g["peak_force"] <= opt_force + 0.02]
-                # Always include the true smallest-f+d layout, solved AT the exact
-                # minimum force (never dropped by the diversity dedup).
+                        if g["peak_force"] <= cap + 1e-9]
+                # Inject the leanest-mount layout within the same force budget (smallest
+                # f + d), so the extreme "least material" option is always present.
                 lean = minimize_mount_material(
                     width, height, x_cg, z_cg, length_window=(L_ret, L_ext),
                     length_exact=full_stroke, roof_clearance=clearance,
-                    var_bounds=bounds, force_cap=opt_force, stroke_ratio_max=3.0)
-                if lean is not None and lean["peak_force"] <= opt_force + 0.02:
-                    lean["penalty_pct"] = max((lean["peak_force"] / opt_force - 1) * 100.0,
-                                              0.0)
+                    var_bounds=bounds, force_cap=cap, stroke_ratio_max=3.0)
+                if lean is not None and lean["peak_force"] <= cap + 1e-9:
                     keep = [lean] + keep
+                # Tag each layout with its force penalty vs the optimum (for the label).
+                for g in keep:
+                    g["penalty_pct"] = max((g["peak_force"] / opt_force - 1.0) * 100.0, 0.0)
                 _opt = dict(_opt)
                 _opt["alternatives"] = keep
         st.session_state["rv_opt"] = _opt if _opt["feasible"] else None
@@ -324,17 +327,20 @@ def render_reverse():
     opt = st.session_state.get("rv_opt")
     if opt:                                # the optimizer has run for these exact inputs
         raw = opt.get("alternatives") or [opt]
-        # Order by MOUNT MATERIAL, least first: f + d = base-post height + bracket offset,
-        # a proxy for how much steel each layout's mounts need. Every option is at the
-        # optimal force (shown as +0.0%).
-        alts = sorted(raw, key=lambda g: g["f"] + g["d"])
+        # Order by MOUNT MATERIAL (f + d = base-post height + bracket offset, a proxy for
+        # how much steel each mount needs), least first, and drop any layout that would
+        # render IDENTICALLY at the label's precision — so every row is a distinct mount.
+        seen, alts = set(), []
+        for g in sorted(raw, key=lambda g: g["f"] + g["d"]):
+            key = tuple(round(g[k] * wall_fac, 3) for k in ("a", "b", "d", "f"))
+            if key not in seen:
+                seen.add(key)
+                alts.append(g)
 
         def _glabel(i):
             g = alts[i]
             fd = (g["f"] + g["d"]) * wall_fac
             pen = max(g.get("penalty_pct", 0.0), 0.0)
-            # 3 decimals so layouts that differ only in the thousandths (e.g. the
-            # leanest-mount vs the force-optimum) read as distinct rows, not identical.
             return (f"f+d = {fd:.3f} {wall_u}  ·  a={g['a'] * wall_fac:.3f} "
                     f"b={g['b'] * wall_fac:.3f} d={g['d'] * wall_fac:.3f} "
                     f"f={g['f'] * wall_fac:.3f} {wall_u}  ·  "
@@ -347,13 +353,14 @@ def render_reverse():
         prev = st.session_state.get("rv_choice_idx", 0)
         prev = prev if isinstance(prev, int) and 0 <= prev < len(alts) else 0
         choice = st.selectbox(
-            f"Geometry — {len(alts)} options, all at the optimal force, ordered by "
-            "least mount material (f + d) first",
+            f"Geometry — {len(alts)} distinct layouts within +{REV_FORCE_TOL * 100:.0f}% "
+            "of the optimal force, ordered by least mount material (f + d) first",
             range(len(alts)), index=prev, format_func=_glabel,
-            help="Every option raises the load at the optimal force and uses the same "
-                 "stroke — they are just different mounting layouts. Ordered by **f + d** "
-                 "(base-post height + bracket offset), a proxy for how much mount material "
-                 "each needs; the top option needs the least.")
+            help="Different mounting layouts that all raise the load within "
+                 f"+{REV_FORCE_TOL * 100:.0f}% of the minimum force — each row shows its "
+                 "own force penalty (+x.x%). Ordered by **f + d** (base-post height + "
+                 "bracket offset), a proxy for mount material; the top needs the least, "
+                 "usually at a hair more force.")
         st.session_state["rv_choice_idx"] = choice
         sel = alts[choice]
         source = "opt"
@@ -499,7 +506,8 @@ def render_reverse():
     _fd = f"; mount material **f + d = {(f + d) * wall_fac:.2f} {wall_u}**" if source != "grid" else ""
     _which = ("a fast **near-optimal** pick from the grid (run the optimizer for the "
               "true best)" if source == "grid" else
-              "the optimizer result at the **optimal force**")
+              f"the selected optimizer layout (**+{max(sel.get('penalty_pct', 0.0), 0.0):.1f}%** "
+              "force vs the minimum)")
     st.markdown(
         f"Showing {_which}{_fd}: its cylinder runs "
         f"**{L_min * len_fac:.2f}–{L_max * len_fac:.2f} {len_u}** ({_win}).")

@@ -188,9 +188,11 @@ cylinder, and it finds the best geometry and the **biggest wall it can raise**.
    max** (flat-out, no margin). Use the safe one. Right below is a **Get the exact
    optimum** button: press it to run the real optimizer for your exact inputs (~15 s,
    usually a little better). Because many different mountings often tie for best, that
-   also gives a **picker** of ~20 equally-good **alternative** layouts, **ordered by
-   least mount material first** (`f + d` = base-post height + bracket offset, shown on
-   each option) so you can pick the leanest mount. Under that are the setup diagram + plots, the
+   also gives a **picker** of **distinct** alternative layouts within **+2% of the
+   optimal force**, **ordered by least mount material first** (`f + d` = base-post height
+   + bracket offset, shown on each option, with each row's own **force penalty +x.x%**),
+   so you can trade a hair of force for a leaner or differently-shaped mount. Under that
+   are the setup diagram + plots, the
    **sensitivity** panel, and an **Export design (PDF)** — a one-page sizing sheet.
    (There's no bore-sizing card here: the cylinder is the input, not an output.)
 
