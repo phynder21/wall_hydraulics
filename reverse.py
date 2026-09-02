@@ -215,6 +215,11 @@ def render_reverse():
     }
     bounds = {}
     with tab_wall.expander("Restrict the output geometry (a, b, d, f)", expanded=False):
+        st.caption("Set a min and max for any variable — or **lock** one by making its "
+                   "min = max. Note: a very tight (or locked) range can show **No "
+                   "geometry** in the instant preview even when a valid layout exists — "
+                   "the preview only checks a coarse grid, so press **Get the exact "
+                   "optimum** to search your exact range.")
         for v, (lo, hi, label) in ranges.items():
             bounds[v] = _sb_range(label, f"rv_rng_{v}", lo, hi, disp_factor=wall_fac,
                                   disp_step=geo_step, fmt=geo_fmt)
@@ -228,12 +233,131 @@ def render_reverse():
                                   exact=full_stroke, exact_tol=exact_tol)
     n = res["peak_force"].size
 
-    if n == 0:
+    # A stored optimizer result only applies to the inputs it was run on — drop it (and
+    # reset the picker) whenever any input changes, so stale geometry never lingers.
+    bounds_items = tuple(sorted((k, (float(v[0]), float(v[1]))) for k, v in bounds.items()))
+    _sig = (round(L_ret, 5), round(L_ext, 5), round(x_cg, 5), round(z_cg, 5),
+            round(clearance, 5), bool(full_stroke), bounds_items, size, n_cyl)
+    if st.session_state.get("rv_opt_sig") != _sig:
+        st.session_state["rv_opt_sig"] = _sig
+        st.session_state.pop("rv_opt", None)
+        st.session_state["rv_choice_idx"] = 0
+
+    head = st.container()      # headline metrics render here (top); the controls sit below
+    caption_slot = st.empty()  # filled below once we know grid vs optimizer result
+
+    # The exact-optimum control — ALWAYS available, even when the instant grid
+    # preview found nothing. That preview only checks a COARSE grid of layouts, so a
+    # tightly restricted a/b/d/f (or a value locked by setting its min = max) can fall
+    # between grid points and match nothing here even though a valid continuous
+    # geometry exists in your range; the optimizer searches your EXACT range.
+    if st.button("Get the exact optimum — run optimizer",
+                 help="Runs the real continuous optimizer for your exact inputs and "
+                      "ranges (usually a little better than the instant grid pick) and "
+                      "returns ~20 equally-good alternative layouts to pick from. Works "
+                      "even when the preview shows no geometry — the preview only "
+                      "checks a coarse grid, so a narrow or locked range can miss a "
+                      "layout the optimizer still finds."):
+        with st.spinner("Optimizing…"):
+            # Ask for a big spread of alternatives (up to 20) so there are many
+            # buildable layouts to pick from — a denser separation than the default. The
+            # tight alt_rel_tol keeps them all at (essentially) the optimal force, so the
+            # picker never pads with higher-force layouts.
+            _opt = optimize_actuator(
+                width, height, x_cg, z_cg, length_window=(L_ret, L_ext),
+                length_exact=full_stroke, stroke_ratio_max=3.0,
+                roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=0.005,
+                n_alternatives=20, alt_min_sep=0.02, alt_target_sep=0.08)
+            if _opt["feasible"]:
+                opt_force = _opt["peak_force"]
+                # Keep ONLY optimal-force layouts — drop anything the optimizer padded
+                # in above the minimum force.
+                keep = [g for g in (_opt.get("alternatives") or [])
+                        if g["peak_force"] <= opt_force + 0.02]
+                # Always include the true smallest-f+d layout, solved AT the exact
+                # minimum force (never dropped by the diversity dedup).
+                lean = minimize_mount_material(
+                    width, height, x_cg, z_cg, length_window=(L_ret, L_ext),
+                    length_exact=full_stroke, roof_clearance=clearance,
+                    var_bounds=bounds, force_cap=opt_force, stroke_ratio_max=3.0)
+                if lean is not None and lean["peak_force"] <= opt_force + 0.02:
+                    lean["penalty_pct"] = max((lean["peak_force"] / opt_force - 1) * 100.0,
+                                              0.0)
+                    keep = [lean] + keep
+                _opt = dict(_opt)
+                _opt["alternatives"] = keep
+        st.session_state["rv_opt"] = _opt if _opt["feasible"] else None
+        st.session_state["rv_choice_idx"] = 0
+        st.session_state["rv_opt_ran_sig"] = _sig   # ran the optimizer for these inputs
+        if not _opt["feasible"] and n > 0:
+            st.warning("The optimizer couldn't improve on the grid pick for these "
+                       "inputs — keeping the grid geometry above.")
+        # If n == 0 and it's infeasible, the fall-through block below explains it (with
+        # the specific over-center / length-window diagnostics), tailored by whether the
+        # optimizer has already been run — so it never tells you to press it again.
+
+    opt = st.session_state.get("rv_opt")
+    if opt:                                # the optimizer has run for these exact inputs
+        raw = opt.get("alternatives") or [opt]
+        # Order by MOUNT MATERIAL, least first: f + d = base-post height + bracket offset,
+        # a proxy for how much steel each layout's mounts need. Every option is at the
+        # optimal force (shown as +0.0%).
+        alts = sorted(raw, key=lambda g: g["f"] + g["d"])
+
+        def _glabel(i):
+            g = alts[i]
+            fd = (g["f"] + g["d"]) * wall_fac
+            pen = max(g.get("penalty_pct", 0.0), 0.0)
+            return (f"f+d = {fd:.2f} {wall_u}  ·  a={g['a'] * wall_fac:.2f} "
+                    f"b={g['b'] * wall_fac:.2f} d={g['d'] * wall_fac:.2f} "
+                    f"f={g['f'] * wall_fac:.2f} {wall_u}  ·  "
+                    f"{g['peak_force'] / n_cyl:.1f} N/kg (+{pen:.1f}%)")
+
+        # Drive the picker by OUR OWN integer index (rv_choice_idx), not the widget's
+        # stored value: pass it as index= and read the selectbox's return. This avoids
+        # ever comparing/indexing a widget value whose type can vary across Streamlit
+        # versions. Clamp in case the option count shrank since last run.
+        prev = st.session_state.get("rv_choice_idx", 0)
+        prev = prev if isinstance(prev, int) and 0 <= prev < len(alts) else 0
+        choice = st.selectbox(
+            f"Geometry — {len(alts)} options, all at the optimal force, ordered by "
+            "least mount material (f + d) first",
+            range(len(alts)), index=prev, format_func=_glabel,
+            help="Every option raises the load at the optimal force and uses the same "
+                 "stroke — they are just different mounting layouts. Ordered by **f + d** "
+                 "(base-post height + bracket offset), a proxy for how much mount material "
+                 "each needs; the top option needs the least.")
+        st.session_state["rv_choice_idx"] = choice
+        sel = alts[choice]
+        source = "opt"
+    elif n > 0:
+        # The INSTANT grid pick (near-optimal); the optimizer button above refines it.
+        sel = {"a": float(res["a"][0]), "b": float(res["b"][0]), "d": float(res["d"][0]),
+               "f": float(res["f"][0]), "peak_force": float(res["peak_force"][0])}
+        source = "grid"
+    else:
+        # No grid match AND no optimizer result yet. Explain why — leading with
+        # the coarse-grid caveat — and point at the optimizer button above.
         # Buildable layouts ignoring the cylinder LENGTH window (still not over-center,
         # under the roof, within the container and your a/b/d/f limits).
         allrows = lookup.search(table, height, x_cg, z_cg, stroke_max=1e9,
                                 roof_clearance=clearance, bounds=bounds, limit=1000000)
-        st.error("### No geometry fits this cylinder")
+        already_ran = st.session_state.get("rv_opt_ran_sig") == _sig
+        if already_ran:
+            # They already pressed the optimizer for these exact inputs and it too found
+            # nothing — don't tell them to press it again; just explain why (below).
+            st.error("### The optimizer found no valid geometry")
+            st.markdown(
+                "The continuous optimizer searched your **exact range** and still found "
+                "no buildable layout. The details below show why, and how to widen it.")
+        else:
+            st.error("### No geometry in the instant preview")
+            st.markdown(
+                "The instant preview only checks a **coarse grid** of layouts, so a "
+                "**tightly restricted (or locked) a, b, d, or f** can fall between grid "
+                "points and show nothing here **even when a valid geometry exists** in "
+                "your range. **Press _Get the exact optimum_ above** to search your exact "
+                "range with the continuous optimizer before changing anything else.")
         if allrows["peak_force"].size:
             # Layouts exist — only the cylinder's length window doesn't contain (or, in
             # full-stroke mode, match) them. Report the CLOSEST single layout: the one
@@ -289,102 +413,6 @@ def render_reverse():
                     "- Pick a **taller container** (High-Cube) so **b** and **f** can go "
                     "higher.")
         return
-
-    # --- Headline geometry: the INSTANT grid pick by default, or (after you press the
-    # optimizer button) the exact optimum / an alternative you pick from the dropdown. ---
-    grid = {"a": float(res["a"][0]), "b": float(res["b"][0]), "d": float(res["d"][0]),
-            "f": float(res["f"][0]), "peak_force": float(res["peak_force"][0])}
-
-    # A stored optimizer result only applies to the inputs it was run on — drop it (and
-    # reset the picker) whenever any input changes, so stale geometry never lingers.
-    bounds_items = tuple(sorted((k, (float(v[0]), float(v[1]))) for k, v in bounds.items()))
-    _sig = (round(L_ret, 5), round(L_ext, 5), round(x_cg, 5), round(z_cg, 5),
-            round(clearance, 5), bool(full_stroke), bounds_items, size, n_cyl)
-    if st.session_state.get("rv_opt_sig") != _sig:
-        st.session_state["rv_opt_sig"] = _sig
-        st.session_state.pop("rv_opt", None)
-        st.session_state["rv_choice_idx"] = 0
-
-    head = st.container()      # headline metrics render here (top); the controls sit below
-    caption_slot = st.empty()  # filled below once we know grid vs optimizer result
-
-    # The exact-optimum control, right under the headline.
-    if st.button("Get the exact optimum — run optimizer",
-                 help="The headline updates instantly from a precomputed grid, so it's "
-                      "only near-optimal. This runs the real optimizer for your exact "
-                      "inputs (usually a little better) and returns ~20 equally-good "
-                      "alternative layouts to pick from."):
-        with st.spinner("Optimizing…"):
-            # Ask for a big spread of alternatives (up to 20) so there are many
-            # buildable layouts to pick from — a denser separation than the default. The
-            # tight alt_rel_tol keeps them all at (essentially) the optimal force, so the
-            # picker never pads with higher-force layouts.
-            _opt = optimize_actuator(
-                width, height, x_cg, z_cg, length_window=(L_ret, L_ext),
-                length_exact=full_stroke, stroke_ratio_max=3.0,
-                roof_clearance=clearance, var_bounds=bounds, alt_rel_tol=0.005,
-                n_alternatives=20, alt_min_sep=0.02, alt_target_sep=0.08)
-            if _opt["feasible"]:
-                opt_force = _opt["peak_force"]
-                # Keep ONLY optimal-force layouts — drop anything the optimizer padded
-                # in above the minimum force.
-                keep = [g for g in (_opt.get("alternatives") or [])
-                        if g["peak_force"] <= opt_force + 0.02]
-                # Always include the true smallest-f+d layout, solved AT the exact
-                # minimum force (never dropped by the diversity dedup).
-                lean = minimize_mount_material(
-                    width, height, x_cg, z_cg, length_window=(L_ret, L_ext),
-                    length_exact=full_stroke, roof_clearance=clearance,
-                    var_bounds=bounds, force_cap=opt_force, stroke_ratio_max=3.0)
-                if lean is not None and lean["peak_force"] <= opt_force + 0.02:
-                    lean["penalty_pct"] = max((lean["peak_force"] / opt_force - 1) * 100.0,
-                                              0.0)
-                    keep = [lean] + keep
-                _opt = dict(_opt)
-                _opt["alternatives"] = keep
-        st.session_state["rv_opt"] = _opt if _opt["feasible"] else None
-        st.session_state["rv_choice_idx"] = 0
-        if not _opt["feasible"]:
-            st.warning("The optimizer couldn't improve on the grid pick for these inputs "
-                       "— keeping the grid geometry above.")
-
-    opt = st.session_state.get("rv_opt")
-    if opt:                                # the optimizer has run for these exact inputs
-        raw = opt.get("alternatives") or [opt]
-        # Order by MOUNT MATERIAL, least first: f + d = base-post height + bracket offset,
-        # a proxy for how much steel each layout's mounts need. Every option is at the
-        # optimal force (shown as +0.0%).
-        alts = sorted(raw, key=lambda g: g["f"] + g["d"])
-
-        def _glabel(i):
-            g = alts[i]
-            fd = (g["f"] + g["d"]) * wall_fac
-            pen = max(g.get("penalty_pct", 0.0), 0.0)
-            return (f"f+d = {fd:.2f} {wall_u}  ·  a={g['a'] * wall_fac:.2f} "
-                    f"b={g['b'] * wall_fac:.2f} d={g['d'] * wall_fac:.2f} "
-                    f"f={g['f'] * wall_fac:.2f} {wall_u}  ·  "
-                    f"{g['peak_force'] / n_cyl:.1f} N/kg (+{pen:.1f}%)")
-
-        # Drive the picker by OUR OWN integer index (rv_choice_idx), not the widget's
-        # stored value: pass it as index= and read the selectbox's return. This avoids
-        # ever comparing/indexing a widget value whose type can vary across Streamlit
-        # versions. Clamp in case the option count shrank since last run.
-        prev = st.session_state.get("rv_choice_idx", 0)
-        prev = prev if isinstance(prev, int) and 0 <= prev < len(alts) else 0
-        choice = st.selectbox(
-            f"Geometry — {len(alts)} options, all at the optimal force, ordered by "
-            "least mount material (f + d) first",
-            range(len(alts)), index=prev, format_func=_glabel,
-            help="Every option raises the load at the optimal force and uses the same "
-                 "stroke — they are just different mounting layouts. Ordered by **f + d** "
-                 "(base-post height + bracket offset), a proxy for how much mount material "
-                 "each needs; the top option needs the least.")
-        st.session_state["rv_choice_idx"] = choice
-        sel = alts[choice]
-        source = "opt"
-    else:
-        sel = grid
-        source = "grid"
 
     # Caption reflects what the headline actually shows now (grid pick vs optimizer).
     if source == "grid":

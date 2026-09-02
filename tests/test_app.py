@@ -480,6 +480,71 @@ def test_reverse_view_renders():
     assert not at.exception, at.exception
 
 
+def test_reverse_optimizer_available_when_grid_preview_empty():
+    """Regression: a tightly restricted (or locked) a/b/d/f can fall between the coarse
+    grid's points, so the INSTANT preview finds nothing — but the optimizer button must
+    stay available, and running it finds a valid geometry the grid missed. (Verified
+    offline: window [1.5, 3.0] m with f in [0.90, 0.92] gives 0 grid matches yet the
+    continuous optimizer is feasible at f ~= 0.903.)"""
+    import browse
+    browse.TABLE_RES = 12   # coarse grid, so the narrow f range definitely misses
+    at = AppTest.from_file(APP_PATH, default_timeout=300)
+    at.run()
+    at.session_state["view"] = "Size from a cylinder"
+    at.run()
+    # generous cylinder window (meters) + a narrow f range between grid nodes
+    at.session_state["rv_ret"] = 1.5
+    at.session_state["rv_stroke"] = 1.5
+    at.session_state["rv_rng_f"] = (0.90, 0.92)
+    at.run()
+    assert not at.exception, at.exception
+    # the instant preview finds nothing and says so (with the coarse-grid caveat)...
+    blurb = " ".join(str(m.value) for m in at.markdown) \
+        + " ".join(str(e.value) for e in at.error)
+    assert "instant preview" in blurb.lower(), "explains the empty preview + caveat"
+    # ...but the optimizer button is STILL present (the fix; it used to disappear)
+    optbtns = [b for b in at.button if "exact optimum" in (b.label or "").lower()]
+    assert optbtns, "optimizer button must remain available when the grid is empty"
+    # running it finds a valid geometry the coarse grid missed -> the picker appears
+    optbtns[0].click().run()
+    assert not at.exception, at.exception
+    picker = [s for s in at.selectbox if "mount material" in (s.label or "")]
+    assert picker, "the optimizer found a layout the grid missed -> picker appears"
+    errs = " ".join(str(e.value) for e in at.error).lower()
+    assert "no geometry" not in errs, "the no-geometry error clears once the optimizer runs"
+
+
+def test_reverse_empty_grid_then_infeasible_optimizer_is_not_contradictory():
+    """When the grid preview is empty AND the optimizer also finds nothing, the message
+    must not tell the user to press a button they just pressed. Before running: the
+    coarse-grid caveat points at the optimizer. After running (still infeasible): the
+    message says the optimizer found nothing — WITHOUT the 'press it above' caveat."""
+    import browse
+    browse.TABLE_RES = 12
+    at = AppTest.from_file(APP_PATH, default_timeout=300)
+    at.run()
+    at.session_state["view"] = "Size from a cylinder"
+    at.run()
+    # an impossible cylinder window -> grid empty AND optimizer infeasible
+    at.session_state["rv_ret"] = 0.1
+    at.session_state["rv_stroke"] = 0.05
+    at.run()
+    assert not at.exception, at.exception
+    before = " ".join(str(m.value) for m in at.markdown).lower()
+    assert "instant preview" in before and "get the exact optimum" in before, \
+        "before running: caveat points the user at the optimizer"
+    optbtns = [b for b in at.button if "exact optimum" in (b.label or "").lower()]
+    assert optbtns, "optimizer button available even when the grid is empty"
+    optbtns[0].click().run()
+    assert not at.exception, at.exception
+    after = " ".join(str(m.value) for m in at.markdown) \
+        + " ".join(str(e.value) for e in at.error)
+    low = after.lower()
+    assert "optimizer found no valid geometry" in low, "post-run header names the optimizer"
+    assert "instant preview" not in low, \
+        "must NOT show the 'instant preview / press it above' caveat after running"
+
+
 def test_reverse_empty_reason_names_over_center():
     """The no-fit diagnosis tells an over-center (singular) region — where every layout
     that clears the roof crosses the hinge — apart from an ordinary roof/limits block."""
