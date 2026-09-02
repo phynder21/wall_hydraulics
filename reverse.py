@@ -88,6 +88,18 @@ def _empty_reason(bounds, height, clearance):
     return "over_center" if (fits.any() and bool(over[fits].all())) else "limits"
 
 
+def _dedup_layouts(layouts, tol=0.005):
+    """Drop geometries that are near-identical in (a, b, d, f), keeping the first. The
+    injected leanest-mount layout can coincide with an optimizer alternative, which would
+    otherwise show as a duplicate row in the picker. tol is in meters (~5 mm), well below
+    the alternatives' own separation, so it only removes true coincidences."""
+    out = []
+    for g in layouts:
+        if not any(all(abs(g[k] - h[k]) <= tol for k in ("a", "b", "d", "f")) for h in out):
+            out.append(g)
+    return out
+
+
 def render_reverse():
     st.header("Size from a cylinder")
     # You enter ONE cylinder's spec; with n_cyl of them sharing the load they can
@@ -309,6 +321,9 @@ def render_reverse():
                     lean["penalty_pct"] = max((lean["peak_force"] / opt_force - 1) * 100.0,
                                               0.0)
                     keep = [lean] + keep
+                # The leanest-mount layout can land on an optimizer alternative; drop such
+                # near-identical geometries so the picker never shows a duplicate row.
+                keep = _dedup_layouts(keep)
                 _opt = dict(_opt)
                 _opt["alternatives"] = keep
         st.session_state["rv_opt"] = _opt if _opt["feasible"] else None
